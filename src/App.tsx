@@ -20,6 +20,7 @@ import {
   CreditCard,
   Store,
   ChevronRight,
+  ChevronLeft,
   Factory,
   DollarSign,
   Save,
@@ -1431,6 +1432,244 @@ const SalesmanModal = ({
                   <p className="text-slate-500 text-sm">No salesmen registered yet</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const ShopMasterModal = ({ 
+  onClose, 
+  onSuccess,
+  shops 
+}: { 
+  onClose: () => void, 
+  onSuccess: () => void,
+  shops: Shop[]
+}) => {
+  const [formData, setFormData] = useState({
+    shop_name: '',
+    owner_name: '',
+    location: '',
+    phone: '',
+    credit_limit: 0
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const url = editingId ? `/api/shops/${editingId}` : '/api/shops';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        onSuccess();
+        setFormData({ 
+          shop_name: '', 
+          owner_name: '', 
+          location: '', 
+          phone: '', 
+          credit_limit: 0 
+        });
+        setEditingId(null);
+      }
+    } catch (err) {
+      console.error("Failed to save shop", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this shop?")) return;
+    try {
+      const res = await fetch(`/api/shops/${id}`, { method: 'DELETE' });
+      if (res.ok) onSuccess();
+      else {
+        const data = await res.json();
+        alert(data.error);
+      }
+    } catch (err) {
+      console.error("Failed to delete shop", err);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-600 rounded-lg">
+              <Store size={20} className="text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Manage Shops Master Data</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3">
+          <div className="p-6 border-r border-slate-100 lg:col-span-1">
+            <h4 className="text-sm font-bold text-slate-900 mb-4">{editingId ? 'Edit Shop' : 'Add New Shop'}</h4>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Shop Name</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.shop_name}
+                  onChange={e => setFormData({...formData, shop_name: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. Al-Madina Mart"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Owner Name</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.owner_name}
+                  onChange={e => setFormData({...formData, owner_name: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. Salim Sheikh"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Location</label>
+                <input 
+                   required
+                   type="text" 
+                   value={formData.location}
+                   onChange={e => setFormData({...formData, location: e.target.value})}
+                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                   placeholder="e.g. Block 4, Gulshan"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Phone</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. 03001234567"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Credit Limit</label>
+                <input 
+                  required
+                  type="number" 
+                  value={formData.credit_limit}
+                  onChange={e => setFormData({...formData, credit_limit: parseInt(e.target.value) || 0})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update Shop' : 'Add Shop'}
+                </button>
+                {editingId && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setEditingId(null);
+                      setFormData({ 
+                        shop_name: '', 
+                        owner_name: '', 
+                        location: '', 
+                        phone: '', 
+                        credit_limit: 0 
+                      });
+                    }}
+                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
+            <h4 className="text-sm font-bold text-slate-900 mb-4">Shop Directory</h4>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">ID</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Shop / Owner</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Location / Phone</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shops.map(shop => (
+                    <tr key={shop.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500">#{shop.id}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-bold text-slate-900">{shop.shop_name}</p>
+                        <p className="text-[10px] text-slate-500">{shop.owner_name}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-xs text-slate-700">{shop.location}</p>
+                        <p className="text-[10px] text-slate-500">{shop.phone}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button 
+                            onClick={() => {
+                              setEditingId(shop.id);
+                              setFormData({ 
+                                shop_name: shop.shop_name, 
+                                owner_name: shop.owner_name, 
+                                location: shop.location, 
+                                phone: shop.phone, 
+                                credit_limit: shop.credit_limit 
+                              });
+                            }}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(shop.id)}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {shops.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-slate-500 text-xs italic">
+                        No shops found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -3261,7 +3500,69 @@ export default function App() {
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
   const [isOrderBookerModalOpen, setIsOrderBookerModalOpen] = useState(false);
   const [isSalesmanModalOpen, setIsSalesmanModalOpen] = useState(false);
+  const [isShopMasterModalOpen, setIsShopMasterModalOpen] = useState(false);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
+  const [commandValue, setCommandValue] = useState("");
+  const [isCommandExpanded, setIsCommandExpanded] = useState(true);
+
+  const executeTransaction = (code: string) => {
+    const tCode = code.trim().toUpperCase();
+    if (!tCode) return;
+
+    // Handle /n prefix
+    const finalCode = tCode.startsWith('/N') ? tCode.slice(2) : tCode;
+
+    // If it started with /n, we "terminate session" by closing any open modals
+    if (tCode.startsWith('/N')) {
+      setIsProductMasterModalOpen(false);
+      setIsRegisterShopModalOpen(false);
+      setIsRegisterSupplierModalOpen(false);
+      setIsPurchaseModalOpen(false);
+      setIsDeliveryModalOpen(false);
+      setIsMaterialGroupModalOpen(false);
+      setIsDriverModalOpen(false);
+      setIsOrderBookerModalOpen(false);
+      setIsSalesmanModalOpen(false);
+      setIsShopMasterModalOpen(false);
+      setIsNewOrderModalOpen(false);
+      setSelectedOrder(null);
+      setSelectedShop(null);
+      setSelectedPurchase(null);
+      setSelectedDelivery(null);
+    }
+
+    switch (finalCode) {
+      // Sales & Distribution (SD)
+      case 'VA01': setIsNewOrderModalOpen(true); break;
+      case 'VA03': setActiveTab('orders'); break;
+      case 'DLVY': setActiveTab('deliveries'); break;
+      
+      // Material Management (MM)
+      case 'MM01': setIsMaterialGroupModalOpen(true); break;
+      case 'MM02': setIsProductMasterModalOpen(true); break;
+      case 'MM03': setActiveTab('inventory'); break;
+      case 'ME21N': setIsPurchaseModalOpen(true); break;
+      
+      // Master Data (MD)
+      case 'VD01': setIsRegisterShopModalOpen(true); break;
+      case 'VD03': setActiveTab('shops'); break;
+      case 'XK01': setIsRegisterSupplierModalOpen(true); break;
+      case 'BP01': setIsShopMasterModalOpen(true); break;
+      case 'OBM1': setIsOrderBookerModalOpen(true); break;
+      case 'SLM1': setIsSalesmanModalOpen(true); break;
+      case 'DRV1': setIsDriverModalOpen(true); break;
+      
+      // Systems & Reports
+      case 'DASH': setActiveTab('dashboard'); break;
+      case 'REPT': setActiveTab('reports'); break;
+      case 'LP01': setActiveTab('load_plans'); break;
+      
+      default:
+        console.warn(`Transaction code ${finalCode} not recognized`);
+        break;
+    }
+    setCommandValue("");
+  };
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editingDelivery, setEditingDelivery] = useState<Delivery | null>(null);
 
@@ -3522,7 +3823,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-bottom border-slate-200 flex items-center justify-between px-6 sticky top-0 z-40">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 sticky top-0 z-40 gap-4">
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="lg:hidden p-2 hover:bg-slate-100 rounded-lg"
@@ -3530,18 +3831,51 @@ export default function App() {
             <Menu size={24} />
           </button>
           
-          <div className="flex-1 max-w-xl mx-4 hidden md:block">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-0.5">
+              <button 
+                onClick={() => setIsCommandExpanded(!isCommandExpanded)}
+                className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-slate-600"
+              >
+                {isCommandExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+              </button>
+              
+              <div className={cn(
+                "overflow-hidden transition-all duration-300 flex items-center",
+                isCommandExpanded ? "w-48 opacity-100 ml-1" : "w-0 opacity-0 ml-0"
+              )}>
+                <input 
+                  type="text" 
+                  value={commandValue}
+                  onChange={(e) => setCommandValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      executeTransaction(commandValue);
+                    }
+                  }}
+                  placeholder="Enter T-Code..." 
+                  className="w-full bg-transparent border-none text-sm font-mono focus:ring-0 placeholder:text-slate-400 uppercase"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 max-w-xl hidden md:block">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Search orders, retailers, products..." 
+                placeholder="Search orders, shops, products..." 
                 className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-600 rounded-xl text-sm transition-all outline-none"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">System</span>
+              <span className="text-xs font-bold text-indigo-600">S4/HANA DMS</span>
+            </div>
             <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100">
               <Plus size={18} />
               <span>New Order</span>
@@ -3806,13 +4140,22 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-slate-900">Shop Network</h3>
-                        <button 
-                          onClick={() => setIsRegisterShopModalOpen(true)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
-                        >
-                          <Plus size={18} />
-                          <span>Register Shop</span>
-                        </button>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => setIsShopMasterModalOpen(true)}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          >
+                            <Settings size={18} />
+                            <span>Manage Shops</span>
+                          </button>
+                          <button 
+                            onClick={() => setIsRegisterShopModalOpen(true)}
+                            className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                          >
+                            <Plus size={18} />
+                            <span>Register Shop</span>
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {shops.map(shop => (
@@ -4512,6 +4855,16 @@ export default function App() {
               fetchSalesmen();
               fetchDeliveries();
             }}
+          />
+        )}
+        {isShopMasterModalOpen && (
+          <ShopMasterModal 
+            onClose={() => setIsShopMasterModalOpen(false)}
+            onSuccess={() => {
+              fetchShops();
+              setIsShopMasterModalOpen(false);
+            }}
+            shops={shops}
           />
         )}
         {isNewOrderModalOpen && (

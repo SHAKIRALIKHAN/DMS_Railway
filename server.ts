@@ -559,6 +559,29 @@ async function startServer() {
     res.json({ id: result.lastInsertRowid });
   });
 
+  app.put("/api/shops/:id", (req, res) => {
+    const { id } = req.params;
+    const { shop_name, owner_name, location, phone, credit_limit } = req.body;
+    try {
+      db.prepare("UPDATE shops SET shop_name = ?, owner_name = ?, location = ?, phone = ?, credit_limit = ? WHERE id = ?").run(
+        shop_name, owner_name, location, phone, credit_limit, id
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/shops/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+      db.prepare("DELETE FROM shops WHERE id = ?").run(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(400).json({ error: "Failed to delete shop. It may have associated records (Orders/Payments)." });
+    }
+  });
+
   app.get("/api/orders", (req, res) => {
     const orders = db.prepare(`
       SELECT o.*, r.shop_name, ob.name as order_booker_name 
