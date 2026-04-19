@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import { 
   LayoutDashboard, 
   Package, 
@@ -25,7 +25,9 @@ import {
   Save,
   Database,
   BarChart3,
-  Edit
+  Edit,
+  Trash2,
+  Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1191,13 +1193,13 @@ const DriverModal = ({
                             }}
                             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           >
-                            <Plus size={14} className="rotate-45" />
+                            <Edit size={14} />
                           </button>
                           <button 
                             onClick={() => handleDelete(driver.id)}
                             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           >
-                            <X size={14} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -1412,13 +1414,13 @@ const SalesmanModal = ({
                       }}
                       className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
                     >
-                      <Plus size={18} className="rotate-45" />
+                      <Edit size={18} />
                     </button>
                     <button 
                       onClick={() => handleDelete(salesman.id)}
                       className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
                     >
-                      <X size={18} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 </div>
@@ -1643,13 +1645,13 @@ const OrderBookerModal = ({
                             }}
                             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           >
-                            <Plus size={14} className="rotate-45" />
+                            <Edit size={14} />
                           </button>
                           <button 
                             onClick={() => handleDelete(booker.id)}
                             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           >
-                            <X size={14} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -2588,6 +2590,8 @@ const MaterialGroupModal = ({
         </div>
       </motion.div>
     </div>
+  );
+};
 
 const UnitModal = ({ 
   onClose, 
@@ -2852,7 +2856,7 @@ const ProductMasterDataModal = ({
   };
 
   const handleEdit = (product: Product) => {
-    setEditingId(product.id || product.product_id); // Support both naming variants if they exist
+    setEditingId(product.product_id);
     setFormData({
       product_name: product.product_name,
       brand: product.brand || '',
@@ -2869,7 +2873,7 @@ const ProductMasterDataModal = ({
     });
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
       const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
@@ -2881,7 +2885,8 @@ const ProductMasterDataModal = ({
 
   const filteredProducts = products.filter(p => 
     p.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.brand && p.brand.toLowerCase().includes(searchQuery.toLowerCase()))
+    (p.brand && p.brand.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    p.product_id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -3106,10 +3111,10 @@ const ProductMasterDataModal = ({
             <div className="overflow-y-auto flex-1 p-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredProducts.map(product => (
-                  <div key={product.id || product.product_id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group">
+                  <div key={product.product_id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 tracking-wider">#{product.id || product.product_id}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 tracking-wider">#{product.product_id}</p>
                         <h5 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{product.product_name}</h5>
                         <p className="text-xs text-slate-500 font-medium">{product.brand} • {product.unit}</p>
                       </div>
@@ -3118,10 +3123,10 @@ const ProductMasterDataModal = ({
                           onClick={() => handleEdit(product)}
                           className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
                         >
-                          <Edit3 size={16} />
+                          <Edit size={16} />
                         </button>
                         <button 
-                          onClick={() => handleDelete(product.id || product.product_id)}
+                          onClick={() => handleDelete(product.product_id)}
                           className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
                         >
                           <Trash2 size={16} />
@@ -4138,13 +4143,25 @@ export default function App() {
                     <h2 className="text-2xl font-bold text-slate-900">Delivery Transactions</h2>
                     <p className="text-slate-500">Manage and track product deliveries against orders</p>
                   </div>
-                  <button 
-                    onClick={() => setIsDeliveryModalOpen(true)}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
-                  >
-                    <Plus size={18} />
-                    <span>New Delivery</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setIsSalesmanModalOpen(true)}
+                      className="bg-white text-slate-700 px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    >
+                      <Users size={18} />
+                      <span>Manage Salesmen</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setSelectedDelivery(null);
+                        setIsDeliveryModalOpen(true);
+                      }}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
+                    >
+                      <Plus size={18} />
+                      <span>New Delivery</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -4493,6 +4510,7 @@ export default function App() {
             onClose={() => setIsSalesmanModalOpen(false)} 
             onSuccess={() => {
               fetchSalesmen();
+              fetchDeliveries();
             }}
           />
         )}
