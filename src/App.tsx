@@ -3469,8 +3469,9 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
 // --- Main App ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'shops' | 'orders' | 'purchases' | 'load_plans' | 'master_data' | 'reports' | 'deliveries'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>('dashboard');
   const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers'>('products');
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>('orders');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -3534,18 +3535,30 @@ export default function App() {
     switch (finalCode) {
       // Sales & Distribution (SD)
       case 'VA01': setIsNewOrderModalOpen(true); break;
-      case 'VA03': setActiveTab('orders'); break;
-      case 'DLVY': setActiveTab('deliveries'); break;
+      case 'VA03': 
+        setActiveTab('transactions');
+        setTransactionsSubTab('orders');
+        break;
+      case 'DLVY': 
+        setActiveTab('transactions');
+        setTransactionsSubTab('deliveries');
+        break;
       
       // Material Management (MM)
       case 'MM01': setIsMaterialGroupModalOpen(true); break;
       case 'MM02': setIsProductMasterModalOpen(true); break;
       case 'MM03': setActiveTab('inventory'); break;
-      case 'ME21N': setIsPurchaseModalOpen(true); break;
+      case 'ME21N': 
+        setActiveTab('transactions');
+        setTransactionsSubTab('purchases');
+        break;
       
       // Master Data (MD)
       case 'VD01': setIsRegisterShopModalOpen(true); break;
-      case 'VD03': setActiveTab('shops'); break;
+      case 'VD03': 
+        setActiveTab('master_data');
+        setMasterDataSubTab('shops');
+        break;
       case 'XK01': setIsRegisterSupplierModalOpen(true); break;
       case 'BP01': setIsShopMasterModalOpen(true); break;
       case 'OBM1': setIsOrderBookerModalOpen(true); break;
@@ -3555,7 +3568,10 @@ export default function App() {
       // Systems & Reports
       case 'DASH': setActiveTab('dashboard'); break;
       case 'REPT': setActiveTab('reports'); break;
-      case 'LP01': setActiveTab('load_plans'); break;
+      case 'LP01': 
+        setActiveTab('transactions');
+        setTransactionsSubTab('load_plans');
+        break;
       
       default:
         console.warn(`Transaction code ${finalCode} not recognized`);
@@ -3765,34 +3781,16 @@ export default function App() {
               onClick={() => setActiveTab('dashboard')} 
             />
             <SidebarItem 
-              icon={ShoppingCart} 
-              label="Orders" 
-              active={activeTab === 'orders'} 
-              onClick={() => setActiveTab('orders')} 
-            />
-            <SidebarItem 
-              icon={Truck} 
-              label="Deliveries" 
-              active={activeTab === 'deliveries'} 
-              onClick={() => setActiveTab('deliveries')} 
-            />
-            <SidebarItem 
-              icon={FileText} 
-              label="Purchases" 
-              active={activeTab === 'purchases'} 
-              onClick={() => setActiveTab('purchases')} 
-            />
-            <SidebarItem 
-              icon={Truck} 
-              label="Load Plans" 
-              active={activeTab === 'load_plans'} 
-              onClick={() => setActiveTab('load_plans')} 
-            />
-            <SidebarItem 
               icon={Database} 
               label="Master Data" 
               active={activeTab === 'master_data'} 
               onClick={() => setActiveTab('master_data')} 
+            />
+            <SidebarItem 
+              icon={TrendingUp} 
+              label="Transactions" 
+              active={activeTab === 'transactions'} 
+              onClick={() => setActiveTab('transactions')} 
             />
             <SidebarItem 
               icon={BarChart3} 
@@ -3874,7 +3872,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">System</span>
-              <span className="text-xs font-bold text-indigo-600">S4/HANA DMS</span>
+              <span className="text-xs font-bold text-indigo-600">SK-DMS</span>
             </div>
             <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100">
               <Plus size={18} />
@@ -4379,9 +4377,9 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'orders' && (
+            {activeTab === 'transactions' && (
               <motion.div 
-                key="orders"
+                key="transactions"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -4389,334 +4387,332 @@ export default function App() {
               >
                 <div className="flex justify-between items-end">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Order Tracking</h2>
-                    <p className="text-slate-500">Monitor sales orders and delivery status</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setIsOrderBookerModalOpen(true)}
-                      className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
-                    >
-                      <Users size={18} />
-                      <span>Order Bookers</span>
-                    </button>
-                    <button 
-                      onClick={() => setIsNewOrderModalOpen(true)}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
-                    >
-                      <Plus size={18} />
-                      <span>New Order</span>
-                    </button>
+                    <h2 className="text-2xl font-bold text-slate-900">Transaction Processing</h2>
+                    <p className="text-slate-500">Manage sales, purchases and logistics</p>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Booker</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {orders.map(order => (
-                        <tr 
-                          key={order.id} 
-                          onClick={() => setSelectedOrder(order)}
-                          className="hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-mono text-slate-500">#ORD-{order.id.toString().padStart(4, '0')}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-bold text-slate-900">{order.shop_name}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-slate-600">{order.order_booker_name}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-slate-600">{new Date(order.order_date).toLocaleDateString()}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-bold text-slate-900">{formatPKR(order.total_amount)}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
-                              order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                              order.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
-                            )}>
-                              {order.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingOrder(order);
-                                setIsNewOrderModalOpen(true);
-                              }}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                            >
-                              <Edit size={18} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'deliveries' && (
-              <motion.div 
-                key="deliveries"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Delivery Transactions</h2>
-                    <p className="text-slate-500">Manage and track product deliveries against orders</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setIsSalesmanModalOpen(true)}
-                      className="bg-white text-slate-700 px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                    >
-                      <Users size={18} />
-                      <span>Manage Salesmen</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setSelectedDelivery(null);
-                        setIsDeliveryModalOpen(true);
-                      }}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
-                    >
-                      <Plus size={18} />
-                      <span>New Delivery</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery ID</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Ref</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Salesman</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {deliveries.map(delivery => (
-                        <tr key={delivery.id} className="hover:bg-slate-50 transition-colors group">
-                          <td className="px-6 py-4">
-                            <span className="font-mono font-bold text-indigo-600">#DEL-{delivery.id.toString().padStart(4, '0')}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-slate-600">
-                              #ORD-{(delivery.order_ref || delivery.order_id || 0).toString().padStart(4, '0')}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-bold text-slate-900">{delivery.shop_name}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-slate-600">{delivery.salesman_name}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-slate-600">{new Date(delivery.delivery_date).toLocaleDateString()}</p>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <p className="text-sm font-bold text-slate-900">{formatPKR(delivery.total_amount)}</p>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex justify-center gap-2">
-                              <button 
-                                onClick={() => setSelectedDelivery(delivery)}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                              >
-                                <FileText size={18} />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  setEditingDelivery(delivery);
-                                  setIsDeliveryModalOpen(true);
-                                }}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                              >
-                                <Edit size={18} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {deliveries.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center">
-                            <Truck size={48} className="mx-auto text-slate-200 mb-4" />
-                            <p className="text-slate-500 font-medium">No delivery transactions found</p>
-                            <button 
-                              onClick={() => setIsDeliveryModalOpen(true)}
-                              className="mt-4 text-indigo-600 font-bold hover:underline"
-                            >
-                              Create your first delivery
-                            </button>
-                          </td>
-                        </tr>
+                {/* Sub-tabs Navigation */}
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
+                  {[
+                    { id: 'orders', label: 'Orders', icon: ShoppingCart },
+                    { id: 'deliveries', label: 'Deliveries', icon: Truck },
+                    { id: 'purchases', label: 'Purchases', icon: FileText },
+                    { id: 'load_plans', label: 'Load Plans', icon: Truck },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTransactionsSubTab(tab.id as any)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                        transactionsSubTab === tab.id 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
                       )}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'purchases' && (
-              <motion.div 
-                key="purchases"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Purchase Orders</h2>
-                    <p className="text-slate-500">Inventory intake from MSK Company</p>
-                  </div>
-                  <button 
-                    onClick={() => setIsPurchaseModalOpen(true)}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
-                  >
-                    <Plus size={18} />
-                    <span>New Purchase</span>
-                  </button>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Supplier</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {purchases.map(purchase => (
-                        <tr 
-                          key={purchase.id} 
-                          className="hover:bg-slate-50 transition-colors cursor-pointer group"
-                        >
-                          <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-mono text-slate-500">#PUR-{purchase.id.toString().padStart(4, '0')}</td>
-                          <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-bold text-slate-900">{purchase.supplier_name}</td>
-                          <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm text-slate-600">{new Date(purchase.purchase_date).toLocaleDateString()}</td>
-                          <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-bold text-slate-900">{formatPKR(purchase.total_amount)}</td>
-                          <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600">
-                              {purchase.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingPurchase(purchase);
-                                setIsPurchaseModalOpen(true);
-                              }}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
-                            >
-                              <Edit size={18} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'load_plans' && (
-              <motion.div 
-                key="load_plans"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Daily Load Plans</h2>
-                    <p className="text-slate-500">Manage daily dispatch and logistics</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setIsDriverModalOpen(true)}
-                      className="bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-colors"
                     >
-                      <Users size={18} />
-                      <span>Drivers Master</span>
+                      <tab.icon size={16} />
+                      <span>{tab.label}</span>
                     </button>
-                    <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
-                      <Plus size={18} />
-                      <span>Generate Plan</span>
-                    </button>
-                  </div>
+                  ))}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {loadPlans.map(plan => (
-                    <div key={plan.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-indigo-50 p-3 rounded-xl">
-                            <Truck className="text-indigo-600" size={24} />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-slate-900">#LP-{plan.id.toString().padStart(4, '0')}</h3>
-                            <p className="text-xs text-slate-500">{new Date(plan.plan_date).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <span className={cn(
-                          "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
-                          plan.status === 'completed' ? "bg-emerald-50 text-emerald-600" : 
-                          plan.status === 'dispatched' ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-600"
-                        )}>
-                          {plan.status}
-                        </span>
-                      </div>
-                      <div className="space-y-3 mb-6">
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Phone size={14} />
-                          <span>Vehicle: {plan.vehicle_id}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Users size={14} />
-                          <span>Driver: {plan.driver_name}</span>
+                <div className="mt-6">
+                  {transactionsSubTab === 'orders' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Sales Orders</h3>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsOrderBookerModalOpen(true)}
+                            className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
+                          >
+                            <Users size={18} />
+                            <span>Order Bookers</span>
+                          </button>
+                          <button 
+                            onClick={() => setIsNewOrderModalOpen(true)}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
+                          >
+                            <Plus size={18} />
+                            <span>New Order</span>
+                          </button>
                         </div>
                       </div>
-                      <button className="w-full py-2 text-sm font-bold text-indigo-600 border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors">
-                        View Dispatch List
-                      </button>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Booker</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {orders.map(order => (
+                              <tr 
+                                key={order.id} 
+                                onClick={() => setSelectedOrder(order)}
+                                className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-6 py-4">
+                                  <span className="text-sm font-mono text-slate-500">#ORD-{order.id.toString().padStart(4, '0')}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm font-bold text-slate-900">{order.shop_name}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm text-slate-600">{order.order_booker_name}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm text-slate-600">{new Date(order.order_date).toLocaleDateString()}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm font-bold text-slate-900">{formatPKR(order.total_amount)}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={cn(
+                                    "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
+                                    order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
+                                    order.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                                  )}>
+                                    {order.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingOrder(order);
+                                      setIsNewOrderModalOpen(true);
+                                    }}
+                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Edit size={18} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {transactionsSubTab === 'deliveries' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Delivery Notes</h3>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsSalesmanModalOpen(true)}
+                            className="bg-white text-slate-700 px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                          >
+                            <Users size={18} />
+                            <span>Salesmen</span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setSelectedDelivery(null);
+                              setIsDeliveryModalOpen(true);
+                            }}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
+                          >
+                            <Plus size={18} />
+                            <span>New Delivery</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery ID</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Ref</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Salesman</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {deliveries.map(delivery => (
+                              <tr key={delivery.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="px-6 py-4">
+                                  <span className="font-mono font-bold text-indigo-600">#DEL-{delivery.id.toString().padStart(4, '0')}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm font-medium text-slate-600">
+                                    #ORD-{(delivery.order_ref || delivery.order_id || 0).toString().padStart(4, '0')}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm font-bold text-slate-900">{delivery.shop_name}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm text-slate-600">{delivery.salesman_name}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm text-slate-600">{new Date(delivery.delivery_date).toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <p className="text-sm font-bold text-slate-900">{formatPKR(delivery.total_amount)}</p>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="flex justify-center gap-2">
+                                    <button 
+                                      onClick={() => setSelectedDelivery(delivery)}
+                                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    >
+                                      <FileText size={18} />
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setEditingDelivery(delivery);
+                                        setIsDeliveryModalOpen(true);
+                                      }}
+                                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                      <Edit size={18} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {deliveries.length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="px-6 py-12 text-center">
+                                  <Truck size={48} className="mx-auto text-slate-200 mb-4" />
+                                  <p className="text-slate-500 font-medium">No deliveries found</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {transactionsSubTab === 'purchases' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Purchase Orders</h3>
+                        <button 
+                          onClick={() => setIsPurchaseModalOpen(true)}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                        >
+                          <Plus size={18} />
+                          <span>New Purchase</span>
+                        </button>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Supplier</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {purchases.map(purchase => (
+                              <tr 
+                                key={purchase.id} 
+                                className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                              >
+                                <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-mono text-slate-500">#PUR-{purchase.id.toString().padStart(4, '0')}</td>
+                                <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-bold text-slate-900">{purchase.supplier_name}</td>
+                                <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm text-slate-600">{new Date(purchase.purchase_date).toLocaleDateString()}</td>
+                                <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4 text-sm font-bold text-slate-900">{formatPKR(purchase.total_amount)}</td>
+                                <td onClick={() => setSelectedPurchase(purchase)} className="px-6 py-4">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600">
+                                    {purchase.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingPurchase(purchase);
+                                      setIsPurchaseModalOpen(true);
+                                    }}
+                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Edit size={18} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {transactionsSubTab === 'load_plans' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Load Plans</h3>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsDriverModalOpen(true)}
+                            className="bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-colors"
+                          >
+                            <Users size={18} />
+                            <span>Drivers Master</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {loadPlans.map(plan => (
+                          <div key={plan.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className="flex justify-between items-start mb-6">
+                              <div className="flex items-center gap-3">
+                                <div className="bg-indigo-50 p-3 rounded-xl">
+                                  <Truck className="text-indigo-600" size={24} />
+                                </div>
+                                <div>
+                                  <h3 className="font-bold text-slate-900">#LP-{plan.id.toString().padStart(4, '0')}</h3>
+                                  <p className="text-xs text-slate-500">{new Date(plan.plan_date).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              <span className={cn(
+                                "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
+                                plan.status === 'completed' ? "bg-emerald-50 text-emerald-600" : 
+                                plan.status === 'dispatched' ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-600"
+                              )}>
+                                {plan.status}
+                              </span>
+                            </div>
+                            <div className="space-y-3 mb-6">
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Truck size={14} />
+                                <span>Vehicle: {plan.vehicle_id}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Users size={14} />
+                                <span>Driver: {plan.driver_name}</span>
+                              </div>
+                            </div>
+                            <button className="w-full py-2 text-sm font-bold text-indigo-600 border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors">
+                              View Dispatch List
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
