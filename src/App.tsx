@@ -61,7 +61,8 @@ import {
   Salesman,
   Delivery,
   DeliveryItem,
-  Unit
+  Unit,
+  TCodeInfo
 } from './types';
 
 function cn(...inputs: ClassValue[]) {
@@ -3470,7 +3471,7 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>('dashboard');
-  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers'>('products');
+  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'tcodes'>('products');
   const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>('orders');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -3498,6 +3499,29 @@ export default function App() {
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [isMaterialGroupModalOpen, setIsMaterialGroupModalOpen] = useState(false);
+
+  const [tCodes, setTCodes] = useState<TCodeInfo[]>([
+    { id: 1, parentModule: 'Master Data', tCode: 'MM01', transactionName: 'Register Material Group', actionType: 'Create', roleAssociation: 'Z_MM_ADMIN' },
+    { id: 2, parentModule: 'Master Data', tCode: 'MM02', transactionName: 'Manage Product Master', actionType: 'Manage', roleAssociation: 'Z_MM_ADMIN' },
+    { id: 3, parentModule: 'Master Data', tCode: 'MM03', transactionName: 'Inventory Overview', actionType: 'Display', roleAssociation: 'Z_MM_VIEWS' },
+    { id: 4, parentModule: 'Master Data', tCode: 'VD01', transactionName: 'Register Shop', actionType: 'Create', roleAssociation: 'Z_SHOP_ADMIN' },
+    { id: 5, parentModule: 'Master Data', tCode: 'VD03', transactionName: 'Shop Detail Ledger', actionType: 'Display', roleAssociation: 'Z_SHOP_VIEW' },
+    { id: 6, parentModule: 'Master Data', tCode: 'XK01', transactionName: 'Register Supplier', actionType: 'Create', roleAssociation: 'Z_PURCHASE_ADMIN' },
+    { id: 7, parentModule: 'Master Data', tCode: 'BP01', transactionName: 'Shop Network Management', actionType: 'Manage', roleAssociation: 'Z_SHOP_ADMIN' },
+    { id: 8, parentModule: 'Master Data', tCode: 'OBM1', transactionName: 'Order Booker Management', actionType: 'Manage', roleAssociation: 'Z_STAFF_ADMIN' },
+    { id: 9, parentModule: 'Master Data', tCode: 'SLM1', transactionName: 'Salesman Management', actionType: 'Manage', roleAssociation: 'Z_STAFF_ADMIN' },
+    { id: 10, parentModule: 'Master Data', tCode: 'DRV1', transactionName: 'Driver Management', actionType: 'Manage', roleAssociation: 'Z_STAFF_ADMIN' },
+    { id: 11, parentModule: 'Transactions', tCode: 'VA01', transactionName: 'Create Sales Order', actionType: 'Create', roleAssociation: 'Z_SALES_ENTRY' },
+    { id: 12, parentModule: 'Transactions', tCode: 'VA03', transactionName: 'Order Tracking', actionType: 'Display', roleAssociation: 'Z_SALES_VIEW' },
+    { id: 13, parentModule: 'Transactions', tCode: 'ME21N', transactionName: 'Create Purchase Order', actionType: 'Create', roleAssociation: 'Z_PURCHASE_ENTRY' },
+    { id: 14, parentModule: 'Transactions', tCode: 'DLVY', transactionName: 'Process Delivery', actionType: 'Create', roleAssociation: 'Z_LOGISTICS_ENTRY' },
+    { id: 15, parentModule: 'Transactions', tCode: 'LP01', transactionName: 'Generate Load Plan', actionType: 'Create', roleAssociation: 'Z_LOGISTICS_MGMT' },
+    { id: 16, parentModule: 'System', tCode: 'DASH', transactionName: 'Executive Dashboard', actionType: 'Display', roleAssociation: 'Z_EXEC_VIEW' },
+    { id: 17, parentModule: 'System', tCode: 'REPT', transactionName: 'MIS Reports', actionType: 'Display', roleAssociation: 'Z_EXEC_VIEW' },
+    { id: 18, parentModule: 'Master Data', tCode: 'TC01', transactionName: 'TCODE Info Maintenance', actionType: 'Manage', roleAssociation: 'Z_SYS_ADMIN' },
+  ]);
+  const [selectedTCode, setSelectedTCode] = useState<TCodeInfo | null>(null);
+  const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
   const [isOrderBookerModalOpen, setIsOrderBookerModalOpen] = useState(false);
   const [isSalesmanModalOpen, setIsSalesmanModalOpen] = useState(false);
@@ -3525,6 +3549,7 @@ export default function App() {
       setIsOrderBookerModalOpen(false);
       setIsSalesmanModalOpen(false);
       setIsShopMasterModalOpen(false);
+      setIsTCodeModalOpen(false);
       setIsNewOrderModalOpen(false);
       setSelectedOrder(null);
       setSelectedShop(null);
@@ -3560,10 +3585,30 @@ export default function App() {
         setMasterDataSubTab('shops');
         break;
       case 'XK01': setIsRegisterSupplierModalOpen(true); break;
-      case 'BP01': setIsShopMasterModalOpen(true); break;
-      case 'OBM1': setIsOrderBookerModalOpen(true); break;
-      case 'SLM1': setIsSalesmanModalOpen(true); break;
-      case 'DRV1': setIsDriverModalOpen(true); break;
+      case 'BP01': 
+        setActiveTab('master_data');
+        setMasterDataSubTab('shops');
+        setIsShopMasterModalOpen(true); 
+        break;
+      case 'OBM1': 
+        setActiveTab('master_data');
+        setMasterDataSubTab('order_bookers');
+        setIsOrderBookerModalOpen(true); 
+        break;
+      case 'SLM1': 
+        setActiveTab('master_data');
+        setMasterDataSubTab('salesmen');
+        setIsSalesmanModalOpen(true); 
+        break;
+      case 'DRV1': 
+        setActiveTab('master_data');
+        setMasterDataSubTab('drivers');
+        setIsDriverModalOpen(true); 
+        break;
+      case 'TC01':
+        setActiveTab('master_data');
+        setMasterDataSubTab('tcodes');
+        break;
       
       // Systems & Reports
       case 'DASH': setActiveTab('dashboard'); break;
@@ -4073,7 +4118,9 @@ export default function App() {
                     { id: 'shops', label: 'Shops', icon: Store },
                     { id: 'order_bookers', label: 'Order Bookers', icon: Users },
                     { id: 'salesmen', label: 'Salesmen', icon: Users },
+                    { id: 'drivers', label: 'Drivers', icon: Truck },
                     { id: 'products', label: 'Products', icon: Package },
+                    { id: 'tcodes', label: 'TCODE Info', icon: Settings },
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4271,6 +4318,112 @@ export default function App() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {masterDataSubTab === 'drivers' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Drivers Directory</h3>
+                        <button 
+                          onClick={() => setIsDriverModalOpen(true)}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                        >
+                          <Plus size={18} />
+                          <span>Manage Drivers</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {drivers.map(driver => (
+                          <div key={driver.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className="flex items-center gap-4 mb-4">
+                              <div className="bg-amber-50 p-3 rounded-xl text-amber-600">
+                                <Truck size={24} />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-bold text-slate-900">{driver.name}</h3>
+                                <p className="text-sm text-slate-500">Driver ID: #DR-{driver.id.toString().padStart(3, '0')}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-3 pt-4 border-t border-slate-50">
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Phone size={16} className="text-slate-400" />
+                                <span>{driver.cell_no}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Clock size={16} className="text-slate-400" />
+                                <span>Joined: {new Date(driver.joining_date).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {drivers.length === 0 && (
+                          <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                            <Truck size={48} className="mx-auto text-slate-300 mb-4" />
+                            <p className="text-slate-500">No drivers registered yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {masterDataSubTab === 'tcodes' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">TCODE Info & Role Maintenance</h3>
+                        <button 
+                          onClick={() => {
+                            setSelectedTCode(null);
+                            setIsTCodeModalOpen(true);
+                          }}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                        >
+                          <Plus size={18} />
+                          <span>New TCODE</span>
+                        </button>
+                      </div>
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Parent Module</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">T-Code</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Transaction Name</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Action Type</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Role Association</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {tCodes.map(tc => (
+                              <tr key={tc.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="px-6 py-4 text-sm text-slate-600">{tc.parentModule}</td>
+                                <td className="px-6 py-4">
+                                  <span className="font-mono font-bold text-indigo-600 text-sm">{tc.tCode}</span>
+                                </td>
+                                <td className="px-6 py-4 font-bold text-slate-900 text-sm">{tc.transactionName}</td>
+                                <td className="px-6 py-4 text-sm text-slate-500">{tc.actionType}</td>
+                                <td className="px-6 py-4">
+                                  <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                                    {tc.roleAssociation}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedTCode(tc);
+                                      setIsTCodeModalOpen(true);
+                                    }}
+                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Edit size={18} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -4881,7 +5034,156 @@ export default function App() {
             formatPKR={formatPKR}
           />
         )}
+        {isTCodeModalOpen && (
+          <TCodeModal 
+            onClose={() => setIsTCodeModalOpen(false)}
+            onSuccess={(updatedTCodes) => {
+              if (updatedTCodes) setTCodes(updatedTCodes);
+              setIsTCodeModalOpen(false);
+            }}
+            tCodes={tCodes}
+            selectedTCode={selectedTCode}
+          />
+        )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function TCodeModal({ onClose, onSuccess, tCodes, selectedTCode }: { 
+  onClose: () => void; 
+  onSuccess: (updated?: TCodeInfo[]) => void;
+  tCodes: TCodeInfo[];
+  selectedTCode: TCodeInfo | null;
+}) {
+  const [formData, setFormData] = useState<Partial<TCodeInfo>>(
+    selectedTCode || {
+      parentModule: 'Master Data',
+      tCode: '',
+      transactionName: '',
+      actionType: 'Create',
+      roleAssociation: ''
+    }
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.tCode || !formData.transactionName) return;
+
+    let updated;
+    if (selectedTCode) {
+      updated = tCodes.map(tc => tc.id === selectedTCode.id ? { ...tc, ...formData } as TCodeInfo : tc);
+    } else {
+      updated = [...tCodes, { ...formData, id: Math.max(0, ...tCodes.map(t => t.id)) + 1 } as TCodeInfo];
+    }
+    onSuccess(updated);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+      >
+        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{selectedTCode ? 'Edit TCODE' : 'New TCODE Maintenance'}</h2>
+            <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Granular Access Control</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-colors">
+            <X size={20} className="text-slate-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Parent Module</label>
+              <select 
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+                value={formData.parentModule}
+                onChange={e => setFormData({ ...formData, parentModule: e.target.value })}
+              >
+                <option value="Master Data">Master Data</option>
+                <option value="Transactions">Transactions</option>
+                <option value="System">System</option>
+                <option value="Reports">Reports</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">T-Code ID</label>
+              <input 
+                autoFocus
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                placeholder="e.g. MM01"
+                value={formData.tCode}
+                onChange={e => setFormData({ ...formData, tCode: e.target.value.toUpperCase() })}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Transaction Name</label>
+            <input 
+              className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+              placeholder="Descriptive name of the action"
+              value={formData.transactionName}
+              onChange={e => setFormData({ ...formData, transactionName: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Action Type</label>
+              <select 
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+                value={formData.actionType}
+                onChange={e => setFormData({ ...formData, actionType: e.target.value as any })}
+              >
+                <option value="Create">Create</option>
+                <option value="Change">Change</option>
+                <option value="Display">Display</option>
+                <option value="Manage">Manage</option>
+                <option value="Delete">Delete</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Technical Role</label>
+              <input 
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                placeholder="Z_ROLE_NAME"
+                value={formData.roleAssociation}
+                onChange={e => setFormData({ ...formData, roleAssociation: e.target.value.toUpperCase() })}
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 flex gap-3 font-bold">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-6 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+            >
+              {selectedTCode ? 'Update Record' : 'Save TCODE'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
   );
 }
