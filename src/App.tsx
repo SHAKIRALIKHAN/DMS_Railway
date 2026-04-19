@@ -45,7 +45,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { 
   Product, 
-  Retailer, 
+  Shop, 
   Order, 
   DashboardStats, 
   OrderItem, 
@@ -70,11 +70,11 @@ function cn(...inputs: ClassValue[]) {
 // --- Components ---
 
 const LedgerModal = ({ 
-  retailer, 
+  shop, 
   onClose, 
   formatPKR 
 }: { 
-  retailer: Retailer, 
+  shop: Shop, 
   onClose: () => void, 
   formatPKR: (amount: number) => string 
 }) => {
@@ -84,7 +84,7 @@ const LedgerModal = ({
   useEffect(() => {
     const fetchLedger = async () => {
       try {
-        const res = await fetch(`/api/ledger/${retailer.id}`);
+        const res = await fetch(`/api/ledger/${shop.id}`);
         const data = await res.json();
         setEntries(data);
       } catch (err) {
@@ -94,7 +94,7 @@ const LedgerModal = ({
       }
     };
     fetchLedger();
-  }, [retailer.id]);
+  }, [shop.id]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -106,8 +106,8 @@ const LedgerModal = ({
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Client Ledger</h3>
-            <p className="text-sm text-slate-500">{retailer.shop_name} • Financial History</p>
+            <h3 className="text-lg font-bold text-slate-900">Shop Ledger</h3>
+            <p className="text-sm text-slate-500">{shop.shop_name} • Financial History</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <X size={20} className="text-slate-500" />
@@ -214,7 +214,7 @@ const OrderDetailsModal = ({
         <div className="p-6">
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Retailer</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Shop</p>
               <p className="text-sm font-bold text-slate-900">{order.shop_name}</p>
               <p className="text-xs text-slate-500">Booker: {order.order_booker_name}</p>
             </div>
@@ -854,7 +854,7 @@ const RegisterSupplierModal = ({
   );
 };
 
-const RegisterRetailerModal = ({ 
+const RegisterShopModal = ({ 
   onClose, 
   onSuccess 
 }: { 
@@ -874,7 +874,7 @@ const RegisterRetailerModal = ({
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/retailers', {
+      const res = await fetch('/api/shops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -887,7 +887,7 @@ const RegisterRetailerModal = ({
         onClose();
       }
     } catch (err) {
-      console.error("Failed to register retailer", err);
+      console.error("Failed to register shop", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -902,7 +902,7 @@ const RegisterRetailerModal = ({
         className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-slate-900">Register New Retailer</h3>
+          <h3 className="text-lg font-bold text-slate-900">Register New Shop</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <X size={20} className="text-slate-500" />
           </button>
@@ -978,7 +978,7 @@ const RegisterRetailerModal = ({
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Register Retailer'}
+              {isSubmitting ? 'Registering...' : 'Register Shop'}
             </button>
           </div>
         </form>
@@ -2065,7 +2065,7 @@ const DeliveryDetailsModal = ({
         <div className="p-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Retailer</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Shop</p>
               <p className="text-sm font-bold text-slate-900">{delivery.shop_name}</p>
             </div>
             <div>
@@ -2121,7 +2121,7 @@ const DeliveryDetailsModal = ({
 };
 
 const NewOrderModal = ({ 
-  retailers,
+  shops,
   orderBookers,
   products,
   order,
@@ -2129,7 +2129,7 @@ const NewOrderModal = ({
   onSuccess,
   formatPKR
 }: { 
-  retailers: Retailer[],
+  shops: Shop[],
   orderBookers: OrderBooker[],
   products: Product[],
   order?: Order,
@@ -2138,7 +2138,7 @@ const NewOrderModal = ({
   formatPKR: (amount: number) => string
 }) => {
   const [masterData, setMasterData] = useState({
-    retailer_id: order?.retailer_id.toString() || '',
+    shop_id: order?.shop_id.toString() || '',
     order_booker_id: order?.order_booker_id.toString() || '',
     estimated_delivery_date: order?.estimated_delivery_date || new Date(Date.now() + 86400000).toISOString().split('T')[0]
   });
@@ -2215,7 +2215,7 @@ const NewOrderModal = ({
 
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (!masterData.retailer_id || !masterData.order_booker_id || items.length === 0) {
+    if (!masterData.shop_id || !masterData.order_booker_id || items.length === 0) {
       alert("Please fill all master data and add at least one item.");
       return;
     }
@@ -2230,7 +2230,7 @@ const NewOrderModal = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...masterData,
-          retailer_id: parseInt(masterData.retailer_id),
+          shop_id: parseInt(masterData.shop_id),
           order_booker_id: parseInt(masterData.order_booker_id),
           items
         })
@@ -2268,15 +2268,15 @@ const NewOrderModal = ({
           {/* Master Form */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
             <div>
-              <label className="block text-xs font-bold text-indigo-700 mb-1 uppercase">Retailer / Shop</label>
+              <label className="block text-xs font-bold text-indigo-700 mb-1 uppercase">Shop</label>
               <select 
                 required
-                value={masterData.retailer_id}
-                onChange={e => setMasterData({...masterData, retailer_id: e.target.value})}
+                value={masterData.shop_id}
+                onChange={e => setMasterData({...masterData, shop_id: e.target.value})}
                 className="w-full px-4 py-2 bg-white border border-indigo-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
               >
-                <option value="">Select Retailer</option>
-                {retailers.map(r => <option key={r.id} value={r.id}>{r.shop_name}</option>)}
+                <option value="">Select Shop</option>
+                {shops.map(r => <option key={r.id} value={r.id}>{r.shop_name}</option>)}
               </select>
             </div>
             <div>
@@ -3230,11 +3230,11 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
 // --- Main App ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'retailers' | 'orders' | 'purchases' | 'load_plans' | 'master_data' | 'reports' | 'deliveries'>('dashboard');
-  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'retailers' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers'>('products');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'shops' | 'orders' | 'purchases' | 'load_plans' | 'master_data' | 'reports' | 'deliveries'>('dashboard');
+  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers'>('products');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [retailers, setRetailers] = useState<Retailer[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -3248,11 +3248,11 @@ export default function App() {
   const [chartData, setChartData] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [selectedRetailer, setSelectedRetailer] = useState<Retailer | null>(null);
+  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [isProductMasterModalOpen, setIsProductMasterModalOpen] = useState(false);
-  const [isRegisterRetailerModalOpen, setIsRegisterRetailerModalOpen] = useState(false);
+  const [isRegisterShopModalOpen, setIsRegisterShopModalOpen] = useState(false);
   const [isRegisterSupplierModalOpen, setIsRegisterSupplierModalOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
@@ -3268,7 +3268,7 @@ export default function App() {
   useEffect(() => {
     fetchStats();
     fetchProducts();
-    fetchRetailers();
+    fetchShops();
     fetchSuppliers();
     fetchOrders();
     fetchChartData();
@@ -3367,14 +3367,14 @@ export default function App() {
     }
   };
 
-  const fetchRetailers = async () => {
+  const fetchShops = async () => {
     try {
-      const res = await fetch('/api/retailers');
+      const res = await fetch('/api/shops');
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      setRetailers(data);
+      setShops(data);
     } catch (err) {
-      console.error("Failed to fetch retailers", err);
+      console.error("Failed to fetch shops", err);
     }
   };
 
@@ -3618,8 +3618,8 @@ export default function App() {
                     color="bg-emerald-500"
                   />
                   <StatCard 
-                    label="Active Retailers" 
-                    value={stats?.totalRetailers || 0} 
+                    label="Active Shops" 
+                    value={stats?.totalShops || 0} 
                     icon={Store} 
                     color="bg-indigo-500"
                     trend={5}
@@ -3738,7 +3738,7 @@ export default function App() {
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                   {[
                     { id: 'suppliers', label: 'Suppliers', icon: Factory },
-                    { id: 'retailers', label: 'Retailers', icon: Store },
+                    { id: 'shops', label: 'Shops', icon: Store },
                     { id: 'order_bookers', label: 'Order Bookers', icon: Users },
                     { id: 'salesmen', label: 'Salesmen', icon: Users },
                     { id: 'products', label: 'Products', icon: Package },
@@ -3802,45 +3802,45 @@ export default function App() {
                     </div>
                   )}
 
-                  {masterDataSubTab === 'retailers' && (
+                  {masterDataSubTab === 'shops' && (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Retailer Network</h3>
+                        <h3 className="text-lg font-bold text-slate-900">Shop Network</h3>
                         <button 
-                          onClick={() => setIsRegisterRetailerModalOpen(true)}
+                          onClick={() => setIsRegisterShopModalOpen(true)}
                           className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
                         >
                           <Plus size={18} />
-                          <span>Register Retailer</span>
+                          <span>Register Shop</span>
                         </button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {retailers.map(retailer => (
-                          <div key={retailer.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                        {shops.map(shop => (
+                          <div key={shop.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
                             <div className="flex justify-between items-start mb-4">
                               <div className="bg-indigo-50 p-3 rounded-xl">
                                 <Store className="text-indigo-600" size={24} />
                               </div>
                               <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Active</span>
                             </div>
-                            <h3 className="text-lg font-bold text-slate-900 mb-1">{retailer.shop_name}</h3>
-                            <p className="text-sm text-slate-500 mb-4">{retailer.owner_name}</p>
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">{shop.shop_name}</h3>
+                            <p className="text-sm text-slate-500 mb-4">{shop.owner_name}</p>
                             <div className="space-y-3 pt-4 border-t border-slate-50">
                               <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <MapPin size={16} className="text-slate-400" />
-                                <span>{retailer.location}</span>
+                                <span>{shop.location}</span>
                               </div>
                               <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <Phone size={16} className="text-slate-400" />
-                                <span>{retailer.phone}</span>
+                                <span>{shop.phone}</span>
                               </div>
                               <div className="flex items-center justify-between pt-2">
                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Credit Limit</span>
-                                <span className="text-sm font-bold text-slate-900">{formatPKR(retailer.credit_limit)}</span>
+                                <span className="text-sm font-bold text-slate-900">{formatPKR(shop.credit_limit)}</span>
                               </div>
                               <div className="pt-4 border-t border-slate-50 flex justify-end">
                                 <button 
-                                  onClick={() => setSelectedRetailer(retailer)}
+                                  onClick={() => setSelectedShop(shop)}
                                   className="flex items-center gap-1 text-indigo-600 text-sm font-bold hover:underline"
                                 >
                                   <span>View Ledger</span>
@@ -4017,7 +4017,7 @@ export default function App() {
                   {[
                     { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
                     { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
-                    { title: 'Retailer Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },
+                    { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },
                     { title: 'Booker Performance', desc: 'Orders and revenue by order booker', icon: Users },
                     { title: 'Product Velocity', desc: 'Fast and slow moving items', icon: BarChart3 },
                   ].map((report, i) => (
@@ -4072,7 +4072,7 @@ export default function App() {
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Retailer</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Booker</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
@@ -4170,7 +4170,7 @@ export default function App() {
                       <tr className="bg-slate-50 border-b border-slate-100">
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery ID</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Ref</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Retailer</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Salesman</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
@@ -4397,10 +4397,10 @@ export default function App() {
             formatPKR={formatPKR}
           />
         )}
-        {selectedRetailer && (
+        {selectedShop && (
           <LedgerModal 
-            retailer={selectedRetailer} 
-            onClose={() => setSelectedRetailer(null)} 
+            shop={selectedShop} 
+            onClose={() => setSelectedShop(null)} 
             formatPKR={formatPKR}
           />
         )}
@@ -4422,11 +4422,11 @@ export default function App() {
             }}
           />
         )}
-        {isRegisterRetailerModalOpen && (
-          <RegisterRetailerModal 
-            onClose={() => setIsRegisterRetailerModalOpen(false)} 
+        {isRegisterShopModalOpen && (
+          <RegisterShopModal 
+            onClose={() => setIsRegisterShopModalOpen(false)} 
             onSuccess={() => {
-              fetchRetailers();
+              fetchShops();
               fetchStats();
             }}
           />
@@ -4516,7 +4516,7 @@ export default function App() {
         )}
         {isNewOrderModalOpen && (
           <NewOrderModal 
-            retailers={retailers}
+            shops={shops}
             orderBookers={orderBookers}
             products={products}
             order={editingOrder || undefined}

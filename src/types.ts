@@ -27,7 +27,7 @@ export interface Product {
   reorder_level: number;
 }
 
-export interface Retailer {
+export interface Shop {
   id: number;
   shop_name: string;
   owner_name: string;
@@ -56,7 +56,7 @@ export interface Salesman {
 
 export interface Order {
   id: number;
-  retailer_id: number;
+  shop_id: number;
   order_booker_id: number;
   order_date: string;
   estimated_delivery_date: string;
@@ -89,7 +89,7 @@ export interface DashboardStats {
   totalSales: number;
   pendingOrders: number;
   lowStock: number;
-  totalRetailers: number;
+  totalShops: number;
 }
 
 export interface Supplier {
@@ -148,7 +148,7 @@ export interface LoadPlanItem {
 
 export interface LedgerEntry {
   id: number;
-  retailer_id: number;
+  shop_id: number;
   date: string;
   description: string;
   debit: number;

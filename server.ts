@@ -64,7 +64,7 @@ db.exec(`
     FOREIGN KEY (purchase_id) REFERENCES purchases(id)
   );
 
-  CREATE TABLE IF NOT EXISTS retailers (
+  CREATE TABLE IF NOT EXISTS shops (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     shop_name TEXT NOT NULL,
     owner_name TEXT NOT NULL,
@@ -93,13 +93,13 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    retailer_id INTEGER NOT NULL,
+    shop_id INTEGER NOT NULL,
     order_booker_id INTEGER NOT NULL,
     order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     estimated_delivery_date DATETIME,
     status TEXT DEFAULT 'pending',
     total_amount REAL NOT NULL,
-    FOREIGN KEY (retailer_id) REFERENCES retailers(id),
+    FOREIGN KEY (shop_id) REFERENCES shops(id),
     FOREIGN KEY (order_booker_id) REFERENCES order_bookers(id)
   );
 
@@ -116,11 +116,11 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    retailer_id INTEGER NOT NULL,
+    shop_id INTEGER NOT NULL,
     amount REAL NOT NULL,
     payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     payment_method TEXT NOT NULL,
-    FOREIGN KEY (retailer_id) REFERENCES retailers(id)
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
   );
 
   CREATE TABLE IF NOT EXISTS suppliers (
@@ -203,13 +203,13 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS client_ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    retailer_id INTEGER NOT NULL,
+    shop_id INTEGER NOT NULL,
     date DATETIME DEFAULT CURRENT_TIMESTAMP,
     description TEXT NOT NULL,
     debit REAL DEFAULT 0,
     credit REAL DEFAULT 0,
     balance REAL NOT NULL,
-    FOREIGN KEY (retailer_id) REFERENCES retailers(id)
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
   );
 `);
 
@@ -266,13 +266,13 @@ if (userCount.count === 0) {
     );
   }
 
-  db.prepare("INSERT INTO retailers (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
     "Bismillah General Store", "Ahmed Ali", "Saddar, Karachi", "03111111111", 50000
   );
-  db.prepare("INSERT INTO retailers (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
     "Madina Super Mart", "Muhammad Usman", "Gulshan-e-Iqbal, Karachi", "03222222222", 100000
   );
-  db.prepare("INSERT INTO retailers (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
     "Al-Jadeed Mart", "Ibrahim Khan", "North Nazimabad, Karachi", "03333333333", 75000
   );
 
@@ -397,13 +397,13 @@ async function startServer() {
     const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get() as { total: number };
     const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get() as { count: number };
     const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
-    const totalRetailers = db.prepare("SELECT COUNT(*) as count FROM retailers").get() as { count: number };
+    const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
 
     res.json({
       totalSales: totalSales.total || 0,
       pendingOrders: pendingOrders.count,
       lowStock: lowStock.count,
-      totalRetailers: totalRetailers.count
+      totalShops: totalShops.count
     });
   });
 
@@ -546,14 +546,14 @@ async function startServer() {
     }
   });
 
-  app.get("/api/retailers", (req, res) => {
-    const retailers = db.prepare("SELECT * FROM retailers").all();
-    res.json(retailers);
+  app.get("/api/shops", (req, res) => {
+    const shops = db.prepare("SELECT * FROM shops").all();
+    res.json(shops);
   });
 
-  app.post("/api/retailers", (req, res) => {
+  app.post("/api/shops", (req, res) => {
     const { shop_name, owner_name, location, phone, credit_limit } = req.body;
-    const result = db.prepare("INSERT INTO retailers (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+    const result = db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
       shop_name, owner_name, location, phone, credit_limit
     );
     res.json({ id: result.lastInsertRowid });
@@ -563,7 +563,7 @@ async function startServer() {
     const orders = db.prepare(`
       SELECT o.*, r.shop_name, ob.name as order_booker_name 
       FROM orders o
-      JOIN retailers r ON o.retailer_id = r.id
+      JOIN shops r ON o.shop_id = r.id
       JOIN order_bookers ob ON o.order_booker_id = ob.id
       ORDER BY o.order_date DESC
     `).all();
@@ -571,12 +571,12 @@ async function startServer() {
   });
 
   app.post("/api/orders", (req, res) => {
-    const { retailer_id, order_booker_id, estimated_delivery_date, items } = req.body;
+    const { shop_id, order_booker_id, estimated_delivery_date, items } = req.body;
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     const transaction = db.transaction(() => {
-      const order = db.prepare("INSERT INTO orders (retailer_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
-        retailer_id, order_booker_id, total_amount, 'pending', estimated_delivery_date
+      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
+        shop_id, order_booker_id, total_amount, 'pending', estimated_delivery_date
       );
       const orderId = order.lastInsertRowid;
 
@@ -695,7 +695,7 @@ async function startServer() {
     const order = db.prepare(`
       SELECT o.*, r.shop_name, ob.name as order_booker_name
       FROM orders o
-      JOIN retailers r ON o.retailer_id = r.id
+      JOIN shops r ON o.shop_id = r.id
       JOIN order_bookers ob ON o.order_booker_id = ob.id
       WHERE o.id = ?
     `).get(id);
@@ -704,16 +704,16 @@ async function startServer() {
 
   app.put("/api/orders/:id", (req, res) => {
     const { id } = req.params;
-    const { retailer_id, order_booker_id, estimated_delivery_date, items } = req.body;
+    const { shop_id, order_booker_id, estimated_delivery_date, items } = req.body;
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     try {
       db.transaction(() => {
         db.prepare(`
           UPDATE orders 
-          SET retailer_id = ?, order_booker_id = ?, estimated_delivery_date = ?, total_amount = ?
+          SET shop_id = ?, order_booker_id = ?, estimated_delivery_date = ?, total_amount = ?
           WHERE id = ?
-        `).run(retailer_id, order_booker_id, estimated_delivery_date, total_amount, id);
+        `).run(shop_id, order_booker_id, estimated_delivery_date, total_amount, id);
 
         db.prepare("DELETE FROM order_items WHERE order_id = ?").run(id);
 
@@ -736,7 +736,7 @@ async function startServer() {
       SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name
       FROM deliveries d
       JOIN orders o ON d.order_id = o.id
-      JOIN retailers r ON o.retailer_id = r.id
+      JOIN shops r ON o.shop_id = r.id
       JOIN salesmen s ON d.salesman_id = s.id
       ORDER BY d.delivery_date DESC
     `).all();
@@ -749,7 +749,7 @@ async function startServer() {
       SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name
       FROM deliveries d
       JOIN orders o ON d.order_id = o.id
-      JOIN retailers r ON o.retailer_id = r.id
+      JOIN shops r ON o.shop_id = r.id
       JOIN salesmen s ON d.salesman_id = s.id
       WHERE d.id = ?
     `).get(id);
@@ -840,7 +840,7 @@ async function startServer() {
       }
 
       // 5. Update Client Ledger
-      const order = db.prepare("SELECT retailer_id FROM orders WHERE id = ?").get(order_id) as any;
+      const order = db.prepare("SELECT shop_id FROM orders WHERE id = ?").get(order_id) as any;
       const ledgerEntry = db.prepare("SELECT id, debit, balance FROM client_ledger WHERE description LIKE ?").get(`%Delivery #DEL-${id}%`) as any;
       if (ledgerEntry) {
         const diff = totalAmount - ledgerEntry.debit;
@@ -850,12 +850,12 @@ async function startServer() {
           WHERE id = ?
         `).run(totalAmount, delivery_date, diff, ledgerEntry.id);
         
-        // Also update all subsequent balances for this retailer
+        // Also update all subsequent balances for this shop
         db.prepare(`
           UPDATE client_ledger
           SET balance = balance + ?
-          WHERE retailer_id = ? AND id > ?
-        `).run(diff, order.retailer_id, ledgerEntry.id);
+          WHERE shop_id = ? AND id > ?
+        `).run(diff, order.shop_id, ledgerEntry.id);
       }
 
       return true;
@@ -958,15 +958,15 @@ async function startServer() {
         db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', oid);
       }
 
-      // 4. Update Client Ledger (Debit the retailer for the delivery)
-      const order = db.prepare("SELECT retailer_id FROM orders WHERE id = ?").get(order_id) as any;
-      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE retailer_id = ? ORDER BY id DESC LIMIT 1").get(order.retailer_id) as any;
+      // 4. Update Client Ledger (Debit the shop for the delivery)
+      const order = db.prepare("SELECT shop_id FROM orders WHERE id = ?").get(order_id) as any;
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(order.shop_id) as any;
       const currentBalance = (lastLedger?.balance || 0) + totalAmount;
 
       db.prepare(`
-        INSERT INTO client_ledger (retailer_id, date, description, debit, balance)
+        INSERT INTO client_ledger (shop_id, date, description, debit, balance)
         VALUES (?, ?, ?, ?, ?)
-      `).run(order.retailer_id, delivery_date, `Delivery #DEL-${deliveryId} for Order #ORD-${order_id}`, totalAmount, currentBalance);
+      `).run(order.shop_id, delivery_date, `Delivery #DEL-${deliveryId} for Order #ORD-${order_id}`, totalAmount, currentBalance);
 
       return deliveryId;
     });
@@ -1185,15 +1185,15 @@ async function startServer() {
       SELECT lpi.*, r.shop_name, o.total_amount, o.status as order_status
       FROM load_plan_items lpi
       JOIN orders o ON lpi.order_id = o.id
-      JOIN retailers r ON o.retailer_id = r.id
+      JOIN shops r ON o.shop_id = r.id
       WHERE lpi.plan_id = ?
     `).all(id);
     res.json(items);
   });
 
-  app.get("/api/ledger/:retailerId", (req, res) => {
-    const { retailerId } = req.params;
-    const entries = db.prepare("SELECT * FROM client_ledger WHERE retailer_id = ? ORDER BY date DESC").all(retailerId);
+  app.get("/api/ledger/:shopId", (req, res) => {
+    const { shopId } = req.params;
+    const entries = db.prepare("SELECT * FROM client_ledger WHERE shop_id = ? ORDER BY date DESC").all(shopId);
     res.json(entries);
   });
 
