@@ -168,15 +168,6 @@ export interface Delivery {
   status: 'completed';
 }
 
-export interface TCodeInfo {
-  id: number;
-  parentModule: string;
-  tCode: string;
-  transactionName: string;
-  actionType: 'Create' | 'Change' | 'Display' | 'Manage' | 'Delete';
-  roleAssociation: string;
-}
-
 export interface DeliveryItem {
   id: number;
   delivery_id: number;
