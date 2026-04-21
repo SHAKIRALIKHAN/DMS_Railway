@@ -26,6 +26,18 @@ export const DeliveryModal = ({
   const [deliveryItems, setDeliveryItems] = useState<{order_item_id: number, product_id: string, product_name: string, quantity: number, price: number, max_quantity: number, order_ref: number}[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrderId, selectedSalesmanId, deliveryDate, deliveryItems]);
+
   useEffect(() => {
     if (salesmen && salesmen.length > 0) {
       setInternalSalesmen(salesmen);
@@ -109,8 +121,8 @@ export const DeliveryModal = ({
     }));
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedOrderId || !selectedSalesmanId || deliveryItems.length === 0) return;
     
     setIsSubmitting(true);
@@ -305,7 +317,7 @@ export const DeliveryModal = ({
                   {isSubmitting ? 'Processing...' : (
                     <>
                       <Save size={18} />
-                      <span>Confirm Delivery</span>
+                      <span>Confirm Delivery (CTRL+S / F2)</span>
                     </>
                   )}
                 </button>

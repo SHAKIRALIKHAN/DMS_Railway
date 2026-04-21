@@ -58,7 +58,7 @@ export const PurchaseModal = ({
       setItems([...items, { 
         product_id: product.product_id, 
         quantity: 1, 
-        price: product.trade_price,
+        price: product.purchase_price,
         product_name: product.product_name 
       }]);
     }
@@ -76,8 +76,26 @@ export const PurchaseModal = ({
 
   const totalAmount = items.reduce((sum, i) => sum + (i.quantity * i.price), 0);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ALT+A to focus search
+      if (e.altKey && e.key === 'a') {
+        e.preventDefault();
+        document.getElementById('purchase-product-search')?.focus();
+      }
+      // CTRL+S or F2 to Save
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, items]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     if (!formData.supplier_id || items.length === 0) return;
 
     setIsSubmitting(true);
@@ -178,7 +196,7 @@ export const PurchaseModal = ({
                         <p className="text-xs text-slate-500 font-mono">{p.product_id}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-indigo-600">PKR {p.trade_price}</p>
+                        <p className="text-sm font-bold text-indigo-600">PKR {p.purchase_price}</p>
                         <p className="text-[10px] text-slate-400">Stock: {p.stock_quantity}</p>
                       </div>
                     </button>
@@ -279,7 +297,7 @@ export const PurchaseModal = ({
                 {isSubmitting ? 'Processing...' : (
                   <>
                     <Save size={18} />
-                    <span>Post Purchase (ALT+S)</span>
+                    <span>Post Purchase (CTRL+S / F2)</span>
                   </>
                 )}
               </button>
@@ -344,7 +362,7 @@ export const NewOrderModal = ({
         e.preventDefault();
         document.getElementById('product-search')?.focus();
       }
-      if (e.altKey && e.key === 's') {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
       }
@@ -601,7 +619,7 @@ export const NewOrderModal = ({
                 {isSubmitting ? 'Processing...' : (
                   <>
                     <Save size={18} />
-                    <span>Save Order (ALT+S)</span>
+                    <span>Save Order (CTRL+S / F2)</span>
                   </>
                 )}
               </button>

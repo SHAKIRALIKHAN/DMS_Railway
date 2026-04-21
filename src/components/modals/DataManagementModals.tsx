@@ -19,8 +19,20 @@ export const RegisterShopModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/shops', {
@@ -127,7 +139,7 @@ export const RegisterShopModal = ({
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Register Shop'}
+              {isSubmitting ? 'Registering...' : 'Register Shop (CTRL+S / F2)'}
             </button>
           </div>
         </form>
@@ -155,8 +167,20 @@ export const ShopMasterModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/shops/${editingId}` : '/api/shops';
@@ -250,7 +274,7 @@ export const ShopMasterModal = ({
                   disabled={isSubmitting}
                   className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update Shop' : 'Add Shop'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Shop (CTRL+S / F2)'}
                 </button>
                 {editingId && (
                   <button 
@@ -356,12 +380,24 @@ export const UnitModal = ({
     }
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
   useEffect(() => {
     fetchUnits();
   }, []);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/units/${editingId}` : '/api/units';
@@ -438,7 +474,7 @@ export const UnitModal = ({
                         disabled={isSubmitting}
                         className="w-full py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50"
                     >
-                        {isSubmitting ? 'Saving...' : editingId ? 'Update Unit' : 'Add Unit'}
+                        {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Unit (CTRL+S / F2)'}
                     </button>
                     {editingId && (
                         <button 
@@ -507,8 +543,20 @@ export const ProductMasterDataModal = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+                e.preventDefault();
+                handleSubmit();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [formData, editingId]);
+
+    const handleSubmit = async (e?: FormEvent) => {
+        if (e) e.preventDefault();
         setIsSubmitting(true);
         try {
             const url = editingId ? `/api/products/${editingId}` : '/api/products';
@@ -678,7 +726,7 @@ export const ProductMasterDataModal = ({
                                     className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                                 >
                                     <Save size={18}/>
-                                    {isSubmitting ? 'Saving...' : editingId ? 'Update Product' : 'Save Product'}
+                                    {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Save (CTRL+S / F2)'}
                                 </button>
                                 {editingId && (
                                     <button 

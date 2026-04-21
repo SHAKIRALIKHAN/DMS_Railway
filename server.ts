@@ -345,25 +345,29 @@ if (userCount.count === 0) {
   }
 
   // Seed Purchases
+  const p1_items = [{ id: "A000000001", qty: 100, price: 450 }];
+  const p1_total = p1_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
   const purchase1 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-    1, 50000, 'received'
+    1, p1_total, 'received'
   );
   db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-    purchase1.lastInsertRowid, "A000000001", 100, 450, "B-001", "Warehouse A"
+    purchase1.lastInsertRowid, p1_items[0].id, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
   );
   db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    "A000000001", purchase1.lastInsertRowid, 100, 100, 450, "B-001", "Warehouse A"
+    p1_items[0].id, purchase1.lastInsertRowid, p1_items[0].qty, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
   );
   db.prepare("UPDATE products SET stock_quantity = stock_quantity + 100 WHERE product_id = ?").run("A000000001");
 
+  const p2_items = [{ id: "A000000002", qty: 50, price: 580 }];
+  const p2_total = p2_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
   const purchase2 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-    2, 35000, 'received'
+    2, p2_total, 'received'
   );
   db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-    purchase2.lastInsertRowid, "A000000002", 50, 580, "B-002", "Warehouse B"
+    purchase2.lastInsertRowid, p2_items[0].id, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
   );
   db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    "A000000002", purchase2.lastInsertRowid, 50, 50, 580, "B-002", "Warehouse B"
+    p2_items[0].id, purchase2.lastInsertRowid, p2_items[0].qty, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
   );
   db.prepare("UPDATE products SET stock_quantity = stock_quantity + 50 WHERE product_id = ?").run("A000000002");
 

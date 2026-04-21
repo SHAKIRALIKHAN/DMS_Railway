@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import { X, Save, Trash2, Edit, Users, Phone, Clock, Plus, Search, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Supplier, MaterialGroup, Driver, OrderBooker, Salesman } from '../../types';
@@ -19,8 +19,20 @@ export const RegisterSupplierModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/suppliers', {
@@ -112,7 +124,7 @@ export const RegisterSupplierModal = ({
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Register Supplier'}
+              {isSubmitting ? 'Registering...' : 'Register Supplier (CTRL+S / F2)'}
             </button>
           </div>
         </form>
@@ -140,8 +152,20 @@ export const DriverModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/drivers/${editingId}` : '/api/drivers';
@@ -262,7 +286,7 @@ export const DriverModal = ({
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update Driver' : 'Add Driver'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Driver (CTRL+S / F2)'}
                 </button>
                 {editingId && (
                   <button 
@@ -374,8 +398,20 @@ export const SalesmanModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/salesmen/${editingId}` : '/api/salesmen';
@@ -496,7 +532,7 @@ export const SalesmanModal = ({
                   disabled={isSubmitting}
                   className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update Salesman' : 'Save Salesman'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Save (CTRL+S / F2)'}
                 </button>
                 {editingId && (
                   <button 
@@ -593,8 +629,20 @@ export const OrderBookerModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/order-bookers/${editingId}` : '/api/order-bookers';
@@ -715,7 +763,7 @@ export const OrderBookerModal = ({
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update Booker' : 'Add Booker'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Booker (CTRL+S / F2)'}
                 </button>
                 {editingId && (
                   <button 
@@ -823,8 +871,20 @@ export const MaterialGroupModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/material-groups/${editingId}` : '/api/material-groups';
@@ -908,7 +968,7 @@ export const MaterialGroupModal = ({
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update' : 'Add Group'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Group (CTRL+S / F2)'}
                 </button>
                 {editingId && (
                   <button 
