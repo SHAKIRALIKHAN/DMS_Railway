@@ -216,36 +216,62 @@ export default function App() {
 
     switch (finalCode) {
       // Sales & Distribution (SD)
-      case 'VA01': setIsNewOrderModalOpen(true); break;
+      case 'VA01': 
+      case 'OR05':
+        setIsNewOrderModalOpen(true); 
+        break;
       case 'VA03': 
+      case 'OR01':
         setActiveTab('transactions');
         setTransactionsSubTab('orders');
         break;
       case 'DLVY': 
+      case 'DL01':
         setActiveTab('transactions');
         setTransactionsSubTab('deliveries');
         break;
       
-      // Material Management (MM)
-      case 'MM01': setIsMaterialGroupModalOpen(true); break;
-      case 'MM02': setIsProductMasterModalOpen(true); break;
-      case 'MM03': setActiveTab('inventory'); break;
+      // Material Management (MM) / Product (PR)
+      case 'MM01': 
+      case 'IN05':
+        setIsMaterialGroupModalOpen(true); 
+        break;
+      case 'MM02': 
+      case 'PR01':
+      case 'PR02':
+      case 'PR03':
+        setIsProductMasterModalOpen(true); 
+        break;
+      case 'MM03': 
+      case 'IN01':
+        setActiveTab('inventory'); 
+        break;
       case 'MM04': setIsUnitModalOpen(true); break;
       case 'ME21N': 
         setActiveTab('transactions');
         setTransactionsSubTab('purchases');
         break;
       
-      // Master Data (MD)
-      case 'VD01': setIsRegisterShopModalOpen(true); break;
+      // Master Data (MD) / Salesmen (SM) / Shops (SH)
+      case 'VD01': 
+      case 'SH05':
+        setIsRegisterShopModalOpen(true); 
+        break;
       case 'VD03': 
+      case 'SH01':
         setActiveTab('master_data');
         setMasterDataSubTab('shops');
         break;
       case 'XK01': setIsRegisterSupplierModalOpen(true); break;
       case 'BP01': setIsShopMasterModalOpen(true); break;
       case 'OBM1': setIsOrderBookerModalOpen(true); break;
-      case 'SLM1': setIsSalesmanModalOpen(true); break;
+      case 'SLM1': 
+      case 'SM01':
+      case 'SM05':
+      case 'SM07':
+      case 'SM08':
+        setIsSalesmanModalOpen(true); 
+        break;
       case 'DRV1': setIsDriverModalOpen(true); break;
       case 'TC01': setIsTCodeModalOpen(true); break;
       
@@ -253,6 +279,7 @@ export default function App() {
       case 'DASH': setActiveTab('dashboard'); break;
       case 'REPT': setActiveTab('reports'); break;
       case 'LP01': 
+      case 'DL05':
         setActiveTab('transactions');
         setTransactionsSubTab('load_plans');
         break;

@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("dms_v6.db");
+const db = new Database("dms_v7.db");
 
 // Initialize Database Schema
 db.exec(`
@@ -312,7 +312,7 @@ if (userCount.count === 0) {
     const estDelivery = new Date();
     estDelivery.setDate(estDelivery.getDate() + 1);
     
-    const order = db.prepare("INSERT INTO orders (retailer_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
+    const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
       o.retailer, o.order_booker, total, o.status, estDelivery.toISOString()
     );
     const orderId = order.lastInsertRowid;
@@ -338,7 +338,7 @@ if (userCount.count === 0) {
     }
 
     if (o.status === 'delivered') {
-      db.prepare("INSERT INTO client_ledger (retailer_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
+      db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
         o.retailer, `Order #${orderId}`, total, total
       );
     }
