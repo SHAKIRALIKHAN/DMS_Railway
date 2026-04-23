@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import { Supplier, MaterialGroup, Driver, OrderBooker, Salesman } from '../../types';
 import { TCODES } from '../../constants/tcodes';
 
+const cn = (...classes: (any)[]) => classes.filter(Boolean).join(' ');
+
 export const RegisterSupplierModal = ({ 
   onClose, 
   onSuccess 
@@ -1141,6 +1143,311 @@ export const TCodeMasterModal = ({
           >
             Close
           </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+export const LocationMasterModal = ({ 
+  onClose 
+}: { 
+  onClose: () => void 
+}) => {
+  const [activeLevel, setActiveLevel] = useState<'countries' | 'provinces' | 'cities' | 'towns' | 'areas' | 'subareas'>('countries');
+  const [selection, setSelection] = useState<Record<string, { id: number, name: string } | null>>({
+    countries: null,
+    provinces: null,
+    cities: null,
+    towns: null,
+    areas: null,
+    subareas: null
+  });
+  
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const levels = [
+    { key: 'countries', label: 'Country', parent: null },
+    { key: 'provinces', label: 'Province', parent: 'countries' },
+    { key: 'cities', label: 'City', parent: 'provinces' },
+    { key: 'towns', label: 'Town', parent: 'cities' },
+    { key: 'areas', label: 'Area', parent: 'towns' },
+    { key: 'subareas', label: 'Subarea', parent: 'areas' }
+  ];
+
+  useEffect(() => {
+    fetchData();
+  }, [activeLevel, selection]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const levelObj = levels.find(l => l.key === activeLevel);
+      let url = `/api/locations/${activeLevel}`;
+      
+      if (levelObj?.parent) {
+        const parentId = selection[levelObj.parent]?.id;
+        if (parentId) url += `?parentId=${parentId}`;
+        else {
+          setList([]);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      setList(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name) return;
+    
+    setIsSubmitting(true);
+    try {
+      const levelObj = levels.find(l => l.key === activeLevel);
+      const parentId = levelObj?.parent ? selection[levelObj.parent]?.id : null;
+      
+      const res = await fetch(`/api/locations/${activeLevel}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, parentId })
+      });
+      
+      if (res.ok) {
+        setName('');
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm(`Are you sure you want to delete this ${activeLevel.slice(0, -1)}?`)) return;
+    try {
+      const res = await fetch(`/api/locations/${activeLevel}/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchData();
+      else {
+        const data = await res.json();
+        alert(data.error);
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const selectItem = (item: any) => {
+    const newSelection = { ...selection, [activeLevel]: item };
+    // Clear children
+    const levelIndex = levels.findIndex(l => l.key === activeLevel);
+    for (let i = levelIndex + 1; i < levels.length; i++) {
+      newSelection[levels[i].key] = null;
+    }
+    setSelection(newSelection);
+    
+    // Move to next level if exists
+    if (levelIndex < levels.length - 1) {
+      setActiveLevel(levels[levelIndex + 1].key as any);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Manage Location Hierarchy</h3>
+            <p className="text-xs text-slate-500">Configure Country, Province, City, Town, Area, and Subarea Master Data</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="flex bg-slate-50 border-b border-slate-100 overflow-x-auto scrollbar-hide">
+          {levels.map((level, idx) => (
+            <button
+              key={level.key}
+              onClick={() => setActiveLevel(level.key as any)}
+              className={cn(
+                "px-6 py-4 text-xs font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap min-w-[150px]",
+                activeLevel === level.key 
+                  ? "text-indigo-600 border-indigo-600 bg-white shadow-sm" 
+                  : "text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-100/50"
+              )}
+            >
+              <div className="flex flex-col items-start gap-0.5">
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded-full bg-slate-100 text-[10px] flex items-center justify-center text-slate-500">
+                    {idx + 1}
+                  </span>
+                  {level.label}
+                </span>
+                <span className="text-[10px] font-medium text-indigo-500/80 normal-case italic truncate w-full text-left">
+                  {selection[level.key]?.name || 'Not Selected'}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row divide-x divide-slate-100">
+          <div className="flex-1 p-6 overflow-y-auto bg-white">
+            <div className="flex justify-between items-center mb-6">
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
+                Select {levels.find(l => l.key === activeLevel)?.label}
+                {activeLevel !== 'countries' && selection[levels.find(l => l.key === activeLevel)?.parent!] && (
+                  <span className="text-slate-400 font-medium ml-1">in {selection[levels.find(l => l.key === activeLevel)?.parent!]?.name}</span>
+                )}
+              </h4>
+              <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">
+                {list.length} Items Found
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 grayscale opacity-50">
+                <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent mb-4"></div>
+                <p className="text-xs font-bold text-slate-900 animate-pulse">Synchronizing hierarchy...</p>
+              </div>
+            ) : list.length === 0 ? (
+              <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
+                  <Search size={24} className="text-slate-300" />
+                </div>
+                <p className="text-slate-900 font-bold mb-1">No {activeLevel} records found</p>
+                <p className="text-slate-500 text-xs max-w-xs mx-auto mb-6">
+                  {activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] 
+                    ? `To view ${activeLevel}, please select a ${levels.find(l => l.key === activeLevel)?.parent.slice(0, -1)} first.`
+                    : `Start by adding a new ${activeLevel.slice(0, -1)} using the form on the right.`}
+                </p>
+                {activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] && (
+                   <button 
+                    onClick={() => setActiveLevel(levels.find(l => l.key === activeLevel)?.parent as any)}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
+                   >
+                     Go to {levels.find(l => l.key === activeLevel)?.parent.slice(0, -1)} Selection
+                   </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {list.map(item => (
+                  <div 
+                    key={item.id}
+                    className={cn(
+                      "group p-4 rounded-2xl border-2 flex justify-between items-center transition-all cursor-pointer relative overflow-hidden",
+                      selection[activeLevel]?.id === item.id 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
+                        : "bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50/50"
+                    )}
+                    onClick={() => selectItem(item)}
+                  >
+                    <div className="flex items-center gap-3">
+                       <span className={cn(
+                         "w-2 h-2 rounded-full",
+                         selection[activeLevel]?.id === item.id ? "bg-white" : "bg-indigo-400"
+                       )}></span>
+                       <span className="text-sm font-bold truncate pr-8">{item.name}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 z-10">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                        className={cn(
+                          "p-2 rounded-xl transition-all",
+                          selection[activeLevel]?.id === item.id 
+                            ? "hover:bg-white/20 text-white" 
+                            : "text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+                        )}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="w-full md:w-80 bg-slate-50 p-6 flex flex-col">
+            <div className="flex-1">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-6">
+                <h4 className="text-sm font-black text-slate-900 mb-6 flex items-center gap-2">
+                  <div className="bg-indigo-600 w-2 h-4 rounded-full"></div>
+                  New {levels.find(l => l.key === activeLevel)?.label}
+                </h4>
+                <form onSubmit={handleCreate} className="space-y-6">
+                  {activeLevel !== 'countries' && (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Relational Parent</label>
+                      <p className={cn(
+                        "text-sm font-bold truncate",
+                        selection[levels.find(l => l.key === activeLevel)?.parent!] ? "text-indigo-600" : "text-rose-400 italic"
+                      )}>
+                        {selection[levels.find(l => l.key === activeLevel)?.parent!]?.name || `Select ${levels.find(l => l.key === activeLevel)?.parent.slice(0, -1)} first`}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{levels.find(l => l.key === activeLevel)?.label} Name</label>
+                    <input 
+                      required
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      disabled={activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] || isSubmitting}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:border-indigo-600 focus:bg-white outline-none transition-all disabled:opacity-50 shadow-inner"
+                      placeholder={`Enter ${activeLevel.slice(0, -1)}...`}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || (activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!])}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-3"
+                  >
+                    <Plus size={18} />
+                    <span>{isSubmitting ? 'Processing...' : 'Save Record (CTRL+S / F2)'}</span>
+                  </button>
+                </form>
+              </div>
+
+              <div className="p-6 bg-indigo-900 rounded-3xl text-white shadow-2xl shadow-indigo-100 overflow-hidden relative group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                <h5 className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <Shield size={12} />
+                  Selected Path
+                </h5>
+                <div className="space-y-3 relative z-10">
+                  {levels.map((l, i) => (
+                    <div key={l.key} className="flex justify-between items-center text-[11px]">
+                      <span className="text-indigo-300 font-medium">Level {i+1}:</span>
+                      <span className={cn(
+                        "font-black truncate max-w-[120px]",
+                        selection[l.key] ? "text-white" : "text-indigo-400/50"
+                      )}>{selection[l.key]?.name || 'N/A'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>

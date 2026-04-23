@@ -67,7 +67,7 @@ import {
 
 // Modal component imports
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
-import { RegisterSupplierModal, DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal } from './components/modals/MasterModals';
+import { RegisterSupplierModal, DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
 import { DeliveryModal } from './components/modals/LogisticsModals';
 import { RegisterShopModal, ShopMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
@@ -148,7 +148,7 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>('dashboard');
-  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers'>('products');
+  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>('products');
   const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>('orders');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -184,6 +184,7 @@ export default function App() {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
   const [isCommandExpanded, setIsCommandExpanded] = useState(true);
 
@@ -208,6 +209,7 @@ export default function App() {
       setIsShopMasterModalOpen(false);
       setIsNewOrderModalOpen(false);
       setIsUnitModalOpen(false);
+      setIsLocationModalOpen(false);
       setSelectedOrder(null);
       setSelectedShop(null);
       setSelectedPurchase(null);
@@ -247,6 +249,7 @@ export default function App() {
         setActiveTab('inventory'); 
         break;
       case 'MM04': setIsUnitModalOpen(true); break;
+      case 'LOC01': setIsLocationModalOpen(true); break;
       case 'ME21N': 
         setActiveTab('transactions');
         setTransactionsSubTab('purchases');
@@ -796,6 +799,7 @@ export default function App() {
                     { id: 'order_bookers', label: 'Order Bookers', icon: Users },
                     { id: 'salesmen', label: 'Salesmen', icon: Users },
                     { id: 'products', label: 'Products', icon: Package },
+                    { id: 'locations', label: 'Locations', icon: MapPin },
                     { id: 'units', label: 'Units', icon: Settings },
                   ].map(tab => (
                     <button
@@ -823,6 +827,55 @@ export default function App() {
 
                 {/* Sub-tab Content */}
                 <div className="mt-6">
+                  {masterDataSubTab === 'locations' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Location Master Data</h3>
+                        <button 
+                          onClick={() => setIsLocationModalOpen(true)}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                        >
+                          <Settings size={18} />
+                          <span>Manage Locations</span>
+                        </button>
+                      </div>
+
+                      <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center text-center max-w-2xl mx-auto">
+                        <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 mb-6 shadow-xl shadow-indigo-100/50">
+                          <MapPin size={40} />
+                        </div>
+                        <h4 className="text-xl font-bold text-slate-900 mb-2">Hierarchical Location Structure</h4>
+                        <p className="text-slate-500 mb-8 sm:px-10">
+                          Configure your multi-level location master data to enable precise routing and load plan tracking. 
+                          The system supports a 6-level hierarchy from Country down to Subarea.
+                        </p>
+                        
+                        <div className="w-full grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+                          {[
+                            { l: 'Level 1', n: 'Country' },
+                            { l: 'Level 2', n: 'Province' },
+                            { l: 'Level 3', n: 'City' },
+                            { l: 'Level 4', n: 'Town' },
+                            { l: 'Level 5', n: 'Area' },
+                            { l: 'Level 6', n: 'Subarea' }
+                          ].map((item, idx) => (
+                            <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.l}</span>
+                              <p className="text-sm font-bold text-slate-900">{item.n}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button 
+                          onClick={() => setIsLocationModalOpen(true)}
+                          className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-indigo-600 transition-all shadow-2xl shadow-slate-200"
+                        >
+                          Open Location Manager (LOC01)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {masterDataSubTab === 'suppliers' && (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
@@ -1623,6 +1676,11 @@ export default function App() {
               // units are not fetched at top level currently, but common to Success handling
               setIsUnitModalOpen(false);
             }}
+          />
+        )}
+        {isLocationModalOpen && (
+          <LocationMasterModal 
+            onClose={() => setIsLocationModalOpen(false)}
           />
         )}
       </AnimatePresence>

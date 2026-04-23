@@ -211,6 +211,46 @@ db.exec(`
     balance REAL NOT NULL,
     FOREIGN KEY (shop_id) REFERENCES shops(id)
   );
+
+  CREATE TABLE IF NOT EXISTS countries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+  );
+
+  CREATE TABLE IF NOT EXISTS provinces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (country_id) REFERENCES countries(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS cities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    province_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (province_id) REFERENCES provinces(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS towns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (city_id) REFERENCES cities(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS areas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    town_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (town_id) REFERENCES towns(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS subareas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    area_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (area_id) REFERENCES areas(id)
+  );
 `);
 
 // Seed initial data if empty
@@ -386,6 +426,24 @@ if (userCount.count === 0) {
   db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(
     plan1.lastInsertRowid, 2
   );
+
+  // Seed Locations
+  const country = db.prepare("INSERT INTO countries (name) VALUES (?)").run("Pakistan");
+  const countryId = country.lastInsertRowid;
+
+  const province = db.prepare("INSERT INTO provinces (country_id, name) VALUES (?, ?)").run(countryId, "Sindh");
+  const provinceId = province.lastInsertRowid;
+
+  const city = db.prepare("INSERT INTO cities (province_id, name) VALUES (?, ?)").run(provinceId, "Karachi");
+  const cityId = city.lastInsertRowid;
+
+  const town = db.prepare("INSERT INTO towns (city_id, name) VALUES (?, ?)").run(cityId, "Saddar");
+  const townId = town.lastInsertRowid;
+
+  const area = db.prepare("INSERT INTO areas (town_id, name) VALUES (?, ?)").run(townId, "Saddar Area");
+  const areaId = area.lastInsertRowid;
+
+  db.prepare("INSERT INTO subareas (area_id, name) VALUES (?, ?)").run(areaId, "Saddar Main Market");
 }
 
 async function startServer() {
@@ -1222,6 +1280,68 @@ async function startServer() {
     const { shopId } = req.params;
     const entries = db.prepare("SELECT * FROM client_ledger WHERE shop_id = ? ORDER BY date DESC").all(shopId);
     res.json(entries);
+  });
+
+  // Location Hierarchy APIs
+  const locationTypes = ['countries', 'provinces', 'cities', 'towns', 'areas', 'subareas'];
+  const parentMap: Record<string, string> = {
+    provinces: 'country_id',
+    cities: 'province_id',
+    towns: 'city_id',
+    areas: 'town_id',
+    subareas: 'area_id'
+  };
+
+  locationTypes.forEach(type => {
+    app.get(`/api/locations/${type}`, (req, res) => {
+      const parentId = req.query.parentId;
+      const parentField = parentMap[type];
+      
+      let query = `SELECT * FROM ${type}`;
+      let params: any[] = [];
+      
+      if (parentId && parentField) {
+        query += ` WHERE ${parentField} = ?`;
+        params.push(parentId);
+      }
+      
+      const data = db.prepare(query).all(...params);
+      res.json(data);
+    });
+
+    app.post(`/api/locations/${type}`, (req, res) => {
+      const { name, parentId } = req.body;
+      const parentField = parentMap[type];
+      
+      try {
+        let result;
+        if (parentField && parentId) {
+          result = db.prepare(`INSERT INTO ${type} (name, ${parentField}) VALUES (?, ?)`).run(name, parentId);
+        } else {
+          result = db.prepare(`INSERT INTO ${type} (name) VALUES (?)`).run(name);
+        }
+        res.json({ id: result.lastInsertRowid });
+      } catch (err: any) {
+        res.status(400).json({ error: err.message });
+      }
+    });
+
+    app.put(`/api/locations/${type}/:id`, (req, res) => {
+      const { name } = req.body;
+      const { id } = req.params;
+      db.prepare(`UPDATE ${type} SET name = ? WHERE id = ?`).run(name, id);
+      res.json({ success: true });
+    });
+
+    app.delete(`/api/locations/${type}/:id`, (req, res) => {
+      const { id } = req.params;
+      try {
+        db.prepare(`DELETE FROM ${type} WHERE id = ?`).run(id);
+        res.json({ success: true });
+      } catch (err: any) {
+        res.status(400).json({ error: `Cannot delete ${type.slice(0, -1)}. It may have children linked to it.` });
+      }
+    });
   });
 
   app.get("/api/sales-chart", (req, res) => {

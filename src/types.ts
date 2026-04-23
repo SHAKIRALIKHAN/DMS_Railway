@@ -156,6 +156,41 @@ export interface LedgerEntry {
   balance: number;
 }
 
+export interface Country {
+  id: number;
+  name: string;
+}
+
+export interface Province {
+  id: number;
+  country_id: number;
+  name: string;
+}
+
+export interface City {
+  id: number;
+  province_id: number;
+  name: string;
+}
+
+export interface Town {
+  id: number;
+  city_id: number;
+  name: string;
+}
+
+export interface Area {
+  id: number;
+  town_id: number;
+  name: string;
+}
+
+export interface Subarea {
+  id: number;
+  area_id: number;
+  name: string;
+}
+
 export interface Delivery {
   id: number;
   order_id: number;
