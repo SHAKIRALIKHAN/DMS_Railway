@@ -1,7 +1,324 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { X, Save, Trash2, Edit, Store, Package, Plus, Trash } from 'lucide-react';
+import { X, Save, Trash2, Edit, Store, Package, Plus, Trash, Factory } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Shop, Product, Unit, MaterialGroup } from '../../types';
+import { Shop, Product, Unit, MaterialGroup, Supplier } from '../../types';
+
+export const RegisterSupplierModal = ({ 
+  onClose, 
+  onSuccess 
+}: { 
+  onClose: () => void, 
+  onSuccess: () => void 
+}) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    address: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        onSuccess();
+        onClose();
+      }
+    } catch (err) {
+      console.error("Failed to register supplier", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-indigo-600 rounded-lg">
+                <Factory size={20} className="text-white" />
+             </div>
+             <h3 className="text-lg font-bold text-slate-900">Register New Supplier</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Supplier Name</label>
+            <input 
+              required
+              type="text" 
+              value={formData.name}
+              onChange={e => setFormData({...formData, name: e.target.value})}
+              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+              placeholder="e.g. MSK Company"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Contact Person</label>
+            <input 
+              required
+              type="text" 
+              value={formData.contact_person}
+              onChange={e => setFormData({...formData, contact_person: e.target.value})}
+              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+              placeholder="e.g. Saleem Ahmed"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
+            <input 
+              required
+              type="tel" 
+              value={formData.phone}
+              onChange={e => setFormData({...formData, phone: e.target.value})}
+              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+              placeholder="e.g. 03444444444"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Address</label>
+            <textarea 
+              required
+              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all min-h-[80px]"
+              value={formData.address}
+              onChange={e => setFormData({...formData, address: e.target.value})}
+              placeholder="e.g. SITE Area, Karachi"
+            />
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              {isSubmitting ? 'Registering...' : 'Register (CTRL+S / F2)'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+export const SupplierMasterModal = ({ 
+  onClose, 
+  onSuccess,
+  suppliers 
+}: { 
+  onClose: () => void, 
+  onSuccess: () => void,
+  suppliers: Supplier[]
+}) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    address: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, editingId]);
+
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const url = editingId ? `/api/suppliers/${editingId}` : '/api/suppliers';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        onSuccess();
+        setFormData({ name: '', contact_person: '', phone: '', address: '' });
+        setEditingId(null);
+      }
+    } catch (err) {
+      console.error("Failed to save supplier", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Delete this supplier?")) return;
+    try {
+      const res = await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+      if (res.ok) onSuccess();
+      else alert( (await res.json()).error );
+    } catch (err) { console.error(err); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-indigo-600 rounded-lg">
+                <Factory size={20} className="text-white" />
+             </div>
+             <h3 className="text-lg font-bold text-slate-900">Manage Suppliers Master Data</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3">
+          <div className="p-6 border-r border-slate-100 lg:col-span-1">
+            <h4 className="text-sm font-bold text-slate-900 mb-4">{editingId ? 'Edit Supplier' : 'Add New Supplier'}</h4>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Supplier Name</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. MSK Company"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Contact Person</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.contact_person}
+                  onChange={e => setFormData({...formData, contact_person: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Phone</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add (CTRL+S / F2)'}
+                </button>
+                {editingId && (
+                  <button 
+                    type="button"
+                    onClick={() => { setEditingId(null); setFormData({name:'', contact_person:'', phone:'', address:''}); }}
+                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
+            <h4 className="text-sm font-bold text-slate-900 mb-4">Registered Suppliers</h4>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Vendor Info</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Contact</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {suppliers.map(s => (
+                            <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-3">
+                                    <p className="text-sm font-bold text-slate-900">{s.name}</p>
+                                    <p className="text-[10px] text-slate-500">{s.address}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <p className="text-xs text-slate-700">{s.contact_person}</p>
+                                    <p className="text-[10px] text-slate-500">{s.phone}</p>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <div className="flex justify-end gap-1">
+                                        <button onClick={() => { setEditingId(s.id); setFormData({...s}); }} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                                            <Edit size={14} />
+                                        </button>
+                                        <button onClick={() => handleDelete(s.id)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg">
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 export const RegisterShopModal = ({ 
   onClose, 
@@ -363,9 +680,11 @@ export const UnitModal = ({
   onSuccess: () => void 
 }) => {
   const [units, setUnits] = useState<Unit[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
+    unit_code: '',
     name: '',
     short_name: '',
     status: 1
@@ -380,7 +699,6 @@ export const UnitModal = ({
     }
   };
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
@@ -398,6 +716,8 @@ export const UnitModal = ({
 
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
+    if (!formData.unit_code || !formData.name) return;
+
     setIsSubmitting(true);
     try {
       const url = editingId ? `/api/units/${editingId}` : '/api/units';
@@ -410,8 +730,11 @@ export const UnitModal = ({
       if (res.ok) {
         onSuccess();
         fetchUnits();
-        setFormData({ name: '', short_name: '', status: 1 });
+        setFormData({ unit_code: '', name: '', short_name: '', status: 1 });
         setEditingId(null);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to save unit");
       }
     } catch (err) {
       console.error("Failed to save unit", err);
@@ -421,13 +744,26 @@ export const UnitModal = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this unit?")) return;
+    if (!confirm("Are you sure you want to delete this unit record? This action cannot be undone.")) return;
     try {
       const res = await fetch(`/api/units/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchUnits();
-      else alert( (await res.json()).error );
-    } catch (err) { console.error(err); }
+      if (res.ok) {
+        fetchUnits();
+        onSuccess();
+      } else {
+        const error = await res.json();
+        alert(error.error);
+      }
+    } catch (err) { 
+      console.error(err); 
+    }
   };
+
+  const filteredUnits = units.filter(u => 
+    u.unit_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.short_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -435,76 +771,179 @@ export const UnitModal = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-slate-900">Manage Units</h3>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500 rounded-lg">
+              <Package size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Units Master Data (MM04)</h3>
+              <p className="text-xs text-slate-500">Manage measurement units and scales</p>
+            </div>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2">
-            <div className="p-6 border-r border-slate-100">
+        <div className="flex flex-1 overflow-hidden">
+            {/* Form Section */}
+            <div className="w-full md:w-80 p-6 border-r border-slate-100 overflow-y-auto bg-white">
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">
+                        {editingId ? 'Edit Unit' : 'New Unit Entry'}
+                    </h4>
+                    
                     <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Unit Name</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-tight">Unit Code (Key)</label>
                         <input 
                             required
                             type="text" 
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600"
+                            disabled={!!editingId}
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 font-mono focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50"
+                            value={formData.unit_code}
+                            onChange={e => setFormData({...formData, unit_code: e.target.value.toUpperCase()})}
+                            placeholder="e.g. KG"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-tight">Full Text</label>
+                        <input 
+                            required
+                            type="text" 
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
                             value={formData.name}
                             onChange={e => setFormData({...formData, name: e.target.value})}
-                            placeholder="e.g. Cartoon"
+                            placeholder="e.g. Kilogram"
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Short Name</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-tight">Short Text</label>
                         <input 
                             required
                             type="text" 
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600"
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
                             value={formData.short_name}
                             onChange={e => setFormData({...formData, short_name: e.target.value})}
-                            placeholder="e.g. CTN"
+                            placeholder="e.g. KGS"
                         />
                     </div>
-                    <button 
-                        type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                        {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Unit (CTRL+S / F2)'}
-                    </button>
-                    {editingId && (
-                        <button 
-                            onClick={() => { setEditingId(null); setFormData({name: '', short_name: '', status:1}); }}
-                            className="w-full py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm"
+                    
+                    <div className="flex items-center gap-2 py-2">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({...formData, status: formData.status === 1 ? 0 : 1})}
+                            className={`w-10 h-5 rounded-full transition-colors relative ${formData.status === 1 ? 'bg-emerald-500' : 'bg-slate-300'}`}
                         >
-                            Cancel
+                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.status === 1 ? 'left-6' : 'left-1'}`} />
                         </button>
-                    )}
+                        <span className="text-xs font-bold text-slate-600">
+                            {formData.status === 1 ? 'Active Unit' : 'Inactive'}
+                        </span>
+                    </div>
+
+                    <div className="pt-2">
+                        <button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className="w-full py-2.5 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 disabled:opacity-50 shadow-lg shadow-amber-100 flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                            <Save size={16} />
+                            {isSubmitting ? 'Saving...' : editingId ? 'Update Unit' : 'Save Unit Record'}
+                        </button>
+                        
+                        {editingId && (
+                            <button 
+                                type="button"
+                                onClick={() => { setEditingId(null); setFormData({unit_code: '', name: '', short_name: '', status:1}); }}
+                                className="w-full mt-2 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+                            >
+                                Abort Edit
+                            </button>
+                        )}
+                    </div>
                 </form>
             </div>
-            <div className="p-6 bg-slate-50 overflow-y-auto max-h-[400px]">
-                <h4 className="text-xs font-bold text-slate-400 uppercase mb-4">Available Units</h4>
-                <div className="space-y-2">
-                    {units.map(u => (
-                        <div key={u.id} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
-                            <div>
-                                <p className="text-sm font-bold text-slate-900">{u.name}</p>
-                                <p className="text-[10px] text-slate-400 font-mono tracking-wider">{u.short_name}</p>
+
+            {/* List Section */}
+            <div className="flex-1 p-6 bg-slate-50 flex flex-col">
+                <div className="mb-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Master Repository</h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-full text-slate-500">
+                            {filteredUnits.length} Units Found
+                        </span>
+                    </div>
+                    <div className="relative">
+                        <input 
+                            type="text"
+                            placeholder="Locate unit via code or name..."
+                            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 transition-all shadow-sm"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
+                        <Package size={16} className="absolute left-3 top-2.5 text-slate-400" />
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                    {filteredUnits.length > 0 ? (
+                        filteredUnits.map(u => (
+                            <div key={u.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm hover:shadow-md transition-all group">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-mono font-black text-xs border ${u.status === 1 ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-60'}`}>
+                                        {u.unit_code}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                            {u.name}
+                                            {u.status === 0 && <span className="text-[8px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full">INACTIVE</span>}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-[10px] text-slate-400 font-medium px-1.5 py-0.5 bg-slate-50 rounded italic">{u.short_name}</span>
+                                            <span className="text-[10px] text-slate-300">•</span>
+                                            <span className="text-[10px] text-slate-300 font-mono uppercase">ID: {u.id.toString().padStart(4, '0')}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                        onClick={() => { 
+                                            setEditingId(u.id); 
+                                            setFormData({unit_code: u.unit_code, name: u.name, short_name: u.short_name, status: u.status}); 
+                                        }} 
+                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                                        title="Edit Record"
+                                    >
+                                        <Edit size={16} />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDelete(u.id)} 
+                                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                                        title="Delete Permanently"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex gap-1">
-                                <button onClick={() => { setEditingId(u.id); setFormData({name: u.name, short_name: u.short_name, status: u.status}); }} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg">
-                                    <Edit size={14} />
-                                </button>
-                                <button onClick={() => handleDelete(u.id)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg">
-                                    <X size={14} />
-                                </button>
+                        ))
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-dashed border-slate-200">
+                            <div className="p-4 bg-slate-50 rounded-full mb-4">
+                                <Package size={32} className="text-slate-300" />
                             </div>
+                            <p className="text-sm font-bold text-slate-400">No units match your search</p>
+                            <p className="text-xs text-slate-300 mt-1 pb-4">Try a different keyword or create a new unit</p>
+                            <button 
+                                onClick={() => setSearchQuery('')}
+                                className="text-xs text-indigo-600 font-bold hover:underline"
+                            >
+                                Clear search
+                            </button>
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
         </div>
@@ -684,7 +1123,7 @@ export const ProductMasterDataModal = ({
                                         onChange={e => setFormData({...formData, unit: e.target.value})}
                                     >
                                         <option value="">Select Unit</option>
-                                        {units.map(u => <option key={u.id} value={u.short_name}>{u.short_name}</option>)}
+                                        {units.map(u => <option key={u.id} value={u.unit_code}>{u.unit_code} - {u.name}</option>)}
                                     </select>
                                 </div>
                                 <div>

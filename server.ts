@@ -9,11 +9,19 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("dms_v7.db");
+let db: any;
+try {
+  db = new Database("dms_v7.db");
+  
+  // Initialize Database Schema
+  try {
+    db.prepare("SELECT unit_code FROM units LIMIT 1").get();
+  } catch (err) {
+    db.exec("DROP TABLE IF EXISTS units");
+  }
 
-// Initialize Database Schema
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
@@ -45,6 +53,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS units (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    unit_code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     short_name TEXT NOT NULL,
     status INTEGER DEFAULT 1
@@ -221,41 +230,51 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     country_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (country_id) REFERENCES countries(id)
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    UNIQUE(country_id, name)
   );
 
   CREATE TABLE IF NOT EXISTS cities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     province_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (province_id) REFERENCES provinces(id)
+    FOREIGN KEY (province_id) REFERENCES provinces(id),
+    UNIQUE(province_id, name)
   );
 
   CREATE TABLE IF NOT EXISTS towns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     city_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (city_id) REFERENCES cities(id)
+    FOREIGN KEY (city_id) REFERENCES cities(id),
+    UNIQUE(city_id, name)
   );
 
   CREATE TABLE IF NOT EXISTS areas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     town_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (town_id) REFERENCES towns(id)
+    FOREIGN KEY (town_id) REFERENCES towns(id),
+    UNIQUE(town_id, name)
   );
 
-  CREATE TABLE IF NOT EXISTS subareas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    area_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (area_id) REFERENCES areas(id)
-  );
-`);
+    CREATE TABLE IF NOT EXISTS subareas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      area_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      FOREIGN KEY (area_id) REFERENCES areas(id),
+      UNIQUE(area_id, name)
+    );
+  `);
+} catch (err) {
+  console.error("CRITICAL: Database initialization failed:", err);
+  process.exit(1);
+}
 
 // Seed initial data if empty
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-if (userCount.count === 0) {
+try {
+  const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+  if (userCount.count === 0) {
   db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
     "Admin Karachi", "admin", "03001234567", "admin123"
   );
@@ -276,24 +295,32 @@ if (userCount.count === 0) {
   }
 
   // Seed Units
-  const initialUnits = [
-    { name: 'KGS', short_name: 'KGS' },
-    { name: 'MT', short_name: 'MT' },
-    { name: 'PCS', short_name: 'PCS' },
-    { name: 'GRM', short_name: 'GRM' },
-    { name: 'LITER', short_name: 'LTR' }
-  ];
+  const unitCount = db.prepare("SELECT COUNT(*) as count FROM units").get() as { count: number };
+  if (unitCount.count === 0) {
+    const initialUnits = [
+      { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
+      { code: 'MT', name: 'METRIC TON', short: 'MT' },
+      { code: 'PC', name: 'PIECES', short: 'PCS' },
+      { code: 'GR', name: 'GRAM', short: 'GRM' },
+      { code: 'L', name: 'LITER', short: 'LTR' },
+      { code: 'BX', name: 'BOX', short: 'BOX' },
+      { code: 'DZ', name: 'DOZEN', short: 'DZN' },
+      { code: 'CT', name: 'CARTON', short: 'CTN' },
+      { code: 'EA', name: 'EACH', short: 'EA' },
+      { code: 'PK', name: 'PACK', short: 'PACK' }
+    ];
 
-  for (const u of initialUnits) {
-    db.prepare("INSERT INTO units (name, short_name, status) VALUES (?, ?, ?)").run(u.name, u.short_name, 1);
+    for (const u of initialUnits) {
+      db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
+    }
   }
 
   const initialProducts = [
-    { id: "A000000001", name: "Cooking Oil 1L", brand: "Dalda", mg: "00001", pp: 500, tp: 550, rp: 600, stock: 100, unit: "EACH", conv: 1, convUnit: "LTR", min: 20, reorder: 40 },
-    { id: "A000000002", name: "Tea 400g", brand: "Tapal", mg: "00003", pp: 600, tp: 650, rp: 700, stock: 50, unit: "EACH", conv: 400, convUnit: "G", min: 10, reorder: 20 },
-    { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EACH", conv: 1, convUnit: "EACH", min: 50, reorder: 100 },
-    { id: "A000000004", name: "Milk 1L", brand: "MilkPak", mg: "00002", pp: 250, tp: 280, rp: 320, stock: 150, unit: "EACH", conv: 1, convUnit: "LTR", min: 30, reorder: 60 },
-    { id: "A000000005", name: "Biscuits 12pk", brand: "Peek Freans", mg: "00004", pp: 400, tp: 450, rp: 500, stock: 80, unit: "PACK", conv: 12, convUnit: "EACH", min: 15, reorder: 30 }
+    { id: "A000000001", name: "Cooking Oil 1L", brand: "Dalda", mg: "00001", pp: 500, tp: 550, rp: 600, stock: 100, unit: "EA", conv: 1, convUnit: "L", min: 20, reorder: 40 },
+    { id: "A000000002", name: "Tea 400g", brand: "Tapal", mg: "00003", pp: 600, tp: 650, rp: 700, stock: 50, unit: "EA", conv: 400, convUnit: "GR", min: 10, reorder: 20 },
+    { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EA", conv: 1, convUnit: "EA", min: 50, reorder: 100 },
+    { id: "A000000004", name: "Milk 1L", brand: "MilkPak", mg: "00002", pp: 250, tp: 280, rp: 320, stock: 150, unit: "EA", conv: 1, convUnit: "L", min: 30, reorder: 60 },
+    { id: "A000000005", name: "Biscuits 12pk", brand: "Peek Freans", mg: "00004", pp: 400, tp: 450, rp: 500, stock: 80, unit: "PK", conv: 12, convUnit: "EA", min: 15, reorder: 30 }
   ];
 
   for (const p of initialProducts) {
@@ -426,24 +453,126 @@ if (userCount.count === 0) {
   db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(
     plan1.lastInsertRowid, 2
   );
+  }
+} catch (err) {
+  console.error("CRITICAL: Initial seeding failed:", err);
+}
 
-  // Seed Locations
-  const country = db.prepare("INSERT INTO countries (name) VALUES (?)").run("Pakistan");
-  const countryId = country.lastInsertRowid;
+// Seed Units separately
+try {
+  const unitCount = db.prepare("SELECT COUNT(*) as count FROM units").get() as { count: number };
+  if (unitCount.count === 0) {
+    const initialUnits = [
+      { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
+      { code: 'MT', name: 'METRIC TON', short: 'MT' },
+      { code: 'PC', name: 'PIECES', short: 'PCS' },
+      { code: 'GR', name: 'GRAM', short: 'GRM' },
+      { code: 'L', name: 'LITER', short: 'LTR' },
+      { code: 'BX', name: 'BOX', short: 'BOX' },
+      { code: 'DZ', name: 'DOZEN', short: 'DZN' },
+      { code: 'CT', name: 'CARTON', short: 'CTN' },
+      { code: 'EA', name: 'EACH', short: 'EA' },
+      { code: 'PK', name: 'PACK', short: 'PACK' }
+    ];
 
-  const province = db.prepare("INSERT INTO provinces (country_id, name) VALUES (?, ?)").run(countryId, "Sindh");
-  const provinceId = province.lastInsertRowid;
+    for (const u of initialUnits) {
+      db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
+    }
+  }
+} catch (err) {
+  console.error("Unit seeding failed:", err);
+}
 
-  const city = db.prepare("INSERT INTO cities (province_id, name) VALUES (?, ?)").run(provinceId, "Karachi");
-  const cityId = city.lastInsertRowid;
+// Seed Locations (Idempotent)
+try {
+  const country = db.prepare("INSERT OR IGNORE INTO countries (name) VALUES (?)").run("Pakistan");
+  const countryId = country.lastInsertRowid || (db.prepare("SELECT id FROM countries WHERE name = ?").get("Pakistan") as any)?.id;
 
-  const town = db.prepare("INSERT INTO towns (city_id, name) VALUES (?, ?)").run(cityId, "Saddar");
-  const townId = town.lastInsertRowid;
+  if (countryId) {
+    const province = db.prepare("INSERT OR IGNORE INTO provinces (country_id, name) VALUES (?, ?)").run(countryId, "Sindh");
+    const provinceId = province.lastInsertRowid || (db.prepare("SELECT id FROM provinces WHERE name = ? AND country_id = ?").get("Sindh", countryId) as any)?.id;
 
-  const area = db.prepare("INSERT INTO areas (town_id, name) VALUES (?, ?)").run(townId, "Saddar Area");
-  const areaId = area.lastInsertRowid;
+    if (provinceId) {
+      const city = db.prepare("INSERT OR IGNORE INTO cities (province_id, name) VALUES (?, ?)").run(provinceId, "Karachi");
+      const cityId = city.lastInsertRowid || (db.prepare("SELECT id FROM cities WHERE name = ? AND province_id = ?").get("Karachi", provinceId) as any)?.id;
 
-  db.prepare("INSERT INTO subareas (area_id, name) VALUES (?, ?)").run(areaId, "Saddar Main Market");
+      if (cityId) {
+        const locationData = [
+          {
+            town: "Gulshan-e-Iqbal Town",
+            areas: [
+              {
+                name: "Gulshan-e-Iqbal",
+                subareas: ["UC-2 Gulshan-e-Iqbal (Main)", "UC-1 Essa Nagri", "UC-8 National Stadium Area"]
+              },
+              {
+                name: "Gulistan-e-Jauhar (Safoora Town)",
+                subareas: ["UC-7 Gulistan-e-Jauhar", "UC-8 Safari Park Area", "UC-6 Pahlwan Goth"]
+              },
+              {
+                name: "Gulzar-e-Hijri",
+                subareas: ["UC-2 Gulzar-e-Hijri", "UC-3 Sachal Goth", "UC-4 Al-Azhar Garden"]
+              }
+            ]
+          },
+          {
+            town: "North Nazimabad Town",
+            areas: [
+              {
+                name: "North Nazimabad",
+                subareas: ["UC-1 Sir Syed Town", "UC-5 Taimooria", "UC-7 Hyderi"]
+              },
+              {
+                name: "Buffer Zone",
+                subareas: ["UC-4 Buffer Zone I", "UC-6 Sakhi Hassan", "UC-10 Shadman Town"]
+              },
+              {
+                name: "Sakhi Hassan & Surrounds",
+                subareas: ["UC-2 Farooq-e-Azam", "UC-3 Siddiq-e-Akbar", "UC-9 Pahar Gunj"]
+              }
+            ]
+          },
+          {
+            town: "Saddar Town",
+            areas: [
+              {
+                name: "Saddar & Civil Lines",
+                subareas: ["UC-9 Hijrat Colony", "UC-10 Frere Town", "UC-11 Clifton / Boat Basin"]
+              },
+              {
+                name: "Garden & Kharadar",
+                subareas: ["UC-4 Nanakwara", "UC-5 Old Town (Kharadar)", "UC-6 City Railway Colony"]
+              },
+              {
+                name: "Aram Bagh",
+                subareas: ["UC-1 Bhim Pura", "UC-2 Ranchore Line", "UC-3 Gazdarabad"]
+              }
+            ]
+          }
+        ];
+
+        for (const t of locationData) {
+          const town = db.prepare("INSERT OR IGNORE INTO towns (city_id, name) VALUES (?, ?)").run(cityId, t.town);
+          const townId = town.lastInsertRowid || (db.prepare("SELECT id FROM towns WHERE name = ? AND city_id = ?").get(t.town, cityId) as any)?.id;
+
+          if (townId) {
+            for (const a of t.areas) {
+              const area = db.prepare("INSERT OR IGNORE INTO areas (town_id, name) VALUES (?, ?)").run(townId, a.name);
+              const areaId = area.lastInsertRowid || (db.prepare("SELECT id FROM areas WHERE name = ? AND town_id = ?").get(a.name, townId) as any)?.id;
+
+              if (areaId) {
+                for (const sa of a.subareas) {
+                  db.prepare("INSERT OR IGNORE INTO subareas (area_id, name) VALUES (?, ?)").run(areaId, sa);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} catch (err) {
+  console.warn("Location seeding skipped or failed:", err);
 }
 
 async function startServer() {
@@ -482,9 +611,9 @@ async function startServer() {
   });
 
   app.post("/api/units", (req, res) => {
-    const { name, short_name, status } = req.body;
+    const { unit_code, name, short_name, status } = req.body;
     try {
-      const result = db.prepare("INSERT INTO units (name, short_name, status) VALUES (?, ?, ?)").run(name, short_name, status);
+      const result = db.prepare("INSERT INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(unit_code, name, short_name, status);
       res.json({ id: result.lastInsertRowid, ...req.body });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -493,9 +622,9 @@ async function startServer() {
 
   app.put("/api/units/:id", (req, res) => {
     const { id } = req.params;
-    const { name, short_name, status } = req.body;
+    const { unit_code, name, short_name, status } = req.body;
     try {
-      db.prepare("UPDATE units SET name = ?, short_name = ?, status = ? WHERE id = ?").run(name, short_name, status, id);
+      db.prepare("UPDATE units SET unit_code = ?, name = ?, short_name = ?, status = ? WHERE id = ?").run(unit_code, name, short_name, status, id);
       res.json({ id, ...req.body });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -1378,4 +1507,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("CRITICAL: Failed to start server:", err);
+  process.exit(1);
+});

@@ -1,5 +1,6 @@
 export interface Unit {
   id: number;
+  unit_code: string;
   name: string;
   short_name: string;
   status: number;

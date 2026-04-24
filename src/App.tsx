@@ -29,7 +29,8 @@ import {
   Edit,
   Trash2,
   Settings,
-  Shield
+  Shield,
+  LifeBuoy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -67,10 +68,10 @@ import {
 
 // Modal component imports
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
-import { RegisterSupplierModal, DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
+import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
 import { DeliveryModal } from './components/modals/LogisticsModals';
-import { RegisterShopModal, ShopMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
+import { RegisterShopModal, ShopMasterModal, RegisterSupplierModal, SupplierMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -147,9 +148,15 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
 // --- Main App ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>('dashboard');
-  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>('products');
-  const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>('orders');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>(
+    (localStorage.getItem('dms_activeTab') as any) || 'dashboard'
+  );
+  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>(
+    (localStorage.getItem('dms_masterDataSubTab') as any) || 'products'
+  );
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>(
+    (localStorage.getItem('dms_transactionsSubTab') as any) || 'orders'
+  );
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -165,7 +172,9 @@ export default function App() {
   const [salesmen, setSalesmen] = useState<Salesman[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [chartData, setChartData] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    localStorage.getItem('dms_isSidebarOpen') === null ? true : localStorage.getItem('dms_isSidebarOpen') === 'true'
+  );
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
@@ -181,12 +190,15 @@ export default function App() {
   const [isOrderBookerModalOpen, setIsOrderBookerModalOpen] = useState(false);
   const [isSalesmanModalOpen, setIsSalesmanModalOpen] = useState(false);
   const [isShopMasterModalOpen, setIsShopMasterModalOpen] = useState(false);
+  const [isSupplierMasterModalOpen, setIsSupplierMasterModalOpen] = useState(false);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
-  const [isCommandExpanded, setIsCommandExpanded] = useState(true);
+  const [isCommandExpanded, setIsCommandExpanded] = useState(
+    localStorage.getItem('dms_isCommandExpanded') === null ? true : localStorage.getItem('dms_isCommandExpanded') === 'true'
+  );
 
   const executeTransaction = (code: string) => {
     const tCode = code.trim().toUpperCase();
@@ -207,6 +219,7 @@ export default function App() {
       setIsOrderBookerModalOpen(false);
       setIsSalesmanModalOpen(false);
       setIsShopMasterModalOpen(false);
+      setIsSupplierMasterModalOpen(false);
       setIsNewOrderModalOpen(false);
       setIsUnitModalOpen(false);
       setIsLocationModalOpen(false);
@@ -260,12 +273,26 @@ export default function App() {
       case 'SH05':
         setIsRegisterShopModalOpen(true); 
         break;
-      case 'VD03': 
+      case 'VD02':
+      case 'VD03':
+      case 'SHM1':
       case 'SH01':
-        setActiveTab('master_data');
-        setMasterDataSubTab('shops');
+      case 'SH07':
+      case 'SH08':
+        setIsShopMasterModalOpen(true);
         break;
-      case 'XK01': setIsRegisterSupplierModalOpen(true); break;
+      case 'XK01': 
+      case 'SU05':
+      case 'SU07':
+        setIsRegisterSupplierModalOpen(true); 
+        break;
+      case 'XK02':
+      case 'XK03':
+      case 'SUM1':
+      case 'SU01':
+      case 'SU08':
+        setIsSupplierMasterModalOpen(true);
+        break;
       case 'BP01': setIsShopMasterModalOpen(true); break;
       case 'OBM1': setIsOrderBookerModalOpen(true); break;
       case 'SLM1': 
@@ -295,6 +322,27 @@ export default function App() {
   };
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editingDelivery, setEditingDelivery] = useState<Delivery | null>(null);
+
+  // UI State Persistence
+  useEffect(() => {
+    localStorage.setItem('dms_activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_masterDataSubTab', masterDataSubTab);
+  }, [masterDataSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_transactionsSubTab', transactionsSubTab);
+  }, [transactionsSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_isSidebarOpen', String(isSidebarOpen));
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_isCommandExpanded', String(isCommandExpanded));
+  }, [isCommandExpanded]);
 
   useEffect(() => {
     fetchStats();
@@ -622,9 +670,18 @@ export default function App() {
                     <h2 className="text-2xl font-bold text-slate-900">Market Overview</h2>
                     <p className="text-slate-500">Real-time distribution metrics for Karachi region</p>
                   </div>
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-medium text-slate-500">Last Updated</p>
-                    <p className="text-sm font-bold text-slate-900">{new Date().toLocaleTimeString()}</p>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setIsTCodeModalOpen(true)}
+                      className="hidden sm:flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm"
+                    >
+                      <LifeBuoy size={18} />
+                      <span>Help</span>
+                    </button>
+                    <div className="text-right hidden sm:block">
+                      <p className="text-sm font-medium text-slate-500">Last Updated</p>
+                      <p className="text-sm font-bold text-slate-900">{new Date().toLocaleTimeString()}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -717,21 +774,66 @@ export default function App() {
 
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-bold mb-6">Weekly Sales Performance</h3>
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                          <Tooltip 
-                            cursor={{ fill: '#f8fafc' }}
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          />
-                          <Bar dataKey="sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                  <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <h3 className="text-lg font-bold mb-6">Weekly Sales Performance</h3>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                            <Tooltip 
+                              cursor={{ fill: '#f8fafc' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Bar dataKey="sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Quick Access Section */}
+                    <div className="bg-slate-900 p-6 rounded-3xl text-white shadow-xl shadow-slate-200">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-lg font-bold">System Administration</h3>
+                          <p className="text-slate-400 text-sm">Direct access to core configurations</p>
+                        </div>
+                        <Shield className="text-indigo-400" size={24} />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <button 
+                          onClick={() => setIsTCodeModalOpen(true)}
+                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
+                        >
+                          <Shield size={24} className="text-indigo-300" />
+                          <div className="text-center">
+                            <p className="text-sm font-bold">TCODE Mapping</p>
+                            <p className="text-[10px] text-slate-400 font-mono">TC01</p>
+                          </div>
+                        </button>
+                        <button 
+                          onClick={() => setIsLocationModalOpen(true)}
+                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
+                        >
+                          <MapPin size={24} className="text-amber-300" />
+                          <div className="text-center">
+                            <p className="text-sm font-bold">Geo Tree</p>
+                            <p className="text-[10px] text-slate-400 font-mono">LOC01</p>
+                          </div>
+                        </button>
+                        <button 
+                          onClick={() => setIsUnitModalOpen(true)}
+                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
+                        >
+                          <Settings size={24} className="text-emerald-300" />
+                          <div className="text-center">
+                            <p className="text-sm font-bold">Unit Master</p>
+                            <p className="text-[10px] text-slate-400 font-mono">MM04</p>
+                          </div>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -880,13 +982,22 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-slate-900">Supplier Directory</h3>
-                        <button 
-                          onClick={() => setIsRegisterSupplierModalOpen(true)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
-                        >
-                          <Plus size={18} />
-                          <span>Register Supplier</span>
-                        </button>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => setIsSupplierMasterModalOpen(true)}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          >
+                            <Settings size={18} />
+                            <span>Manage Suppliers (SUM1)</span>
+                          </button>
+                          <button 
+                            onClick={() => setIsRegisterSupplierModalOpen(true)}
+                            className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                          >
+                            <Plus size={18} />
+                            <span>Register Supplier (XK01)</span>
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {suppliers.map(supplier => (
@@ -927,14 +1038,14 @@ export default function App() {
                             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
                           >
                             <Settings size={18} />
-                            <span>Manage Shops</span>
+                            <span>Manage Shops (SHM1)</span>
                           </button>
                           <button 
                             onClick={() => setIsRegisterShopModalOpen(true)}
                             className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
                           >
                             <Plus size={18} />
-                            <span>Register Shop</span>
+                            <span>Register Shop (VD01)</span>
                           </button>
                         </div>
                       </div>
@@ -1644,6 +1755,17 @@ export default function App() {
               setIsShopMasterModalOpen(false);
             }}
             shops={shops}
+          />
+        )}
+
+        {isSupplierMasterModalOpen && (
+          <SupplierMasterModal 
+            onClose={() => setIsSupplierMasterModalOpen(false)}
+            onSuccess={() => {
+              fetchSuppliers();
+              setIsSupplierMasterModalOpen(false);
+            }}
+            suppliers={suppliers}
           />
         )}
         {isNewOrderModalOpen && (

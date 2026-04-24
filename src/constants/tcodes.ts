@@ -14,6 +14,15 @@ export const TCODES: TCodeInfo[] = [
   {
     module: 'Salesman Management',
     parentModule: 'Master Data',
+    tCode: 'SLM1',
+    transactionName: 'Salesmen Master',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SALESMAN_ADMIN',
+    description: 'Central portal for all salesmen management tasks.'
+  },
+  {
+    module: 'Salesman Management',
+    parentModule: 'Master Data',
     tCode: 'SM01',
     transactionName: 'Salesman Overview',
     actionType: 'Display',
@@ -96,6 +105,60 @@ export const TCODES: TCodeInfo[] = [
     roleAssociation: 'Z_SHOP_ADMIN',
     description: 'Register a new retailer or mart for delivery.'
   },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'SH07',
+    transactionName: 'Create Shop',
+    actionType: 'Create',
+    roleAssociation: 'Z_SHOP_ADMIN',
+    description: 'Quick creation of shop records.'
+  },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'SH08',
+    transactionName: 'Delete Shop Record',
+    actionType: 'Delete',
+    roleAssociation: 'Z_SHOP_ADMIN',
+    description: 'Remove or archive shop master records.'
+  },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'SHM1',
+    transactionName: 'Shop Master Maintenance',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SHOP_MANAGER',
+    description: 'Comprehensive management of shop details and credit.'
+  },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'VD01',
+    transactionName: 'Create Customer (Shop)',
+    actionType: 'Create',
+    roleAssociation: 'Z_SHOP_ADMIN',
+    description: 'SAP standard code for creating customers.'
+  },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'VD02',
+    transactionName: 'Change Customer (Shop)',
+    actionType: 'Change',
+    roleAssociation: 'Z_SHOP_MANAGER',
+    description: 'SAP standard code for modifying customer master.'
+  },
+  {
+    module: 'Shop Management',
+    parentModule: 'Master Data',
+    tCode: 'VD03',
+    transactionName: 'Display Customer (Shop)',
+    actionType: 'Display',
+    roleAssociation: 'Z_SHOP_VIEWER',
+    description: 'SAP standard code for displaying customer data.'
+  },
 
   // Inventory
   {
@@ -155,5 +218,79 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Manage',
     roleAssociation: 'Z_LOGISTICS_ADMIN',
     description: 'Assign orders to vehicles for delivery.'
+  },
+
+  // Master Data - Supplier
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'SU01',
+    transactionName: 'Supplier Overview',
+    actionType: 'Display',
+    roleAssociation: 'Z_SUPPLIER_VIEWER',
+    description: 'View list of all registered suppliers and vendors.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'SU05',
+    transactionName: 'Register New Supplier',
+    actionType: 'Create',
+    roleAssociation: 'Z_SUPPLIER_ADMIN',
+    description: 'Register a new supplier or vendor for purchases.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'SU07',
+    transactionName: 'Create Supplier',
+    actionType: 'Create',
+    roleAssociation: 'Z_SUPPLIER_ADMIN',
+    description: 'Quick creation of supplier records.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'SU08',
+    transactionName: 'Delete Supplier Record',
+    actionType: 'Delete',
+    roleAssociation: 'Z_SUPPLIER_ADMIN',
+    description: 'Remove or archive supplier master records.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'SUM1',
+    transactionName: 'Supplier Master Maintenance',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SUPPLIER_MANAGER',
+    description: 'Comprehensive management of supplier details and terms.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'XK01',
+    transactionName: 'Create Vendor (Supplier)',
+    actionType: 'Create',
+    roleAssociation: 'Z_SUPPLIER_ADMIN',
+    description: 'SAP standard code for creating vendors.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'XK02',
+    transactionName: 'Change Vendor (Supplier)',
+    actionType: 'Change',
+    roleAssociation: 'Z_SUPPLIER_MANAGER',
+    description: 'SAP standard code for modifying vendor master.'
+  },
+  {
+    module: 'Supplier Management',
+    parentModule: 'Master Data',
+    tCode: 'XK03',
+    transactionName: 'Display Vendor (Supplier)',
+    actionType: 'Display',
+    roleAssociation: 'Z_SUPPLIER_VIEWER',
+    description: 'SAP standard code for displaying vendor data.'
   }
 ];
