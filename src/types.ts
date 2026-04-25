@@ -35,6 +35,7 @@ export interface Shop {
   location: string;
   phone: string;
   credit_limit: number;
+  category?: string;
 }
 
 export interface OrderBooker {

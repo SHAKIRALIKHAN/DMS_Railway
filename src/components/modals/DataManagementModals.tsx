@@ -154,6 +154,14 @@ export const SupplierMasterModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredSuppliers = suppliers.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.contact_person.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -252,7 +260,19 @@ export const SupplierMasterModal = ({
                   type="text" 
                   value={formData.phone}
                   onChange={e => setFormData({...formData, phone: e.target.value})}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. 021-3456789"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Address</label>
+                <textarea 
+                  required
+                  rows={2}
+                  value={formData.address}
+                  onChange={e => setFormData({...formData, address: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all resize-none"
+                  placeholder="Street, Area, City"
                 />
               </div>
               <div className="flex gap-2 pt-2">
@@ -276,11 +296,27 @@ export const SupplierMasterModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Registered Suppliers</h4>
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[600px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Registered Suppliers ({filteredSuppliers.length})</h4>
+                <p className="text-[10px] text-slate-500">Search and manage vendor master data</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder="Search suppliers..."
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Edit size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 overflow-y-auto">
                 <table className="w-full text-left border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 bg-white z-10">
                         <tr className="bg-slate-50 border-b border-slate-200">
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Vendor Info</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Contact</th>
@@ -288,7 +324,7 @@ export const SupplierMasterModal = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {suppliers.map(s => (
+                        {filteredSuppliers.map(s => (
                             <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-4 py-3">
                                     <p className="text-sm font-bold text-slate-900">{s.name}</p>
@@ -479,10 +515,20 @@ export const ShopMasterModal = ({
     owner_name: '',
     location: '',
     phone: '',
-    credit_limit: 0
+    credit_limit: 0,
+    category: 'Retailer'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredShops = shops.filter(s => 
+    s.shop_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.owner_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.phone || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -514,7 +560,8 @@ export const ShopMasterModal = ({
           owner_name: '', 
           location: '', 
           phone: '', 
-          credit_limit: 0 
+          credit_limit: 0,
+          category: 'Retailer'
         });
         setEditingId(null);
       }
@@ -585,6 +632,54 @@ export const ShopMasterModal = ({
                   placeholder="e.g. Ahmed"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Location</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.location}
+                  onChange={e => setFormData({...formData, location: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. Saddar, Karachi"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Phone</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="e.g. 03001234567"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Credit Limit (PKR)</label>
+                <input 
+                  required
+                  type="number" 
+                  value={formData.credit_limit}
+                  onChange={e => setFormData({...formData, credit_limit: parseFloat(e.target.value) || 0})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Category</label>
+                <select 
+                  required
+                  value={formData.category}
+                  onChange={e => setFormData({...formData, category: e.target.value})}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                >
+                  <option value="Retailer">Retailer</option>
+                  <option value="Wholesaler">Wholesaler</option>
+                  <option value="Mart">Mart</option>
+                  <option value="General Store">General Store</option>
+                  <option value="Pharmacy">Pharmacy</option>
+                </select>
+              </div>
               <div className="flex gap-2 pt-2">
                 <button 
                   type="submit"
@@ -598,7 +693,14 @@ export const ShopMasterModal = ({
                     type="button"
                     onClick={() => {
                         setEditingId(null);
-                        setFormData({ shop_name: '', owner_name: '', location: '', phone: '', credit_limit: 0 });
+                        setFormData({ 
+                      shop_name: '', 
+                      owner_name: '', 
+                      location: '', 
+                      phone: '', 
+                      credit_limit: 0,
+                      category: 'Retailer'
+                    });
                     }}
                     className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
                   >
@@ -609,24 +711,51 @@ export const ShopMasterModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Registered Shops</h4>
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[600px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Registered Shops ({filteredShops.length})</h4>
+                <p className="text-[10px] text-slate-500">Search and manage customer master data</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder="Search shops..."
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Edit size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 overflow-y-auto">
                 <table className="w-full text-left border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 bg-white z-10">
                         <tr className="bg-slate-50 border-b border-slate-200">
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Shop Info</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Category</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Location / Contact</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Credit</th>
                             <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {shops.map(shop => (
+                        {filteredShops.map(shop => (
                             <tr key={shop.id} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-4 py-3">
                                     <p className="text-sm font-bold text-slate-900">{shop.shop_name}</p>
                                     <p className="text-[10px] text-slate-500">{shop.owner_name}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className={cn(
+                                        "px-2 py-1 rounded-full text-[10px] font-bold uppercase",
+                                        shop.category === 'Wholesaler' ? "bg-purple-100 text-purple-700" :
+                                        shop.category === 'Mart' ? "bg-amber-100 text-amber-700" :
+                                        "bg-blue-100 text-blue-700"
+                                    )}>
+                                        {shop.category || 'Retailer'}
+                                    </span>
                                 </td>
                                 <td className="px-4 py-3">
                                     <p className="text-xs text-slate-700">{shop.location}</p>
@@ -645,7 +774,8 @@ export const ShopMasterModal = ({
                                                     owner_name: shop.owner_name,
                                                     location: shop.location,
                                                     phone: shop.phone,
-                                                    credit_limit: shop.credit_limit
+                                                    credit_limit: shop.credit_limit,
+                                                    category: shop.category || 'Retailer'
                                                 });
                                             }}
                                             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -981,6 +1111,7 @@ export const ProductMasterDataModal = ({
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -993,6 +1124,12 @@ export const ProductMasterDataModal = ({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [formData, editingId]);
+
+    const filteredProducts = products.filter(p => 
+        p.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.product_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.brand.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     const handleSubmit = async (e?: FormEvent) => {
         if (e) e.preventDefault();
@@ -1188,10 +1325,20 @@ export const ProductMasterDataModal = ({
 
                     {/* Table Section */}
                     <div className="lg:col-span-2 bg-slate-50 p-6 overflow-hidden flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
-                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Product Inventory ({products.length})</h4>
-                            <div className="flex gap-2">
-                                <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-bold">Total SKUs: {products.length}</span>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Product Repository ({filteredProducts.length})</h4>
+                                <p className="text-[10px] text-slate-500">Search and manage existing SKU master data</p>
+                            </div>
+                            <div className="relative w-full md:w-64">
+                                <input 
+                                    type="text"
+                                    placeholder="Search products..."
+                                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                <Edit size={16} className="absolute left-3 top-2.5 text-slate-400" />
                             </div>
                         </div>
 
@@ -1207,7 +1354,7 @@ export const ProductMasterDataModal = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
-                                    {products.map(p => (
+                                    {filteredProducts.map(p => (
                                         <tr key={p.product_id} className="hover:bg-slate-50 transition-colors group">
                                             <td className="px-4 py-3">
                                                 <p className="font-bold text-slate-900 leading-tight">{p.product_name}</p>

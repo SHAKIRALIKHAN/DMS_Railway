@@ -24,6 +24,13 @@ export const DriverModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredDrivers = drivers.filter(d => 
+    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.father_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.cell_no.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -183,12 +190,28 @@ export const DriverModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Driver List</h4>
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[600px]">
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+               <div>
+                 <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Driver List ({filteredDrivers.length})</h4>
+                 <p className="text-[10px] text-slate-500">Search and manage delivery personnel</p>
+               </div>
+               <div className="relative w-full md:w-64">
+                 <input 
+                   type="text"
+                   placeholder="Search drivers..."
+                   className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                 />
+                 <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+               </div>
+             </div>
+
+             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 overflow-y-auto">
+               <table className="w-full text-left border-collapse">
+                 <thead className="sticky top-0 bg-white z-10">
+                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">ID</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Name / Father</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Contact / CNIC</th>
@@ -197,7 +220,7 @@ export const DriverModal = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {drivers.map(driver => (
+                  {filteredDrivers.map(driver => (
                     <tr key={driver.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-xs font-mono text-slate-500">#{driver.id}</td>
                       <td className="px-4 py-3">
@@ -270,6 +293,13 @@ export const SalesmanModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredSalesmen = salesmen.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.cell_no.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.cnic_no.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -423,10 +453,26 @@ export const SalesmanModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[500px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Registered Salesmen</h4>
-            <div className="space-y-3">
-              {salesmen.map(salesman => (
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[500px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Registered Salesmen ({filteredSalesmen.length})</h4>
+                <p className="text-[10px] text-slate-500">Search and manage sales personnel</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder="Search salesmen..."
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              </div>
+            </div>
+
+            <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+              {filteredSalesmen.map(salesman => (
                 <div key={salesman.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
                   <div className="flex items-center gap-4">
                     <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600">
@@ -501,6 +547,13 @@ export const OrderBookerModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredOrderBookers = orderBookers.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.cell_no.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.cnic_no.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -660,11 +713,27 @@ export const OrderBookerModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 overflow-y-auto max-h-[600px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Order Booker List</h4>
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[600px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Order Booker List ({filteredOrderBookers.length})</h4>
+                <p className="text-[10px] text-slate-500">Search and manage booking agents</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder="Search bookers..."
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none shadow-sm transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 overflow-y-auto">
               <table className="w-full text-left border-collapse">
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">ID</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Name / Father</th>
@@ -674,7 +743,7 @@ export const OrderBookerModal = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {orderBookers.map(booker => (
+                  {filteredOrderBookers.map(booker => (
                     <tr key={booker.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-xs font-mono text-slate-500">#{booker.id}</td>
                       <td className="px-4 py-3">
@@ -743,6 +812,12 @@ export const MaterialGroupModal = ({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredGroups = materialGroups.filter(g => 
+    g.mat_gp.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    g.mat_description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -859,10 +934,22 @@ export const MaterialGroupModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 overflow-y-auto max-h-[400px]">
-            <h4 className="text-sm font-bold text-slate-900 mb-4">Existing Groups</h4>
-            <div className="space-y-2">
-              {materialGroups.map(group => (
+          <div className="p-6 bg-slate-50 flex flex-col overflow-hidden max-h-[400px]">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Groups ({filteredGroups.length})</h4>
+              <div className="relative w-40">
+                <input 
+                  type="text"
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:border-indigo-600 outline-none shadow-sm transition-all text-slate-900"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Search size={12} className="absolute left-2.5 top-2 text-slate-400" />
+              </div>
+            </div>
+            <div className="space-y-2 flex-1 overflow-y-auto pr-2">
+              {filteredGroups.map(group => (
                 <div key={group.mat_gp} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center">
                   <div>
                     <p className="text-xs font-bold text-slate-400">{group.mat_gp}</p>
@@ -1039,6 +1126,11 @@ export const LocationMasterModal = ({
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredList = list.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const levels = [
     { key: 'countries', label: 'Country', parent: null },
@@ -1179,16 +1271,25 @@ export const LocationMasterModal = ({
 
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row divide-x divide-slate-100">
           <div className="flex-1 p-6 overflow-y-auto bg-white">
-            <div className="flex justify-between items-center mb-6">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
-                Select {levels.find(l => l.key === activeLevel)?.label}
-                {activeLevel !== 'countries' && selection[levels.find(l => l.key === activeLevel)?.parent!] && (
-                  <span className="text-slate-400 font-medium ml-1">in {selection[levels.find(l => l.key === activeLevel)?.parent!]?.name}</span>
-                )}
-              </h4>
-              <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">
-                {list.length} Items Found
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
+                  Select {levels.find(l => l.key === activeLevel)?.label}
+                  {activeLevel !== 'countries' && selection[levels.find(l => l.key === activeLevel)?.parent!] && (
+                    <span className="text-slate-400 font-medium ml-1">in {selection[levels.find(l => l.key === activeLevel)?.parent!]?.name}</span>
+                  )}
+                </h4>
+              </div>
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder={`Search ${activeLevel}...`}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 transition-all bg-white shadow-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
               </div>
             </div>
 
@@ -1197,16 +1298,20 @@ export const LocationMasterModal = ({
                 <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent mb-4"></div>
                 <p className="text-xs font-bold text-slate-900 animate-pulse">Synchronizing hierarchy...</p>
               </div>
-            ) : list.length === 0 ? (
+            ) : filteredList.length === 0 ? (
               <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
                 <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
                   <Search size={24} className="text-slate-300" />
                 </div>
-                <p className="text-slate-900 font-bold mb-1">No {activeLevel} records found</p>
+                <p className="text-slate-900 font-bold mb-1">
+                  {searchQuery ? 'No matching records found' : `No ${activeLevel} records found`}
+                </p>
                 <p className="text-slate-500 text-xs max-w-xs mx-auto mb-6">
-                  {activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] 
-                    ? `To view ${activeLevel}, please select a ${levels.find(l => l.key === activeLevel)?.parent.slice(0, -1)} first.`
-                    : `Start by adding a new ${activeLevel.slice(0, -1)} using the form on the right.`}
+                  {searchQuery 
+                    ? 'Try adjusting your search query'
+                    : activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] 
+                      ? `To view ${activeLevel}, please select a ${levels.find(l => l.key === activeLevel)?.parent.slice(0, -1)} first.`
+                      : `Start by adding a new ${activeLevel.slice(0, -1)} using the form on the right.`}
                 </p>
                 {activeLevel !== 'countries' && !selection[levels.find(l => l.key === activeLevel)?.parent!] && (
                    <button 
@@ -1219,7 +1324,7 @@ export const LocationMasterModal = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {list.map(item => (
+                {filteredList.map(item => (
                   <div 
                     key={item.id}
                     className={cn(

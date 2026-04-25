@@ -79,7 +79,8 @@ try {
     owner_name TEXT NOT NULL,
     location TEXT NOT NULL,
     phone TEXT NOT NULL,
-    credit_limit REAL DEFAULT 0
+    credit_limit REAL DEFAULT 0,
+    category TEXT DEFAULT 'Retailer'
   );
 
   CREATE TABLE IF NOT EXISTS order_bookers (
@@ -266,6 +267,17 @@ try {
       UNIQUE(area_id, name)
     );
   `);
+
+  // Migration for shops category
+  try {
+    db.prepare("SELECT category FROM shops LIMIT 1").get();
+  } catch (err) {
+    try {
+      db.exec("ALTER TABLE shops ADD COLUMN category TEXT DEFAULT 'Retailer'");
+    } catch (e) {
+      // ignore
+    }
+  }
 } catch (err) {
   console.error("CRITICAL: Database initialization failed:", err);
   process.exit(1);

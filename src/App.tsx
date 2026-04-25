@@ -30,7 +30,10 @@ import {
   Trash2,
   Settings,
   Shield,
-  LifeBuoy
+  LifeBuoy,
+  Filter,
+  RotateCcw,
+  SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -145,6 +148,75 @@ const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
   </div>
 );
 
+const FilterBar = ({ 
+  title, 
+  filters, 
+  onFilterChange, 
+  onClear, 
+  options 
+}: { 
+  title: string, 
+  filters: any, 
+  onFilterChange: (key: string, val: any) => void, 
+  onClear: () => void,
+  options: { key: string, label: string, choices: { value: string, label: string }[] }[]
+}) => {
+  const activeFilters = Object.entries(filters).filter(([_, val]) => val !== 'any');
+
+  return (
+    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Filter size={18} className="text-slate-400" />
+          <h4 className="text-sm font-bold text-slate-700">{title}</h4>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          {options.map((opt) => (
+            <div key={opt.key} className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">{opt.label}</span>
+              <select 
+                value={filters[opt.key]}
+                onChange={(e) => onFilterChange(opt.key, e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-600 transition-colors"
+              >
+                <option value="any">All {opt.label}s</option>
+                {opt.choices.map(choice => (
+                  <option key={choice.value} value={choice.value}>{choice.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+          
+          <button 
+            onClick={onClear}
+            className="flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors mt-auto"
+          >
+            <RotateCcw size={14} />
+            <span>Clear All</span>
+          </button>
+        </div>
+      </div>
+
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-50">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Active:</span>
+          {activeFilters.map(([key, val]) => (
+            <button 
+              key={key}
+              onClick={() => onFilterChange(key, 'any')}
+              className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"
+            >
+              <span>{options.find(o => o.key === key)?.label}: {val}</span>
+              <X size={12} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -199,6 +271,88 @@ export default function App() {
   const [isCommandExpanded, setIsCommandExpanded] = useState(
     localStorage.getItem('dms_isCommandExpanded') === null ? true : localStorage.getItem('dms_isCommandExpanded') === 'true'
   );
+
+  // Master Data Filters State
+  const [filters, setFilters] = useState({
+    shops: JSON.parse(localStorage.getItem('dms_filters_shops') || '{"route": "any", "status": "any", "balanceRange": "any", "search": ""}'),
+    suppliers: JSON.parse(localStorage.getItem('dms_filters_suppliers') || '{"category": "any", "city": "any", "search": ""}'),
+    salesmen: JSON.parse(localStorage.getItem('dms_filters_salesmen') || '{"territory": "any", "manager": "any", "search": ""}'),
+    orderBookers: JSON.parse(localStorage.getItem('dms_filters_orderBookers') || '{"status": "any", "search": ""}'),
+    products: JSON.parse(localStorage.getItem('dms_filters_products') || '{"brand": "any", "mg": "any", "availability": "any", "search": ""}'),
+  });
+
+  const [shopSearchInput, setShopSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_shops') || '{}').search || ""
+  );
+  const [showShopSuggestions, setShowShopSuggestions] = useState(false);
+
+  const [supplierSearchInput, setSupplierSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_suppliers') || '{}').search || ""
+  );
+  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+
+  const [salesmanSearchInput, setSalesmanSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_salesmen') || '{}').search || ""
+  );
+  const [showSalesmanSuggestions, setShowSalesmanSuggestions] = useState(false);
+
+  const [orderBookerSearchInput, setOrderBookerSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_orderBookers') || '{}').search || ""
+  );
+  const [showOrderBookerSuggestions, setShowOrderBookerSuggestions] = useState(false);
+
+  const [productSearchInput, setProductSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_products') || '{}').search || ""
+  );
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+
+  const shopSuggestions = shopSearchInput.length > 0 
+    ? shops.filter(s => s.shop_name?.toLowerCase().includes(shopSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const supplierSuggestions = supplierSearchInput.length > 0 
+    ? suppliers.filter(s => s.name?.toLowerCase().includes(supplierSearchInput.toLowerCase()) || (s as any).company_name?.toLowerCase().includes(supplierSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const salesmanSuggestions = salesmanSearchInput.length > 0 
+    ? salesmen.filter(s => s.name?.toLowerCase().includes(salesmanSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const orderBookerSuggestions = orderBookerSearchInput.length > 0 
+    ? orderBookers.filter(s => s.name?.toLowerCase().includes(orderBookerSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const productSuggestions = productSearchInput.length > 0 
+    ? products.filter(s => s.name?.toLowerCase().includes(productSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const updateFilter = (module: keyof typeof filters, key: string, value: any) => {
+    const newFilters = {
+      ...filters,
+      [module]: { ...filters[module], [key]: value }
+    };
+    setFilters(newFilters);
+    localStorage.setItem(`dms_filters_${module as string}`, JSON.stringify(newFilters[module]));
+  };
+
+  const clearFilters = (module: keyof typeof filters) => {
+    const defaults: any = {
+      shops: { route: 'any', status: 'any', balanceRange: 'any', search: '' },
+      suppliers: { category: 'any', city: 'any', search: '' },
+      salesmen: { territory: 'any', manager: 'any', search: '' },
+      orderBookers: { status: 'any', search: '' },
+      products: { brand: 'any', mg: 'any', availability: 'any', search: '' }
+    };
+    if (module === 'shops') setShopSearchInput("");
+    if (module === 'suppliers') setSupplierSearchInput("");
+    if (module === 'salesmen') setSalesmanSearchInput("");
+    if (module === 'orderBookers') setOrderBookerSearchInput("");
+    if (module === 'products') setProductSearchInput("");
+    updateFilter(module, 'RESET', null); // Trigger reset
+    const newFilters = { ...filters, [module]: defaults[module] };
+    setFilters(newFilters);
+    localStorage.setItem(`dms_filters_${module as string}`, JSON.stringify(defaults[module]));
+  };
 
   const executeTransaction = (code: string) => {
     const tCode = code.trim().toUpperCase();
@@ -361,6 +515,59 @@ export default function App() {
     fetchUnits();
     fetchDeliveries();
   }, []);
+
+  // Filtered Data Computation
+  const filteredShops = shops.filter(shop => {
+    const f = filters.shops;
+    if (f.search && !shop.shop_name?.toLowerCase().includes(f.search.toLowerCase())) return false;
+    if (f.route !== 'any' && shop.location !== f.route) return false;
+    // Note: status filter assuming shop has a status field (defaulting to true/active for now if column missing)
+    if (f.status !== 'any') {
+      const shopStatus = (shop as any).status === 0 ? 'inactive' : 'active';
+      if (shopStatus !== f.status) return false;
+    }
+    if (f.balanceRange !== 'any') {
+      const bal = (shop as any).balance || 0;
+      if (f.balanceRange === 'high' && bal < 50000) return false;
+      if (f.balanceRange === 'low' && bal >= 10000) return false;
+    }
+    return true;
+  });
+
+  const filteredSuppliers = suppliers.filter(supplier => {
+    const f = filters.suppliers;
+    if (f.search && !(supplier.name?.toLowerCase().includes(f.search.toLowerCase()) || (supplier as any).company_name?.toLowerCase().includes(f.search.toLowerCase()))) return false;
+    if (f.category !== 'any' && (supplier as any).category !== f.category) return false;
+    if (f.city !== 'any' && (supplier as any).city !== f.city) return false;
+    return true;
+  });
+
+  const filteredSalesmen = salesmen.filter(sm => {
+    const f = filters.salesmen;
+    if (f.search && !sm.name?.toLowerCase().includes(f.search.toLowerCase())) return false;
+    if (f.territory !== 'any' && (sm as any).territory !== f.territory) return false;
+    if (f.manager !== 'any' && (sm as any).reporting_manager !== f.manager) return false;
+    return true;
+  });
+
+  const filteredOrderBookers = orderBookers.filter(ob => {
+    const f = filters.orderBookers;
+    if (f.search && !ob.name?.toLowerCase().includes(f.search.toLowerCase())) return false;
+    return true;
+  });
+
+  const filteredProducts = products.filter(product => {
+    const f = filters.products;
+    if (f.search && !product.name?.toLowerCase().includes(f.search.toLowerCase())) return false;
+    if (f.brand !== 'any' && product.brand !== f.brand) return false;
+    if (f.mg !== 'any' && product.material_group_id !== f.mg) return false;
+    if (f.availability !== 'any') {
+      const isAvailable = product.stock_quantity > 0;
+      if (f.availability === 'in' && !isAvailable) return false;
+      if (f.availability === 'out' && isAvailable) return false;
+    }
+    return true;
+  });
 
   const fetchUnits = async () => {
     try {
@@ -647,10 +854,6 @@ export default function App() {
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">System</span>
               <span className="text-xs font-bold text-indigo-600">SK-DMS</span>
             </div>
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100">
-              <Plus size={18} />
-              <span>New Order</span>
-            </button>
           </div>
         </header>
 
@@ -980,27 +1183,101 @@ export default function App() {
 
                   {masterDataSubTab === 'suppliers' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Supplier Directory</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={supplierSearchInput}
+                              onFocus={() => setShowSupplierSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowSupplierSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setSupplierSearchInput(e.target.value);
+                                updateFilter('suppliers', 'search', e.target.value);
+                              }}
+                              placeholder="Search by supplier or company name..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showSupplierSuggestions && supplierSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Suggestions</span>
+                                </div>
+                                {supplierSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setSupplierSearchInput(suggestion.name);
+                                      updateFilter('suppliers', 'search', suggestion.name);
+                                      setShowSupplierSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-amber-50 p-2 rounded-lg text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                                      <Factory size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.name}</p>
+                                      <p className="text-[10px] text-slate-400">{(suggestion as any).company_name} • {suggestion.contact_person}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <div className="flex gap-3">
                           <button 
                             onClick={() => setIsSupplierMasterModalOpen(true)}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                            className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                           >
                             <Settings size={18} />
                             <span>Manage Suppliers (SUM1)</span>
                           </button>
                           <button 
                             onClick={() => setIsRegisterSupplierModalOpen(true)}
-                            className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                            className="bg-slate-100 text-slate-700 px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
                           >
                             <Plus size={18} />
                             <span>Register Supplier (XK01)</span>
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {suppliers.map(supplier => (
+
+                      <FilterBar 
+                        title="Supplier Filters"
+                        filters={filters.suppliers}
+                        onFilterChange={(k, v) => updateFilter('suppliers', k, v)}
+                        onClear={() => clearFilters('suppliers')}
+                        options={[
+                          { 
+                            key: 'category', 
+                            label: 'Category', 
+                            choices: Array.from(new Set(suppliers.map((s: any) => s.category || 'Trading'))).map(c => ({ value: String(c), label: String(c) }))
+                          },
+                          { 
+                            key: 'city', 
+                            label: 'City', 
+                            choices: Array.from(new Set(suppliers.map((s: any) => s.address?.split(',').pop()?.trim() || 'Karachi'))).map(c => ({ value: String(c), label: String(c) }))
+                          }
+                        ]}
+                      />
+
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                      >
+                        {filteredSuppliers.map(supplier => (
                           <div key={supplier.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                             <div className="flex justify-between items-start mb-4">
                               <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-600 group-hover:text-white transition-colors">
@@ -1024,33 +1301,113 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </motion.div>
                     </div>
                   )}
 
                   {masterDataSubTab === 'shops' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Shop Network</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={shopSearchInput}
+                              onFocus={() => setShowShopSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowShopSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setShopSearchInput(e.target.value);
+                                updateFilter('shops', 'search', e.target.value);
+                              }}
+                              placeholder="Search by shop name (e.g. 'Zahid Stores')..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showShopSuggestions && shopSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Suggestions</span>
+                                </div>
+                                {shopSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setShopSearchInput(suggestion.shop_name);
+                                      updateFilter('shops', 'search', suggestion.shop_name);
+                                      setShowShopSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Store size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
+                                      <p className="text-[10px] text-slate-400">{suggestion.location} • {suggestion.owner_name}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
                         <div className="flex gap-3">
                           <button 
                             onClick={() => setIsShopMasterModalOpen(true)}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                            className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                           >
                             <Settings size={18} />
                             <span>Manage Shops (SHM1)</span>
                           </button>
                           <button 
                             onClick={() => setIsRegisterShopModalOpen(true)}
-                            className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                            className="bg-slate-100 text-slate-700 px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
                           >
                             <Plus size={18} />
                             <span>Register Shop (VD01)</span>
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {shops.map(shop => (
+
+                      <FilterBar 
+                        title="Shop Network Filters"
+                        filters={filters.shops}
+                        onFilterChange={(k, v) => updateFilter('shops', k, v)}
+                        onClear={() => clearFilters('shops')}
+                        options={[
+                          { 
+                            key: 'route', 
+                            label: 'Route', 
+                            choices: Array.from(new Set(shops.map(s => s.location))).map(l => ({ value: String(l), label: String(l) }))
+                          },
+                          { 
+                            key: 'status', 
+                            label: 'Status', 
+                            choices: [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]
+                          },
+                          { 
+                            key: 'balanceRange', 
+                            label: 'Outstanding', 
+                            choices: [{ value: 'low', label: 'Under 10k' }, { value: 'high', label: 'Over 50k' }]
+                          }
+                        ]}
+                      />
+
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                      >
+                        {filteredShops.map(shop => (
                           <div key={shop.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
                             <div className="flex justify-between items-start mb-4">
                               <div className="bg-indigo-50 p-3 rounded-xl">
@@ -1085,24 +1442,78 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </motion.div>
                     </div>
                   )}
 
                   {masterDataSubTab === 'order_bookers' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Order Bookers</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={orderBookerSearchInput}
+                              onFocus={() => setShowOrderBookerSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowOrderBookerSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setOrderBookerSearchInput(e.target.value);
+                                updateFilter('orderBookers', 'search', e.target.value);
+                              }}
+                              placeholder="Search by order booker name..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showOrderBookerSuggestions && orderBookerSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Suggestions</span>
+                                </div>
+                                {orderBookerSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setOrderBookerSearchInput(suggestion.name);
+                                      updateFilter('orderBookers', 'search', suggestion.name);
+                                      setShowOrderBookerSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Users size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.name}</p>
+                                      <p className="text-[10px] text-slate-400">ID: #BK-{suggestion.id.toString().padStart(3, '0')} • {suggestion.cell_no}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <button 
                           onClick={() => setIsOrderBookerModalOpen(true)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                         >
                           <Plus size={18} />
                           <span>Manage Order Bookers</span>
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {orderBookers.map(booker => (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                      >
+                        {filteredOrderBookers.map(booker => (
                           <div key={booker.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <div className="flex items-center gap-4 mb-4">
                               <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600">
@@ -1125,24 +1536,98 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </motion.div>
                     </div>
                   )}
 
                   {masterDataSubTab === 'salesmen' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Salesmen Directory</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={salesmanSearchInput}
+                              onFocus={() => setShowSalesmanSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowSalesmanSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setSalesmanSearchInput(e.target.value);
+                                updateFilter('salesmen', 'search', e.target.value);
+                              }}
+                              placeholder="Search by salesman name..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showSalesmanSuggestions && salesmanSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Suggestions</span>
+                                </div>
+                                {salesmanSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setSalesmanSearchInput(suggestion.name);
+                                      updateFilter('salesmen', 'search', suggestion.name);
+                                      setShowSalesmanSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Users size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.name}</p>
+                                      <p className="text-[10px] text-slate-400">ID: #SM-{suggestion.id.toString().padStart(3, '0')} • {suggestion.cell_no}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <button 
                           onClick={() => setIsSalesmanModalOpen(true)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                         >
                           <Plus size={18} />
                           <span>Manage Salesmen</span>
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {salesmen.map(salesman => (
+
+                      <FilterBar 
+                        title="Salesmen Category Filters"
+                        filters={filters.salesmen}
+                        onFilterChange={(k, v) => updateFilter('salesmen', k, v)}
+                        onClear={() => clearFilters('salesmen')}
+                        options={[
+                          { 
+                            key: 'territory', 
+                            label: 'Territory', 
+                            choices: Array.from(new Set(salesmen.map((s: any) => s.territory || 'Karachi South'))).map(t => ({ value: String(t), label: String(t) }))
+                          },
+                          { 
+                            key: 'manager', 
+                            label: 'Reporting Manager', 
+                            choices: Array.from(new Set(salesmen.map((s: any) => s.reporting_manager || 'Ghulam Ali'))).map(m => ({ value: String(m), label: String(m) }))
+                          }
+                        ]}
+                      />
+
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                      >
+                        {filteredSalesmen.map(salesman => (
                           <div key={salesman.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <div className="flex items-center gap-4 mb-4">
                               <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600">
@@ -1165,14 +1650,65 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </motion.div>
                     </div>
                   )}
 
                   {masterDataSubTab === 'products' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Product Inventory</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={productSearchInput}
+                              onFocus={() => setShowProductSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowProductSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setProductSearchInput(e.target.value);
+                                updateFilter('products', 'search', e.target.value);
+                              }}
+                              placeholder="Search by product name..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showProductSuggestions && productSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Suggestions</span>
+                                </div>
+                                {productSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setProductSearchInput(suggestion.name);
+                                      updateFilter('products', 'search', suggestion.name);
+                                      setShowProductSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Package size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.name}</p>
+                                      <p className="text-[10px] text-slate-400">{suggestion.sku} • {suggestion.brand}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
                         <div className="flex gap-2">
                           <button 
                             onClick={() => setIsMaterialGroupModalOpen(true)}
@@ -1190,7 +1726,36 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+
+                      <FilterBar 
+                        title="Inventory Filters"
+                        filters={filters.products}
+                        onFilterChange={(k, v) => updateFilter('products', k, v)}
+                        onClear={() => clearFilters('products')}
+                        options={[
+                          { 
+                            key: 'brand', 
+                            label: 'Brand', 
+                            choices: Array.from(new Set(products.map(p => p.brand))).map(b => ({ value: String(b), label: String(b) }))
+                          },
+                          { 
+                            key: 'mg', 
+                            label: 'Category', 
+                            choices: materialGroups.map(mg => ({ value: String(mg.mat_gp), label: String(mg.mat_description) }))
+                          },
+                          { 
+                            key: 'availability', 
+                            label: 'Availability', 
+                            choices: [{ value: 'in', label: 'In Stock' }, { value: 'out', label: 'Out of Stock' }]
+                          }
+                        ]}
+                      />
+
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+                      >
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
@@ -1202,7 +1767,7 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {products.map(product => (
+                            {filteredProducts.map(product => (
                               <tr key={product.product_id} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-4 font-mono text-xs text-slate-500">{product.product_id}</td>
                                 <td className="px-6 py-4">
@@ -1210,7 +1775,9 @@ export default function App() {
                                   <p className="text-[10px] text-slate-500">{product.brand}</p>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <span className="text-xs font-bold text-slate-900">{product.material_group_name}</span>
+                                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">
+                                    {product.material_group_name || product.material_group_id}
+                                  </span>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col">
@@ -1227,7 +1794,7 @@ export default function App() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </motion.div>
                     </div>
                   )}
                 </div>
