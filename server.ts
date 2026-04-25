@@ -307,24 +307,24 @@ try {
   }
 
   // Seed Units
-  const unitCount = db.prepare("SELECT COUNT(*) as count FROM units").get() as { count: number };
-  if (unitCount.count === 0) {
-    const initialUnits = [
-      { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
-      { code: 'MT', name: 'METRIC TON', short: 'MT' },
-      { code: 'PC', name: 'PIECES', short: 'PCS' },
-      { code: 'GR', name: 'GRAM', short: 'GRM' },
-      { code: 'L', name: 'LITER', short: 'LTR' },
-      { code: 'BX', name: 'BOX', short: 'BOX' },
-      { code: 'DZ', name: 'DOZEN', short: 'DZN' },
-      { code: 'CT', name: 'CARTON', short: 'CTN' },
-      { code: 'EA', name: 'EACH', short: 'EA' },
-      { code: 'PK', name: 'PACK', short: 'PACK' }
-    ];
+  // Seed Units
+  const unitsToSeed = [
+    { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
+    { code: 'MT', name: 'METRIC TON', short: 'MT' },
+    { code: 'PC', name: 'PIECES', short: 'PCS' },
+    { code: 'GR', name: 'GRAM', short: 'GRM' },
+    { code: 'L', name: 'LITER', short: 'LTR' },
+    { code: 'BX', name: 'BOX', short: 'BOX' },
+    { code: 'DZ', name: 'DOZEN', short: 'DZN' },
+    { code: 'CT', name: 'CARTON', short: 'CTN' },
+    { code: 'EA', name: 'EACH', short: 'EA' },
+    { code: 'PK', name: 'PACK', short: 'PACK' },
+    { code: 'SET', name: 'SET', short: 'SET' },
+    { code: 'BAG', name: 'BAG', short: 'BAG' }
+  ];
 
-    for (const u of initialUnits) {
-      db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
-    }
+  for (const u of unitsToSeed) {
+    db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
   }
 
   const initialProducts = [
@@ -1513,6 +1513,46 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  app.get('/api/units', (req, res) => {
+    try {
+      const units = db.prepare("SELECT * FROM units ORDER BY name ASC").all();
+      res.json(units);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch units" });
+    }
+  });
+
+  app.post('/api/units', (req, res) => {
+    const { unit_code, name, short_name } = req.body;
+    try {
+      const result = db.prepare("INSERT INTO units (unit_code, name, short_name) VALUES (?, ?, ?)")
+        .run(unit_code, name, short_name);
+      res.json({ id: result.lastInsertRowid });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/units/:id', (req, res) => {
+    const { unit_code, name, short_name, status } = req.body;
+    try {
+      db.prepare("UPDATE units SET unit_code = ?, name = ?, short_name = ?, status = ? WHERE id = ?")
+        .run(unit_code, name, short_name, status, req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/units/:id', (req, res) => {
+    try {
+      db.prepare("DELETE FROM units WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Cannot delete unit as it may be in use" });
+    }
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

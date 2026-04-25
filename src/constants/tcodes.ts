@@ -292,5 +292,14 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Display',
     roleAssociation: 'Z_SUPPLIER_VIEWER',
     description: 'SAP standard code for displaying vendor data.'
+  },
+  {
+    module: 'Unit Management',
+    parentModule: 'Master Data',
+    tCode: 'UN01',
+    transactionName: 'Units Master Maintenance',
+    actionType: 'Manage',
+    roleAssociation: 'Z_UNIT_MANAGER',
+    description: 'Comprehensive management of measurement units (e.g. PCS, KG, BOX).'
   }
 ];

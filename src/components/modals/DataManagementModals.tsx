@@ -909,7 +909,7 @@ export const UnitModal = ({
               <Package size={20} className="text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Units Master Data (MM04)</h3>
+              <h3 className="text-lg font-bold text-slate-900">Units Master Data (UN01)</h3>
               <p className="text-xs text-slate-500">Manage measurement units and scales</p>
             </div>
           </div>

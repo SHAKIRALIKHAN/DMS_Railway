@@ -415,7 +415,7 @@ export default function App() {
       case 'IN01':
         setActiveTab('inventory'); 
         break;
-      case 'MM04': setIsUnitModalOpen(true); break;
+      case 'UN01': setIsUnitModalOpen(true); break;
       case 'LOC01': setIsLocationModalOpen(true); break;
       case 'ME21N': 
         setActiveTab('transactions');
@@ -1033,7 +1033,7 @@ export default function App() {
                           <Settings size={24} className="text-emerald-300" />
                           <div className="text-center">
                             <p className="text-sm font-bold">Unit Master</p>
-                            <p className="text-[10px] text-slate-400 font-mono">MM04</p>
+                            <p className="text-[10px] text-slate-400 font-mono">UN01</p>
                           </div>
                         </button>
                       </div>
@@ -1795,6 +1795,55 @@ export default function App() {
                           </tbody>
                         </table>
                       </motion.div>
+                    </div>
+                  )}
+
+                  {masterDataSubTab === 'units' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-900">Units Master Data</h3>
+                        <button 
+                          onClick={() => setIsUnitModalOpen(true)}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                        >
+                          <Settings size={18} />
+                          <span>Manage Units (UN01)</span>
+                        </button>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Unit Code</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Short Name</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {units.map(unit => (
+                              <tr key={unit.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-4 font-mono text-xs font-bold text-slate-900">{unit.unit_code}</td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm text-slate-600">{unit.name}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm text-slate-600">{unit.short_name}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={cn(
+                                    "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
+                                    unit.status === 1 ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
+                                  )}>
+                                    {unit.status === 1 ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
