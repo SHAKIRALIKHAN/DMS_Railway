@@ -15,6 +15,18 @@ export const LedgerModal = ({
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     const fetchLedger = async () => {
       try {
@@ -31,24 +43,24 @@ export const LedgerModal = ({
   }, [shop.id]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Shop Ledger</h3>
             <p className="text-sm text-slate-500">{shop.shop_name} • Financial History</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="flex-1 p-6 overflow-y-auto">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -92,7 +104,7 @@ export const LedgerModal = ({
             onClick={onClose}
             className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors"
           >
-            Close
+            Close (F3)
           </button>
         </div>
       </motion.div>
@@ -112,6 +124,18 @@ export const OrderDetailsModal = ({
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     const fetchItems = async () => {
       try {
@@ -128,24 +152,24 @@ export const OrderDetailsModal = ({
   }, [order.id]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Order Details</h3>
             <p className="text-sm text-slate-500">#ORD-{order.id.toString().padStart(4, '0')} • {order.shop_name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="flex-1 p-6 overflow-y-auto">
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Shop</p>
@@ -208,7 +232,7 @@ export const OrderDetailsModal = ({
 
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
           <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
-            Close
+            Close (F3)
           </button>
         </div>
       </motion.div>
@@ -228,6 +252,18 @@ export const PurchaseDetailsModal = ({
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     const fetchItems = async () => {
       try {
@@ -244,24 +280,24 @@ export const PurchaseDetailsModal = ({
   }, [purchase.id]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Purchase Details</h3>
             <p className="text-sm text-slate-500">#PUR-{purchase.id.toString().padStart(4, '0')} • {purchase.supplier_name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="flex-1 p-6 overflow-y-auto">
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Supplier</p>
@@ -328,7 +364,7 @@ export const PurchaseDetailsModal = ({
 
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
           <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
-            Close
+            Close (F3)
           </button>
         </div>
       </motion.div>
@@ -348,6 +384,18 @@ export const DeliveryDetailsModal = ({
   const [items, setItems] = useState<DeliveryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     fetchItems();
   }, [delivery.id]);
@@ -365,12 +413,12 @@ export const DeliveryDetailsModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
@@ -382,12 +430,12 @@ export const DeliveryDetailsModal = ({
               Order Ref: #ORD-{(delivery.order_ref || delivery.order_id || 0).toString().padStart(4, '0')}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="flex-1 p-6 overflow-y-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Shop</p>

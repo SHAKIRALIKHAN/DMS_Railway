@@ -54,21 +54,21 @@ export const RegisterSupplierModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-indigo-600 rounded-lg">
                 <Factory size={20} className="text-white" />
              </div>
              <h3 className="text-lg font-bold text-slate-900">Register New Supplier</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -214,21 +214,21 @@ export const SupplierMasterModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-indigo-600 rounded-lg">
                 <Factory size={20} className="text-white" />
              </div>
              <h3 className="text-lg font-bold text-slate-900">Manage Suppliers Master Data</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -425,16 +425,16 @@ export const RegisterShopModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">Register New Shop</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -607,12 +607,12 @@ export const ShopMasterModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -621,7 +621,7 @@ export const ShopMasterModal = ({
             </div>
             <h3 className="text-lg font-bold text-slate-900">Manage Shops Master Data</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -739,7 +739,7 @@ export const ShopMasterModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[600px]">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Registered Shops ({filteredShops.length})</h4>
@@ -927,14 +927,14 @@ export const UnitModal = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-500 rounded-lg">
               <Package size={20} className="text-white" />
@@ -944,7 +944,7 @@ export const UnitModal = ({
               <p className="text-xs text-slate-500">Manage measurement units and scales</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -1218,21 +1218,21 @@ export const ProductMasterDataModal = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
             <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-600 rounded-lg">
                             <Package size={20} className="text-white" />
                         </div>
                         <h3 className="text-lg font-bold text-slate-900">Manage Products Master Data</h3>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
                         <X size={20} className="text-slate-500" />
                     </button>
                 </div>

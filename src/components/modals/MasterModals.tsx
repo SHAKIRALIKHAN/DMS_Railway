@@ -91,16 +91,16 @@ export const DriverModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">Manage Drivers Master Data</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -371,16 +371,16 @@ export const SalesmanModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">Manage Salesmen Master Data</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -475,7 +475,7 @@ export const SalesmanModal = ({
             </form>
           </div>
 
-          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-[500px]">
+          <div className="p-6 bg-slate-50 lg:col-span-2 flex flex-col overflow-hidden max-h-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Registered Salesmen ({filteredSalesmen.length})</h4>
@@ -636,16 +636,16 @@ export const OrderBookerModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">Manage Order Bookers Master Data</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -905,16 +905,16 @@ export const MaterialGroupModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">Manage Material Groups</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -1055,14 +1055,14 @@ export const TCodeMasterModal = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500 rounded-lg">
               <Shield size={20} className="text-white" />
@@ -1072,7 +1072,7 @@ export const TCodeMasterModal = ({
               <p className="text-xs text-indigo-200">Granular mapping of functional modules to transaction codes for role-based maintenance</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-white" />
           </button>
         </div>
@@ -1299,19 +1299,19 @@ export const LocationMasterModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Manage Location Hierarchy</h3>
             <p className="text-xs text-slate-500">Configure Country, Province, City, Town, Area, and Subarea Master Data</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>

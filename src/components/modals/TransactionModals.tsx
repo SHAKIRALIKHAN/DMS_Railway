@@ -88,6 +88,9 @@ export const PurchaseModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -123,16 +126,16 @@ export const PurchaseModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">New Purchase Transaction</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -365,6 +368,9 @@ export const NewOrderModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -436,18 +442,18 @@ export const NewOrderModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900">
             {order ? `Update Sale Order (#ORD-${order.id.toString().padStart(4, '0')})` : 'New Booking Order'}
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>

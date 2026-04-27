@@ -326,6 +326,26 @@ export default function App() {
     ? products.filter(s => s.name?.toLowerCase().includes(productSearchInput.toLowerCase())).slice(0, 5)
     : [];
 
+  useEffect(() => {
+    localStorage.setItem('dms_activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_masterDataSubTab', masterDataSubTab);
+  }, [masterDataSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_transactionsSubTab', transactionsSubTab);
+  }, [transactionsSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_isSidebarOpen', isSidebarOpen.toString());
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('dms_isCommandExpanded', isCommandExpanded.toString());
+  }, [isCommandExpanded]);
+
   const updateFilter = (module: keyof typeof filters, key: string, value: any) => {
     const newFilters = {
       ...filters,
