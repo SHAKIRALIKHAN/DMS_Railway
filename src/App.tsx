@@ -33,7 +33,9 @@ import {
   LifeBuoy,
   Filter,
   RotateCcw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  ShoppingBag,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -45,7 +47,11 @@ import {
   Tooltip, 
   ResponsiveContainer, 
   LineChart, 
-  Line 
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from 'recharts';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -87,6 +93,15 @@ function cn(...inputs: ClassValue[]) {
 
 
 
+
+const PIE_COLORS: { [key: string]: string } = {
+  'Pending': '#f59e0b',
+  'Delivered': '#10b981',
+  'Partially Delivered': '#3b82f6',
+  'Cancelled': '#ef4444'
+};
+
+const COLORS = ['#4f46e5', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
 
 const SidebarItem = ({ 
   icon: Icon, 
@@ -226,8 +241,8 @@ export default function App() {
   const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>(
     (localStorage.getItem('dms_masterDataSubTab') as any) || 'products'
   );
-  const [transactionsSubTab, setTransactionsSubTab] = useState<'orders' | 'deliveries' | 'purchases' | 'load_plans'>(
-    (localStorage.getItem('dms_transactionsSubTab') as any) || 'orders'
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'load_plans'>(
+    (localStorage.getItem('dms_transactionsSubTab') as any) || 'purchases'
   );
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -279,6 +294,9 @@ export default function App() {
     salesmen: JSON.parse(localStorage.getItem('dms_filters_salesmen') || '{"territory": "any", "manager": "any", "search": ""}'),
     orderBookers: JSON.parse(localStorage.getItem('dms_filters_orderBookers') || '{"status": "any", "search": ""}'),
     products: JSON.parse(localStorage.getItem('dms_filters_products') || '{"brand": "any", "mg": "any", "availability": "any", "search": ""}'),
+    orders: JSON.parse(localStorage.getItem('dms_filters_orders') || '{"search": "", "status": "any"}'),
+    purchases: JSON.parse(localStorage.getItem('dms_filters_purchases') || '{"search": "", "status": "any"}'),
+    deliveries: JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{"search": "", "status": "any"}'),
   });
 
   const [shopSearchInput, setShopSearchInput] = useState(
@@ -306,6 +324,21 @@ export default function App() {
   );
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
 
+  const [orderSearchInput, setOrderSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_orders') || '{}').search || ""
+  );
+  const [showOrderSuggestions, setShowOrderSuggestions] = useState(false);
+
+  const [purchaseSearchInput, setPurchaseSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_purchases') || '{}').search || ""
+  );
+  const [showPurchaseSuggestions, setShowPurchaseSuggestions] = useState(false);
+
+  const [deliverySearchInput, setDeliverySearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{}').search || ""
+  );
+  const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
+
   const shopSuggestions = shopSearchInput.length > 0 
     ? shops.filter(s => s.shop_name?.toLowerCase().includes(shopSearchInput.toLowerCase())).slice(0, 5)
     : [];
@@ -324,6 +357,31 @@ export default function App() {
 
   const productSuggestions = productSearchInput.length > 0 
     ? products.filter(s => s.name?.toLowerCase().includes(productSearchInput.toLowerCase())).slice(0, 5)
+    : [];
+
+  const orderSuggestions = orderSearchInput.length > 0
+    ? orders.filter(o => 
+        o.id.toString().includes(orderSearchInput) || 
+        o.shop_name?.toLowerCase().includes(orderSearchInput.toLowerCase()) ||
+        o.order_booker_name?.toLowerCase().includes(orderSearchInput.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const purchaseSuggestions = purchaseSearchInput.length > 0
+    ? purchases.filter(p => 
+        p.id.toString().includes(purchaseSearchInput) || 
+        p.supplier_name?.toLowerCase().includes(purchaseSearchInput.toLowerCase()) ||
+        p.bill_no?.toLowerCase().includes(purchaseSearchInput.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const deliverySuggestions = deliverySearchInput.length > 0
+    ? deliveries.filter(d => 
+        d.id.toString().includes(deliverySearchInput) || 
+        d.shop_name?.toLowerCase().includes(deliverySearchInput.toLowerCase()) ||
+        d.order_id?.toString().includes(deliverySearchInput) ||
+        d.driver_name?.toLowerCase().includes(deliverySearchInput.toLowerCase())
+      ).slice(0, 5)
     : [];
 
   useEffect(() => {
@@ -361,13 +419,19 @@ export default function App() {
       suppliers: { category: 'any', city: 'any', search: '' },
       salesmen: { territory: 'any', manager: 'any', search: '' },
       orderBookers: { status: 'any', search: '' },
-      products: { brand: 'any', mg: 'any', availability: 'any', search: '' }
+      products: { brand: 'any', mg: 'any', availability: 'any', search: '' },
+      orders: { search: '', status: 'any' },
+      purchases: { search: '', status: 'any' },
+      deliveries: { search: '', status: 'any' }
     };
     if (module === 'shops') setShopSearchInput("");
     if (module === 'suppliers') setSupplierSearchInput("");
     if (module === 'salesmen') setSalesmanSearchInput("");
     if (module === 'orderBookers') setOrderBookerSearchInput("");
     if (module === 'products') setProductSearchInput("");
+    if (module === 'orders') setOrderSearchInput("");
+    if (module === 'purchases') setPurchaseSearchInput("");
+    if (module === 'deliveries') setDeliverySearchInput("");
     updateFilter(module, 'RESET', null); // Trigger reset
     const newFilters = { ...filters, [module]: defaults[module] };
     setFilters(newFilters);
@@ -587,6 +651,44 @@ export default function App() {
       if (f.availability === 'out' && isAvailable) return false;
     }
     return true;
+  });
+
+  const filteredOrders = orders.filter(order => {
+    const f = filters.orders;
+    if (f.search && !(
+      order.id.toString().includes(f.search) || 
+      order.shop_name?.toLowerCase().includes(f.search.toLowerCase()) ||
+      order.order_booker_name?.toLowerCase().includes(f.search.toLowerCase())
+    )) return false;
+    if (f.status !== 'any') {
+      if (f.status === 'pending') {
+        if (order.status !== 'pending' && order.status !== 'partially_delivered') return false;
+      } else {
+        if (order.status !== f.status) return false;
+      }
+    }
+    return true;
+  });
+
+  const filteredPurchases = purchases.filter(p => {
+    const f = filters.purchases;
+    if (f.search && !(
+      p.id.toString().includes(f.search) || 
+      p.supplier_name?.toLowerCase().includes(f.search.toLowerCase()) ||
+      p.bill_no?.toLowerCase().includes(f.search.toLowerCase())
+    )) return false;
+    return true;
+  });
+
+  const filteredDeliveries = deliveries.filter(d => {
+    const f = filters.deliveries;
+    if (d.id.toString().includes(f.search) || 
+      d.shop_name?.toLowerCase().includes(f.search.toLowerCase()) ||
+      d.order_id?.toString().includes(f.search) ||
+      d.driver_name?.toLowerCase().includes(f.search.toLowerCase())
+    ) return true;
+    if (!f.search) return true;
+    return false;
   });
 
   const fetchUnits = async () => {
@@ -998,21 +1100,56 @@ export default function App() {
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                      <h3 className="text-lg font-bold mb-6">Weekly Sales Performance</h3>
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                            <Tooltip 
-                              cursor={{ fill: '#f8fafc' }}
-                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                            />
-                            <Bar dataKey="sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Weekly Sales</h3>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                              <Tooltip 
+                                cursor={{ fill: '#f8fafc' }}
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              />
+                              <Bar dataKey="sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Order Status</h3>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={stats?.orderStatusCounts || []}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                              >
+                                {(stats?.orderStatusCounts || []).map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name] || COLORS[index % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip 
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              />
+                              <Legend 
+                                iconType="circle"
+                                layout="horizontal"
+                                verticalAlign="bottom"
+                                align="center"
+                                wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '20px' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
                     </div>
 
@@ -1925,9 +2062,9 @@ export default function App() {
                 {/* Sub-tabs Navigation */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                   {[
+                    { id: 'purchases', label: 'Purchases', icon: ShoppingBag },
                     { id: 'orders', label: 'Orders', icon: ShoppingCart },
                     { id: 'deliveries', label: 'Deliveries', icon: Truck },
-                    { id: 'purchases', label: 'Purchases', icon: FileText },
                     { id: 'load_plans', label: 'Load Plans', icon: Truck },
                   ].map(tab => (
                     <button
@@ -1949,23 +2086,93 @@ export default function App() {
                 <div className="mt-6">
                   {transactionsSubTab === 'orders' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Sales Orders</h3>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setIsOrderBookerModalOpen(true)}
-                            className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
-                          >
-                            <Users size={18} />
-                            <span>Order Bookers</span>
-                          </button>
-                          <button 
-                            onClick={() => setIsNewOrderModalOpen(true)}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
-                          >
-                            <Plus size={18} />
-                            <span>New Order</span>
-                          </button>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={orderSearchInput}
+                              onFocus={() => setShowOrderSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowOrderSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setOrderSearchInput(e.target.value);
+                                updateFilter('orders', 'search', e.target.value);
+                              }}
+                              placeholder="Search by order ID, shop or booker..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showOrderSuggestions && orderSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Recent Orders</span>
+                                </div>
+                                {orderSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setOrderSearchInput(suggestion.id.toString());
+                                      updateFilter('orders', 'search', suggestion.id.toString());
+                                      setShowOrderSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <ShoppingCart size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
+                                      <p className="text-[10px] text-slate-400">#ORD-{suggestion.id.toString().padStart(4, '0')} • {suggestion.order_booker_name}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                            <select 
+                              value={filters.orders.status}
+                              onChange={(e) => updateFilter('orders', 'status', e.target.value)}
+                              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:border-indigo-600 outline-none appearance-none cursor-pointer hover:bg-slate-50 transition-all shadow-sm"
+                            >
+                              <option value="any">Any Status</option>
+                              <option value="pending">Pending</option>
+                              <option value="delivered">Delivered</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                              <ChevronDown size={14} />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => setIsOrderBookerModalOpen(true)}
+                              className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
+                            >
+                              <Users size={18} />
+                              <span>Order Bookers</span>
+                            </button>
+                            <button 
+                              onClick={() => setIsNewOrderModalOpen(true)}
+                              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
+                            >
+                              <Plus size={18} />
+                              <span>New Order</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -1983,7 +2190,7 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {orders.map(order => (
+                            {filteredOrders.map(order => (
                               <tr 
                                 key={order.id} 
                                 onClick={() => setSelectedOrder(order)}
@@ -2008,9 +2215,11 @@ export default function App() {
                                   <span className={cn(
                                     "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
                                     order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                                    order.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                                    order.status === 'pending' ? "bg-amber-50 text-amber-600" : 
+                                    order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                                    "bg-rose-50 text-rose-600"
                                   )}>
-                                    {order.status}
+                                    {order.status.replace('_', ' ')}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
@@ -2035,8 +2244,59 @@ export default function App() {
 
                   {transactionsSubTab === 'deliveries' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Delivery Notes</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={deliverySearchInput}
+                              onFocus={() => setShowDeliverySuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowDeliverySuggestions(false), 200)}
+                              onChange={(e) => {
+                                setDeliverySearchInput(e.target.value);
+                                updateFilter('deliveries', 'search', e.target.value);
+                              }}
+                              placeholder="Search by ID, shop, order, or driver..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showDeliverySuggestions && deliverySuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Delivery Suggestions</span>
+                                </div>
+                                {deliverySuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setDeliverySearchInput(suggestion.id.toString());
+                                      updateFilter('deliveries', 'search', suggestion.id.toString());
+                                      setShowDeliverySuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <Truck size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
+                                      <p className="text-[10px] text-slate-400">#DEL-{suggestion.id.toString().padStart(4, '0')} • Order #ORD-{suggestion.order_id}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
                         <div className="flex gap-2">
                           <button 
                             onClick={() => setIsSalesmanModalOpen(true)}
@@ -2072,7 +2332,7 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {deliveries.map(delivery => (
+                            {filteredDeliveries.map(delivery => (
                               <tr key={delivery.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
                                   <span className="font-mono font-bold text-indigo-600">#DEL-{delivery.id.toString().padStart(4, '0')}</span>
@@ -2131,8 +2391,59 @@ export default function App() {
 
                   {transactionsSubTab === 'purchases' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Purchase Orders</h3>
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={purchaseSearchInput}
+                              onFocus={() => setShowPurchaseSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowPurchaseSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setPurchaseSearchInput(e.target.value);
+                                updateFilter('purchases', 'search', e.target.value);
+                              }}
+                              placeholder="Search by ID, supplier, or bill no..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showPurchaseSuggestions && purchaseSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Purchase Suggestions</span>
+                                </div>
+                                {purchaseSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setPurchaseSearchInput(suggestion.id.toString());
+                                      updateFilter('purchases', 'search', suggestion.id.toString());
+                                      setShowPurchaseSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <ShoppingBag size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.supplier_name}</p>
+                                      <p className="text-[10px] text-slate-400">#PUR-{suggestion.id.toString().padStart(4, '0')} • Bill: {suggestion.bill_no}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
                         <button 
                           onClick={() => setIsPurchaseModalOpen(true)}
                           className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
@@ -2155,7 +2466,7 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {purchases.map(purchase => (
+                            {filteredPurchases.map(purchase => (
                               <tr 
                                 key={purchase.id} 
                                 className="hover:bg-slate-50 transition-colors cursor-pointer group"

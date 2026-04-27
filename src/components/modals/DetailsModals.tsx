@@ -181,9 +181,11 @@ export const OrderDetailsModal = ({
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full inline-block",
                 order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                order.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                order.status === 'pending' ? "bg-amber-50 text-amber-600" : 
+                order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                "bg-rose-50 text-rose-600"
               )}>
-                {order.status}
+                {order.status.replace('_', ' ')}
               </span>
               <p className="text-xs text-slate-500 mt-1">{new Date(order.order_date).toLocaleString()}</p>
             </div>

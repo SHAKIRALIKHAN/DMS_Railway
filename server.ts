@@ -601,12 +601,25 @@ async function startServer() {
     const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get() as { count: number };
     const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
     const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
+    
+    const statusCounts = db.prepare(`
+      SELECT status as name, COUNT(*) as value 
+      FROM orders 
+      GROUP BY status
+    `).all() as { name: string; value: number }[];
+
+    // Map statuses to more user-friendly names if needed
+    const formattedStatusCounts = statusCounts.map(s => ({
+      name: s.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+      value: s.value
+    }));
 
     res.json({
       totalSales: totalSales.total || 0,
       pendingOrders: pendingOrders.count,
       lowStock: lowStock.count,
-      totalShops: totalShops.count
+      totalShops: totalShops.count,
+      orderStatusCounts: formattedStatusCounts
     });
   });
 

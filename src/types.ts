@@ -62,7 +62,7 @@ export interface Order {
   order_booker_id: number;
   order_date: string;
   estimated_delivery_date: string;
-  status: 'pending' | 'delivered' | 'cancelled';
+  status: 'pending' | 'delivered' | 'cancelled' | 'partially_delivered';
   total_amount: number;
   shop_name: string;
   order_booker_name: string;
@@ -92,6 +92,7 @@ export interface DashboardStats {
   pendingOrders: number;
   lowStock: number;
   totalShops: number;
+  orderStatusCounts: { name: string; value: number }[];
 }
 
 export interface Supplier {
