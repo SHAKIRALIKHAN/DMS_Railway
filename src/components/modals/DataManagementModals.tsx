@@ -24,6 +24,9 @@ export const RegisterSupplierModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -121,14 +124,14 @@ export const RegisterSupplierModal = ({
               onClick={onClose}
               className="flex-1 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors"
             >
-              Cancel
+              Close (F3)
             </button>
             <button 
               type="submit"
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Register (CTRL+S / F2)'}
+              {isSubmitting ? 'Registering...' : 'Register (F2 / CTRL+S)'}
             </button>
           </div>
         </form>
@@ -169,6 +172,9 @@ export const SupplierMasterModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -277,19 +283,27 @@ export const SupplierMasterModal = ({
               </div>
               <div className="flex gap-2 pt-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Add (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
                     type="button"
                     onClick={() => { setEditingId(null); setFormData({name:'', contact_person:'', phone:'', address:''}); }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -378,6 +392,9 @@ export const RegisterShopModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -485,14 +502,14 @@ export const RegisterShopModal = ({
               onClick={onClose}
               className="flex-1 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors"
             >
-              Cancel
+              Close (F3)
             </button>
             <button 
               type="submit"
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Registering...' : 'Register Shop (CTRL+S / F2)'}
+              {isSubmitting ? 'Registering...' : 'Register Shop (F2 / CTRL+S)'}
             </button>
           </div>
         </form>
@@ -536,6 +553,9 @@ export const ShopMasterModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -682,11 +702,18 @@ export const ShopMasterModal = ({
               </div>
               <div className="flex gap-2 pt-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Shop (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Add Shop (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
@@ -702,9 +729,10 @@ export const ShopMasterModal = ({
                       category: 'Retailer'
                     });
                     }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -834,6 +862,9 @@ export const UnitModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -974,15 +1005,23 @@ export const UnitModal = ({
                         </span>
                     </div>
 
-                    <div className="pt-2">
+                    <div className="flex gap-2">
+                        <button 
+                            type="button" 
+                            onClick={onClose}
+                            className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
+                        >
+                            Close (F3)
+                        </button>
                         <button 
                             type="submit" 
                             disabled={isSubmitting}
-                            className="w-full py-2.5 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 disabled:opacity-50 shadow-lg shadow-amber-100 flex items-center justify-center gap-2 transition-all active:scale-95"
+                            className="flex-[2] py-2.5 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 disabled:opacity-50 shadow-lg shadow-amber-100 flex items-center justify-center gap-2 transition-all active:scale-95"
                         >
                             <Save size={16} />
-                            {isSubmitting ? 'Saving...' : editingId ? 'Update Unit' : 'Save Unit Record'}
+                            {isSubmitting ? 'Saving...' : editingId ? 'Update Unit (F2 / CTRL+S)' : 'Save Unit Record (F2 / CTRL+S)'}
                         </button>
+                    </div>
                         
                         {editingId && (
                             <button 
@@ -993,7 +1032,6 @@ export const UnitModal = ({
                                 Abort Edit
                             </button>
                         )}
-                    </div>
                 </form>
             </div>
 
@@ -1119,6 +1157,9 @@ export const ProductMasterDataModal = ({
             if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
                 e.preventDefault();
                 handleSubmit();
+            } else if (e.key === 'F3') {
+                e.preventDefault();
+                onClose();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -1297,12 +1338,19 @@ export const ProductMasterDataModal = ({
                             
                             <div className="flex gap-2 pt-4">
                                 <button 
+                                    type="button"
+                                    onClick={onClose}
+                                    className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all text-center"
+                                >
+                                    Close (F3)
+                                </button>
+                                <button 
                                     type="submit" 
                                     disabled={isSubmitting}
                                     className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                                 >
                                     <Save size={18}/>
-                                    {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Save (CTRL+S / F2)'}
+                                    {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Save (F2 / CTRL+S)'}
                                 </button>
                                 {editingId && (
                                     <button 
@@ -1314,14 +1362,15 @@ export const ProductMasterDataModal = ({
                                                 conversion_factor: 1, trade_price: 0, retail_price: 0, gst_percent: 18, cost_price: 0, stock_qty: 0
                                             });
                                         }}
-                                        className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200"
+                                        className="p-3 text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-rose-100 flex items-center justify-center"
+                                        title="Cancel Edit"
                                     >
-                                        Cancel
+                                        <X size={18} />
                                     </button>
                                 )}
                             </div>
                         </form>
-                    </div>
+            </div>
 
                     {/* Table Section */}
                     <div className="lg:col-span-2 bg-slate-50 p-6 overflow-hidden flex flex-col">

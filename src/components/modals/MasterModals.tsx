@@ -38,6 +38,9 @@ export const DriverModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -162,11 +165,18 @@ export const DriverModal = ({
               </div>
               <div className="flex gap-2 pt-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Driver (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Add Driver (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
@@ -181,9 +191,10 @@ export const DriverModal = ({
                         joining_date: new Date().toISOString().split('T')[0] 
                       });
                     }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -307,6 +318,9 @@ export const SalesmanModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -431,11 +445,18 @@ export const SalesmanModal = ({
               </div>
               <div className="flex gap-2 pt-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Save (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Save (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
@@ -444,9 +465,10 @@ export const SalesmanModal = ({
                       setEditingId(null);
                       setFormData({ name: '', father_name: '', cell_no: '', cnic_no: '', joining_date: new Date().toISOString().split('T')[0] });
                     }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -561,6 +583,9 @@ export const OrderBookerModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -685,11 +710,18 @@ export const OrderBookerModal = ({
               </div>
               <div className="flex gap-2 pt-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Booker (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Add Booker (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
@@ -704,9 +736,10 @@ export const OrderBookerModal = ({
                         joining_date: new Date().toISOString().split('T')[0] 
                       });
                     }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -825,6 +858,9 @@ export const MaterialGroupModal = ({
       if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
         e.preventDefault();
         handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -912,11 +948,18 @@ export const MaterialGroupModal = ({
               </div>
               <div className="flex gap-2">
                 <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Close (F3)
+                </button>
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingId ? 'Update (CTRL+S / F2)' : 'Add Group (CTRL+S / F2)'}
+                  {isSubmitting ? 'Saving...' : editingId ? 'Update (F2 / CTRL+S)' : 'Add Group (F2 / CTRL+S)'}
                 </button>
                 {editingId && (
                   <button 
@@ -925,9 +968,10 @@ export const MaterialGroupModal = ({
                       setEditingId(null);
                       setFormData({ mat_gp: '', mat_description: '' });
                     }}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100"
+                    title="Cancel Edit"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -991,6 +1035,18 @@ export const TCodeMasterModal = ({
   onClose: () => void 
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const filteredTCodes = TCODES.filter(t => 
     t.tCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1099,7 +1155,7 @@ export const TCodeMasterModal = ({
             onClick={onClose}
             className="px-6 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
           >
-            Close
+            Close (F3)
           </button>
         </div>
       </motion.div>
@@ -1127,6 +1183,24 @@ export const LocationMasterModal = ({
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === 's') || e.key === 'F2') {
+        e.preventDefault();
+        // Since this modal has multiple states, we target the "Plus" save only if "name" is present
+        // or just handle whichever button is type="submit"
+        const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+        if (submitBtn) submitBtn.click();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [name, activeLevel, selection]);
 
   const filteredList = list.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1399,7 +1473,7 @@ export const LocationMasterModal = ({
                     className="w-full py-4 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-3"
                   >
                     <Plus size={18} />
-                    <span>{isSubmitting ? 'Processing...' : 'Save Record (CTRL+S / F2)'}</span>
+                    <span>{isSubmitting ? 'Processing...' : 'Save Record (F2 / CTRL+S)'}</span>
                   </button>
                 </form>
               </div>
