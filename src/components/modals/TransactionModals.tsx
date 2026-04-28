@@ -332,10 +332,16 @@ export const NewOrderModal = ({
   const [masterData, setMasterData] = useState({
     shop_id: order?.shop_id.toString() || '',
     order_booker_id: order?.order_booker_id.toString() || '',
-    estimated_delivery_date: order?.estimated_delivery_date || new Date(Date.now() + 86400000).toISOString().split('T')[0]
+    order_date: order?.order_date ? new Date(order.order_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
   });
   
-  const [items, setItems] = useState<{ product_id: string, quantity: number, price: number, product_name: string }[]>([]);
+  const [items, setItems] = useState<{ 
+    product_id: string, 
+    quantity: number, 
+    price: number, 
+    product_name: string,
+    estimated_delivery_date: string 
+  }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showLOV, setShowLOV] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -357,6 +363,8 @@ export const NewOrderModal = ({
       fetchItems();
     }
   }, [order, products]);
+
+  const defaultDeliveryDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -391,7 +399,8 @@ export const NewOrderModal = ({
         product_id: product.product_id, 
         quantity: 1, 
         price: product.trade_price,
-        product_name: product.product_name 
+        product_name: product.product_name,
+        estimated_delivery_date: defaultDeliveryDate
       }]);
     }
     setSearchQuery('');
@@ -485,12 +494,12 @@ export const NewOrderModal = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Est. Delivery Date</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Order Date</label>
               <input 
                 required
                 type="date" 
-                value={masterData.estimated_delivery_date}
-                onChange={e => setMasterData({...masterData, estimated_delivery_date: e.target.value})}
+                value={masterData.order_date}
+                onChange={e => setMasterData({...masterData, order_date: e.target.value})}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
               />
             </div>
@@ -544,6 +553,7 @@ export const NewOrderModal = ({
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Quantity</th>
+                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Est. Delivery</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Subtotal</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right"></th>
@@ -580,6 +590,15 @@ export const NewOrderModal = ({
                           </button>
                         </div>
                       </td>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="date"
+                          required
+                          value={item.estimated_delivery_date}
+                          onChange={e => setItems(items.map(i => i.product_id === item.product_id ? { ...i, estimated_delivery_date: e.target.value } : i))}
+                          className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs focus:border-indigo-600 outline-none"
+                        />
+                      </td>
                       <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">
                         {formatPKR(item.price)}
                       </td>
@@ -599,7 +618,7 @@ export const NewOrderModal = ({
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
                         <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
                         <p className="text-sm font-medium">No items added to the order</p>
                       </td>

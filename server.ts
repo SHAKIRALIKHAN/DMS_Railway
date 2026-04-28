@@ -120,9 +120,13 @@ try {
     quantity INTEGER NOT NULL,
     price REAL NOT NULL,
     status TEXT DEFAULT 'Pending',
+    estimated_delivery_date DATE,
     FOREIGN KEY (order_id) REFERENCES orders(id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
   );
+
+  // Migration for existing database
+  try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
 
   CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -372,10 +376,10 @@ try {
   );
 
   // Seed Salesmen
-  db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+  const sm1 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
     "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
   );
-  db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+  const sm2 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
     "M. Yasin", "M. Yousuf", "03112223334", "42101-3333333-3", "2024-03-01"
   );
 
@@ -397,7 +401,7 @@ try {
     const orderId = order.lastInsertRowid;
 
     for (const item of o.items) {
-      db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
+      const oi = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
         orderId, item.id, item.qty, item.price, o.status === 'delivered' ? 'Delivered' : 'Pending'
       );
       
@@ -417,6 +421,20 @@ try {
     }
 
     if (o.status === 'delivered') {
+      // Add delivery record
+      const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
+        orderId, sm1.lastInsertRowid, total, 'completed'
+      );
+      const deliveryId = delivery.lastInsertRowid;
+
+      // Link order items to delivery items
+      const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(orderId) as any[];
+      for (const oi of orderItems) {
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
+          deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
+        );
+      }
+
       db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
         o.retailer, `Order #${orderId}`, total, total
       );
@@ -493,6 +511,34 @@ try {
   }
 } catch (err) {
   console.error("Unit seeding failed:", err);
+}
+
+// Seed missing deliveries for delivered orders (Idempotent catch-up)
+try {
+  const deliveryCount = db.prepare("SELECT COUNT(*) as count FROM deliveries").get() as { count: number };
+  if (deliveryCount.count === 0) {
+    const deliveredOrders = db.prepare("SELECT * FROM orders WHERE status = 'delivered'").all() as any[];
+    const firstSalesman = db.prepare("SELECT id FROM salesmen LIMIT 1").get() as { id: number } | undefined;
+    
+    if (deliveredOrders.length > 0 && firstSalesman) {
+      for (const order of deliveredOrders) {
+        const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
+          order.id, firstSalesman.id, order.total_amount, 'completed'
+        );
+        const deliveryId = delivery.lastInsertRowid;
+        
+        const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as any[];
+        for (const oi of orderItems) {
+          db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
+            deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
+          );
+        }
+      }
+      console.log(`Seeded ${deliveredOrders.length} deliveries for existing delivered orders.`);
+    }
+  }
+} catch (err) {
+  console.warn("Delivery catch-up seeding failed:", err);
 }
 
 // Seed Locations (Idempotent)
@@ -861,18 +907,18 @@ async function startServer() {
   });
 
   app.post("/api/orders", (req, res) => {
-    const { shop_id, order_booker_id, estimated_delivery_date, items } = req.body;
+    const { shop_id, order_booker_id, order_date, items } = req.body;
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     const transaction = db.transaction(() => {
-      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
-        shop_id, order_booker_id, total_amount, 'pending', estimated_delivery_date
+      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, order_date) VALUES (?, ?, ?, ?, ?)").run(
+        shop_id, order_booker_id, total_amount, 'pending', order_date || new Date().toISOString()
       );
       const orderId = order.lastInsertRowid;
 
       for (const item of items) {
-        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
-          orderId, item.product_id, item.quantity, item.price, 'Pending'
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?, ?)").run(
+          orderId, item.product_id, item.quantity, item.price, 'Pending', item.estimated_delivery_date
         );
         
         // Reduce stock
@@ -994,24 +1040,24 @@ async function startServer() {
 
   app.put("/api/orders/:id", (req, res) => {
     const { id } = req.params;
-    const { shop_id, order_booker_id, estimated_delivery_date, items } = req.body;
+    const { shop_id, order_booker_id, order_date, items } = req.body;
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     try {
       db.transaction(() => {
         db.prepare(`
           UPDATE orders 
-          SET shop_id = ?, order_booker_id = ?, estimated_delivery_date = ?, total_amount = ?
+          SET shop_id = ?, order_booker_id = ?, order_date = ?, total_amount = ?
           WHERE id = ?
-        `).run(shop_id, order_booker_id, estimated_delivery_date, total_amount, id);
+        `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), total_amount, id);
 
         db.prepare("DELETE FROM order_items WHERE order_id = ?").run(id);
 
         for (const item of items) {
           db.prepare(`
-            INSERT INTO order_items (order_id, product_id, quantity, price, status)
-            VALUES (?, ?, ?, ?, ?)
-          `).run(id, item.product_id, item.quantity, item.price, 'pending');
+            INSERT INTO order_items (order_id, product_id, quantity, price, status, estimated_delivery_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(id, item.product_id, item.quantity, item.price, item.status || 'Pending', item.estimated_delivery_date);
         }
       })();
       res.json({ success: true });

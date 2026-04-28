@@ -61,7 +61,6 @@ export interface Order {
   shop_id: number;
   order_booker_id: number;
   order_date: string;
-  estimated_delivery_date: string;
   status: 'pending' | 'delivered' | 'cancelled' | 'partially_delivered';
   total_amount: number;
   shop_name: string;
@@ -78,6 +77,7 @@ export interface OrderItem {
   brand: string;
   status: 'Pending' | 'Delivered' | 'Cancelled' | 'Partially Delivered';
   delivered_quantity?: number;
+  estimated_delivery_date?: string;
 }
 
 export interface StockValuationReport {
