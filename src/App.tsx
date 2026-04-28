@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { 
   LayoutDashboard, 
   Package, 
@@ -35,7 +35,8 @@ import {
   RotateCcw,
   SlidersHorizontal,
   ShoppingBag,
-  ChevronDown
+  ChevronDown,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -48,6 +49,8 @@ import {
   ResponsiveContainer, 
   LineChart, 
   Line,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
@@ -286,6 +289,21 @@ export default function App() {
   const [isCommandExpanded, setIsCommandExpanded] = useState(
     localStorage.getItem('dms_isCommandExpanded') === null ? true : localStorage.getItem('dms_isCommandExpanded') === 'true'
   );
+  const commandInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setIsCommandExpanded(true);
+        setTimeout(() => {
+          commandInputRef.current?.focus();
+        }, 100);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
   // Master Data Filters State
   const [filters, setFilters] = useState({
@@ -945,6 +963,7 @@ export default function App() {
                 isCommandExpanded ? "w-48 opacity-100 ml-1" : "w-0 opacity-0 ml-0"
               )}>
                 <input 
+                  ref={commandInputRef}
                   type="text" 
                   value={commandValue}
                   onChange={(e) => setCommandValue(e.target.value)}
@@ -957,6 +976,14 @@ export default function App() {
                   className="w-full bg-transparent border-none text-sm font-mono focus:ring-0 placeholder:text-slate-400 uppercase"
                 />
               </div>
+              
+              <button 
+                onClick={() => setIsTCodeModalOpen(true)}
+                className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
+                title="T-Code Directory (Help)"
+              >
+                <HelpCircle size={16} />
+              </button>
             </div>
           </div>
 
@@ -1098,141 +1125,283 @@ export default function App() {
                 )}
 
                 {/* Charts Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Weekly Sales</h3>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                              <Tooltip 
-                                cursor={{ fill: '#f8fafc' }}
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                              />
-                              <Bar dataKey="sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
+                <div className="space-y-6 mb-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Main Sales Trend */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                          <TrendingUp size={16} className="text-indigo-500" />
+                          Sales Trend (Last 7 Days)
+                        </h3>
+                        <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1 rounded-lg">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                          <span className="text-[10px] font-bold text-indigo-600 uppercase italic">Real-time</span>
                         </div>
                       </div>
-
-                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Order Status</h3>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={stats?.orderStatusCounts || []}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                              >
-                                {(stats?.orderStatusCounts || []).map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name] || COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip 
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                              />
-                              <Legend 
-                                iconType="circle"
-                                layout="horizontal"
-                                verticalAlign="bottom"
-                                align="center"
-                                wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '20px' }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={stats?.salesTrend || []}>
+                            <defs>
+                              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis 
+                              dataKey="name" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#64748b', fontSize: 10 }}
+                              tickFormatter={(val) => new Date(val).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                            />
+                            <YAxis 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#64748b', fontSize: 10 }}
+                              tickFormatter={(val) => `Rs ${val / 1000}k`}
+                            />
+                            <Tooltip 
+                              cursor={{ stroke: '#4f46e5', strokeWidth: 1 }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(val: number) => [formatPKR(val), 'Revenue']}
+                            />
+                            <Area type="monotone" dataKey="value" stroke="#4f46e5" fillOpacity={1} fill="url(#colorSales)" strokeWidth={2} />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
 
-                    {/* Quick Access Section */}
-                    <div className="bg-slate-900 p-6 rounded-3xl text-white shadow-xl shadow-slate-200">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-lg font-bold">System Administration</h3>
-                          <p className="text-slate-400 text-sm">Direct access to core configurations</p>
-                        </div>
-                        <Shield className="text-indigo-400" size={24} />
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <button 
-                          onClick={() => setIsTCodeModalOpen(true)}
-                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
-                        >
-                          <Shield size={24} className="text-indigo-300" />
-                          <div className="text-center">
-                            <p className="text-sm font-bold">TCODE Mapping</p>
-                            <p className="text-[10px] text-slate-400 font-mono">TC01</p>
-                          </div>
-                        </button>
-                        <button 
-                          onClick={() => setIsLocationModalOpen(true)}
-                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
-                        >
-                          <MapPin size={24} className="text-amber-300" />
-                          <div className="text-center">
-                            <p className="text-sm font-bold">Geo Tree</p>
-                            <p className="text-[10px] text-slate-400 font-mono">LOC01</p>
-                          </div>
-                        </button>
-                        <button 
-                          onClick={() => setIsUnitModalOpen(true)}
-                          className="flex flex-col items-center gap-3 p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5"
-                        >
-                          <Settings size={24} className="text-emerald-300" />
-                          <div className="text-center">
-                            <p className="text-sm font-bold">Unit Master</p>
-                            <p className="text-[10px] text-slate-400 font-mono">UN01</p>
-                          </div>
-                        </button>
+                    {/* Regional Performance */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-6">
+                        <MapPin size={16} className="text-amber-500" />
+                        Regional Sales Distribution
+                      </h3>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={stats?.salesByTown || []} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                            <XAxis type="number" hide />
+                            <YAxis 
+                              dataKey="name" 
+                              type="category" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                              width={100} 
+                            />
+                            <Tooltip 
+                              cursor={{ fill: '#f8fafc' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(val: number) => [formatPKR(val), 'Revenue']}
+                            />
+                            <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={20} />
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-bold mb-6">Recent Orders</h3>
-                    <div className="space-y-4">
-                      {orders.slice(0, 5).map(order => (
-                        <div 
-                          key={order.id} 
-                          onClick={() => setSelectedOrder(order)}
-                          className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="bg-slate-100 p-2 rounded-lg">
-                              <ShoppingCart size={18} className="text-slate-600" />
-                            </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Category Sales  */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Revenue by Category</h3>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={stats?.categorySales || []}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {(stats?.categorySales || []).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(val: number) => [formatPKR(val), 'Sales']}
+                            />
+                            <Legend 
+                              iconType="circle"
+                              layout="horizontal"
+                              verticalAlign="bottom"
+                              align="center"
+                              wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '20px' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Order Status Breakdown */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Order Status Metrics</h3>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={stats?.orderStatusCounts || []}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {(stats?.orderStatusCounts || []).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name] || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Legend 
+                              iconType="circle"
+                              layout="horizontal"
+                              verticalAlign="bottom"
+                              align="center"
+                              wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '20px' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Order Bookers Ranking */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Top Performers (Bookers)</h3>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={stats?.topOrderBookers || []}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis 
+                              dataKey="name" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <YAxis axisLine={false} tickLine={false} hide />
+                            <Tooltip 
+                              cursor={{ fill: '#f8fafc' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              formatter={(val: number) => [formatPKR(val), 'Volume']}
+                            />
+                            <Bar dataKey="value" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-6">
+                      {/* Quick Access Section */}
+                      <div className="bg-slate-900 p-8 rounded-[2rem] text-white shadow-2xl shadow-slate-200 overflow-hidden relative">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full -mr-32 -mt-32" />
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-8">
                             <div>
-                              <p className="text-sm font-bold text-slate-900">{order.shop_name}</p>
-                              <p className="text-xs text-slate-500">{new Date(order.order_date).toLocaleDateString()}</p>
+                              <h3 className="text-xl font-black tracking-tight">System Administration</h3>
+                              <p className="text-slate-400 text-sm font-medium">Direct master data & T-Code controllers</p>
+                            </div>
+                            <div className="bg-white/10 p-3 rounded-2xl">
+                              <Shield className="text-indigo-400" size={24} />
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-slate-900">{formatPKR(order.total_amount)}</p>
-                            <span className={cn(
-                              "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
-                              order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                            )}>
-                              {order.status}
-                            </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            <button 
+                              onClick={() => setIsTCodeModalOpen(true)}
+                              className="flex flex-col items-center gap-3 p-6 bg-white/5 hover:bg-white/10 rounded-3xl transition-all border border-white/10 group"
+                            >
+                              <div className="p-3 bg-indigo-500/20 rounded-2xl group-hover:scale-110 transition-transform">
+                                <Shield size={24} className="text-indigo-400" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-bold">Transaction codes</p>
+                                <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1">TC01</p>
+                              </div>
+                            </button>
+                            <button 
+                              onClick={() => setIsLocationModalOpen(true)}
+                              className="flex flex-col items-center gap-3 p-6 bg-white/5 hover:bg-white/10 rounded-3xl transition-all border border-white/10 group"
+                            >
+                              <div className="p-3 bg-amber-500/20 rounded-2xl group-hover:scale-110 transition-transform">
+                                <MapPin size={24} className="text-amber-400" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-bold">Location Setup</p>
+                                <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1">LOC01</p>
+                              </div>
+                            </button>
+                            <button 
+                              onClick={() => setIsUnitModalOpen(true)}
+                              className="flex flex-col items-center gap-3 p-6 bg-white/5 hover:bg-white/10 rounded-3xl transition-all border border-white/10 group"
+                            >
+                              <div className="p-3 bg-emerald-500/20 rounded-2xl group-hover:scale-110 transition-transform">
+                                <Settings size={24} className="text-emerald-400" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-bold">Unit Conversion</p>
+                                <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1">UN01</p>
+                              </div>
+                            </button>
                           </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => setActiveTab('orders')}
-                      className="w-full mt-6 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-                    >
-                      View All Orders
-                    </button>
+
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-black tracking-tight flex items-center gap-2">
+                          <ShoppingCart size={20} className="text-indigo-600" />
+                          Recent Orders
+                        </h3>
+                        <button 
+                          onClick={() => { setActiveTab('transactions'); setTransactionsSubTab('orders'); }}
+                          className="text-xs font-bold text-indigo-600 hover:underline"
+                        >
+                          All
+                        </button>
+                      </div>
+                      <div className="space-y-4 flex-1">
+                        {orders.slice(0, 6).map(order => (
+                          <div 
+                            key={order.id} 
+                            onClick={() => setSelectedOrder(order)}
+                            className="group flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer border border-transparent hover:border-slate-100"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="bg-slate-100 p-3 rounded-xl group-hover:bg-white group-hover:shadow-sm transition-all text-slate-600">
+                                <ShoppingCart size={18} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{order.shop_name}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(order.order_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-black text-slate-900">{formatPKR(order.total_amount)}</p>
+                              <span className={cn(
+                                "text-[8px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full inline-block mt-1",
+                                order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
+                                order.status === 'pending' ? "bg-amber-50 text-amber-600" :
+                                order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                                "bg-rose-50 text-rose-600"
+                              )}>
+                                {order.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </motion.div>

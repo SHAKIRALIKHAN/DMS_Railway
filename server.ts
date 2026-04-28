@@ -597,30 +597,81 @@ async function startServer() {
 
   // API Routes
   app.get("/api/stats", (req, res) => {
-    const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get() as { total: number };
-    const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get() as { count: number };
-    const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
-    const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
-    
-    const statusCounts = db.prepare(`
-      SELECT status as name, COUNT(*) as value 
-      FROM orders 
-      GROUP BY status
-    `).all() as { name: string; value: number }[];
+    try {
+      const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get() as { total: number };
+      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get() as { count: number };
+      const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
+      const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
+      
+      const statusCounts = db.prepare(`
+        SELECT status as name, COUNT(*) as value 
+        FROM orders 
+        GROUP BY status
+      `).all() as { name: string; value: number }[];
 
-    // Map statuses to more user-friendly names if needed
-    const formattedStatusCounts = statusCounts.map(s => ({
-      name: s.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-      value: s.value
-    }));
+      const formattedStatusCounts = statusCounts.map(s => ({
+        name: s.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+        value: s.value
+      }));
 
-    res.json({
-      totalSales: totalSales.total || 0,
-      pendingOrders: pendingOrders.count,
-      lowStock: lowStock.count,
-      totalShops: totalShops.count,
-      orderStatusCounts: formattedStatusCounts
-    });
+      // 1. Sales by Town (from location string for now since area_id isn't directly in shops yet)
+      const salesByTown = db.prepare(`
+        SELECT location as name, SUM(total_amount) as value 
+        FROM orders o
+        JOIN shops s ON o.shop_id = s.id
+        WHERE o.status = 'delivered'
+        GROUP BY location
+        ORDER BY value DESC
+        LIMIT 5
+      `).all() as { name: string; value: number }[];
+
+      // 2. Top Order Bookers
+      const topOrderBookers = db.prepare(`
+        SELECT ob.name as name, SUM(o.total_amount) as value 
+        FROM orders o
+        JOIN order_bookers ob ON o.order_booker_id = ob.id
+        WHERE o.status = 'delivered'
+        GROUP BY ob.name
+        ORDER BY value DESC
+        LIMIT 5
+      `).all() as { name: string; value: number }[];
+
+      // 3. Sales Trend (Last 7 Days)
+      const salesTrend = db.prepare(`
+        SELECT strftime('%Y-%m-%d', order_date) as name, SUM(total_amount) as value 
+        FROM orders 
+        WHERE order_date >= date('now', '-7 days') AND status = 'delivered'
+        GROUP BY name
+        ORDER BY name ASC
+      `).all() as { name: string; value: number }[];
+
+      // 4. Sales by Material Group
+      const categorySales = db.prepare(`
+        SELECT mg.mat_description as name, SUM(oi.quantity * oi.price) as value 
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.product_id
+        JOIN material_groups mg ON p.material_group_id = mg.mat_gp
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status = 'delivered'
+        GROUP BY mg.mat_description
+        ORDER BY value DESC
+      `).all() as { name: string; value: number }[];
+
+      res.json({
+        totalSales: totalSales.total || 0,
+        pendingOrders: pendingOrders.count,
+        lowStock: lowStock.count,
+        totalShops: totalShops.count,
+        orderStatusCounts: formattedStatusCounts,
+        salesByTown,
+        topOrderBookers,
+        salesTrend,
+        categorySales
+      });
+    } catch (err: any) {
+      console.error("Dashboard stats fetch failed:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Material Groups API

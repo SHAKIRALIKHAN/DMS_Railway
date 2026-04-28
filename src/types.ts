@@ -93,6 +93,10 @@ export interface DashboardStats {
   lowStock: number;
   totalShops: number;
   orderStatusCounts: { name: string; value: number }[];
+  salesByTown: { name: string; value: number }[];
+  topOrderBookers: { name: string; value: number }[];
+  salesTrend: { name: string; value: number }[];
+  categorySales: { name: string; value: number }[];
 }
 
 export interface Supplier {
