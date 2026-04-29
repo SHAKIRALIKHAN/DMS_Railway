@@ -188,6 +188,7 @@ export const OrderDetailsModal = ({
                 {order.status.replace('_', ' ')}
               </span>
               <p className="text-xs text-slate-500 mt-1">{new Date(order.order_date).toLocaleString()}</p>
+              <p className="text-xs font-bold text-indigo-600 mt-1 uppercase">Delivery: {order.estimated_delivery_date ? new Date(order.estimated_delivery_date).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
 
@@ -197,7 +198,6 @@ export const OrderDetailsModal = ({
                 <tr className="border-b border-slate-200">
                   <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Product</th>
                   <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-center">Qty</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-center">Est. Delivery</th>
                   <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-right">Price</th>
                   <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-right">Total</th>
                 </tr>
@@ -205,11 +205,11 @@ export const OrderDetailsModal = ({
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
+                    <td colSpan={4} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
+                    <td colSpan={4} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
                   </tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
@@ -218,9 +218,6 @@ export const OrderDetailsModal = ({
                       <p className="text-[10px] text-slate-500">{item.brand}</p>
                     </td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{item.quantity}</td>
-                    <td className="px-4 py-3 text-center text-sm text-slate-600">
-                      {item.estimated_delivery_date ? new Date(item.estimated_delivery_date).toLocaleDateString() : '-'}
-                    </td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatPKR(item.price)}</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{formatPKR(item.price * item.quantity)}</td>
                   </tr>
@@ -228,7 +225,7 @@ export const OrderDetailsModal = ({
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100/50">
-                  <td colSpan={4} className="px-4 py-3 text-sm font-bold text-slate-900 text-right uppercase tracking-wider">Grand Total</td>
+                  <td colSpan={3} className="px-4 py-3 text-sm font-bold text-slate-900 text-right uppercase tracking-wider">Grand Total</td>
                   <td className="px-4 py-3 text-right text-lg font-bold text-indigo-600">{formatPKR(order.total_amount)}</td>
                 </tr>
               </tfoot>

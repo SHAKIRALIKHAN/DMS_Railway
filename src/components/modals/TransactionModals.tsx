@@ -332,15 +332,15 @@ export const NewOrderModal = ({
   const [masterData, setMasterData] = useState({
     shop_id: order?.shop_id.toString() || '',
     order_booker_id: order?.order_booker_id.toString() || '',
-    order_date: order?.order_date ? new Date(order.order_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    order_date: order?.order_date ? new Date(order.order_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    estimated_delivery_date: order?.estimated_delivery_date ? new Date(order.estimated_delivery_date).toISOString().split('T')[0] : new Date(Date.now() + 86400000).toISOString().split('T')[0]
   });
   
   const [items, setItems] = useState<{ 
     product_id: string, 
     quantity: number, 
     price: number, 
-    product_name: string,
-    estimated_delivery_date: string 
+    product_name: string
   }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showLOV, setShowLOV] = useState(false);
@@ -399,8 +399,7 @@ export const NewOrderModal = ({
         product_id: product.product_id, 
         quantity: 1, 
         price: product.trade_price,
-        product_name: product.product_name,
-        estimated_delivery_date: defaultDeliveryDate
+        product_name: product.product_name
       }]);
     }
     setSearchQuery('');
@@ -468,7 +467,7 @@ export const NewOrderModal = ({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Select Shop</label>
               <select 
@@ -500,6 +499,16 @@ export const NewOrderModal = ({
                 type="date" 
                 value={masterData.order_date}
                 onChange={e => setMasterData({...masterData, order_date: e.target.value})}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Est. Delivery</label>
+              <input 
+                required
+                type="date" 
+                value={masterData.estimated_delivery_date}
+                onChange={e => setMasterData({...masterData, estimated_delivery_date: e.target.value})}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
               />
             </div>
@@ -553,7 +562,6 @@ export const NewOrderModal = ({
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Quantity</th>
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Est. Delivery</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Subtotal</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right"></th>
@@ -590,15 +598,6 @@ export const NewOrderModal = ({
                           </button>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <input 
-                          type="date"
-                          required
-                          value={item.estimated_delivery_date}
-                          onChange={e => setItems(items.map(i => i.product_id === item.product_id ? { ...i, estimated_delivery_date: e.target.value } : i))}
-                          className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs focus:border-indigo-600 outline-none"
-                        />
-                      </td>
                       <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">
                         {formatPKR(item.price)}
                       </td>
@@ -618,7 +617,7 @@ export const NewOrderModal = ({
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
                         <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
                         <p className="text-sm font-medium">No items added to the order</p>
                       </td>
@@ -644,7 +643,7 @@ export const NewOrderModal = ({
                 {isSubmitting ? 'Processing...' : (
                   <>
                     <Save size={18} />
-                    <span>Save Order (CTRL+S / F2)</span>
+                    <span>Post Order (CTRL+S / F2)</span>
                   </>
                 )}
               </button>

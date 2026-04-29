@@ -12,6 +12,8 @@ const __dirname = path.dirname(__filename);
 let db: any;
 try {
   db = new Database("dms_v7.db");
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
   
   // Initialize Database Schema
   try {
@@ -120,13 +122,9 @@ try {
     quantity INTEGER NOT NULL,
     price REAL NOT NULL,
     status TEXT DEFAULT 'Pending',
-    estimated_delivery_date DATE,
     FOREIGN KEY (order_id) REFERENCES orders(id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
   );
-
-  // Migration for existing database
-  try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
 
   CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -272,6 +270,9 @@ try {
     );
   `);
 
+  // Migration for order_items estimated_delivery_date
+  try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
+
   // Migration for shops category
   try {
     db.prepare("SELECT category FROM shops LIMIT 1").get();
@@ -291,198 +292,195 @@ try {
 try {
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
   if (userCount.count === 0) {
-  db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
-    "Admin Karachi", "admin", "03001234567", "admin123"
-  );
-  db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
-    "Salesman A", "salesman", "03007654321", "sales123"
-  );
-
-  // Seed Material Groups
-  const materialGroups = [
-    { id: "00001", desc: "OIL" },
-    { id: "00002", desc: "DAIRY" },
-    { id: "00003", desc: "KITCHEN" },
-    { id: "00004", desc: "SNACKS" }
-  ];
-
-  for (const mg of materialGroups) {
-    db.prepare("INSERT INTO material_groups (mat_gp, mat_description) VALUES (?, ?)").run(mg.id, mg.desc);
-  }
-
-  // Seed Units
-  // Seed Units
-  const unitsToSeed = [
-    { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
-    { code: 'MT', name: 'METRIC TON', short: 'MT' },
-    { code: 'PC', name: 'PIECES', short: 'PCS' },
-    { code: 'GR', name: 'GRAM', short: 'GRM' },
-    { code: 'L', name: 'LITER', short: 'LTR' },
-    { code: 'BX', name: 'BOX', short: 'BOX' },
-    { code: 'DZ', name: 'DOZEN', short: 'DZN' },
-    { code: 'CT', name: 'CARTON', short: 'CTN' },
-    { code: 'EA', name: 'EACH', short: 'EA' },
-    { code: 'PK', name: 'PACK', short: 'PACK' },
-    { code: 'SET', name: 'SET', short: 'SET' },
-    { code: 'BAG', name: 'BAG', short: 'BAG' }
-  ];
-
-  for (const u of unitsToSeed) {
-    db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
-  }
-
-  const initialProducts = [
-    { id: "A000000001", name: "Cooking Oil 1L", brand: "Dalda", mg: "00001", pp: 500, tp: 550, rp: 600, stock: 100, unit: "EA", conv: 1, convUnit: "L", min: 20, reorder: 40 },
-    { id: "A000000002", name: "Tea 400g", brand: "Tapal", mg: "00003", pp: 600, tp: 650, rp: 700, stock: 50, unit: "EA", conv: 400, convUnit: "GR", min: 10, reorder: 20 },
-    { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EA", conv: 1, convUnit: "EA", min: 50, reorder: 100 },
-    { id: "A000000004", name: "Milk 1L", brand: "MilkPak", mg: "00002", pp: 250, tp: 280, rp: 320, stock: 150, unit: "EA", conv: 1, convUnit: "L", min: 30, reorder: 60 },
-    { id: "A000000005", name: "Biscuits 12pk", brand: "Peek Freans", mg: "00004", pp: 400, tp: 450, rp: 500, stock: 80, unit: "PK", conv: 12, convUnit: "EA", min: 15, reorder: 30 }
-  ];
-
-  for (const p of initialProducts) {
-    db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      p.id, p.name, p.brand, p.mg, p.pp, p.tp, p.rp, p.stock, p.unit, p.conv, p.convUnit, p.min, p.reorder
-    );
-    // Create initial batch for seeded stock
-    db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(
-      p.id, null, p.stock, p.stock, p.pp
-    );
-  }
-
-  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-    "Bismillah General Store", "Ahmed Ali", "Saddar, Karachi", "03111111111", 50000
-  );
-  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-    "Madina Super Mart", "Muhammad Usman", "Gulshan-e-Iqbal, Karachi", "03222222222", 100000
-  );
-  db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-    "Al-Jadeed Mart", "Ibrahim Khan", "North Nazimabad, Karachi", "03333333333", 75000
-  );
-
-  // Seed Suppliers
-  db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
-    "MSK Company", "Saleem Ahmed", "03444444444", "SITE Area, Karachi"
-  );
-  db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
-    "Unilever Pakistan", "Zubair Ali", "03555555555", "Avari Towers, Karachi"
-  );
-
-  // Seed Order Bookers
-  const ob1 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "Zeeshan Ahmed", "Ahmed Khan", "03001234567", "42101-1111111-1", "2024-01-01"
-  );
-  const ob2 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "Kamran Shah", "Shah Jahan", "03007654321", "42101-2222222-2", "2024-01-15"
-  );
-
-  // Seed Salesmen
-  const sm1 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
-  );
-  const sm2 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "M. Yasin", "M. Yousuf", "03112223334", "42101-3333333-3", "2024-03-01"
-  );
-
-  // Seed some orders and items
-  const seedOrders = [
-    { retailer: 1, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000001", qty: 2, price: 550 }, { id: "A000000002", qty: 1, price: 650 }], status: 'delivered' },
-    { retailer: 2, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000003", qty: 10, price: 120 }], status: 'pending' },
-    { retailer: 3, order_booker: ob2.lastInsertRowid, items: [{ id: "A000000001", qty: 5, price: 550 }, { id: "A000000004", qty: 6, price: 280 }, { id: "A000000005", qty: 2, price: 450 }], status: 'delivered' }
-  ];
-
-  for (const o of seedOrders) {
-    const total = o.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    const estDelivery = new Date();
-    estDelivery.setDate(estDelivery.getDate() + 1);
-    
-    const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
-      o.retailer, o.order_booker, total, o.status, estDelivery.toISOString()
-    );
-    const orderId = order.lastInsertRowid;
-
-    for (const item of o.items) {
-      const oi = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
-        orderId, item.id, item.qty, item.price, o.status === 'delivered' ? 'Delivered' : 'Pending'
+    db.transaction(() => {
+      db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
+        "Admin Karachi", "admin", "03001234567", "admin123"
       );
-      
-      // Reduce stock from products
-      db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.qty, item.id);
-      
-      // Reduce stock from batches (FIFO)
-      let remainingToReduce = item.qty;
-      const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.id) as any[];
-      
-      for (const batch of batches) {
-        if (remainingToReduce <= 0) break;
-        const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
-        db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?").run(reduce, batch.id);
-        remainingToReduce -= reduce;
+      db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
+        "Salesman A", "salesman", "03007654321", "sales123"
+      );
+
+      // Seed Material Groups
+      const materialGroups = [
+        { id: "00001", desc: "OIL" },
+        { id: "00002", desc: "DAIRY" },
+        { id: "00003", desc: "KITCHEN" },
+        { id: "00004", desc: "SNACKS" }
+      ];
+
+      const mgStmt = db.prepare("INSERT INTO material_groups (mat_gp, mat_description) VALUES (?, ?)");
+      for (const mg of materialGroups) {
+        mgStmt.run(mg.id, mg.desc);
       }
-    }
 
-    if (o.status === 'delivered') {
-      // Add delivery record
-      const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
-        orderId, sm1.lastInsertRowid, total, 'completed'
+      // Seed Units
+      const unitsToSeed = [
+        { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
+        { code: 'MT', name: 'METRIC TON', short: 'MT' },
+        { code: 'PC', name: 'PIECES', short: 'PCS' },
+        { code: 'GR', name: 'GRAM', short: 'GRM' },
+        { code: 'L', name: 'LITER', short: 'LTR' },
+        { code: 'BX', name: 'BOX', short: 'BOX' },
+        { code: 'DZ', name: 'DOZEN', short: 'DZN' },
+        { code: 'CT', name: 'CARTON', short: 'CTN' },
+        { code: 'EA', name: 'EACH', short: 'EA' },
+        { code: 'PK', name: 'PACK', short: 'PACK' },
+        { code: 'SET', name: 'SET', short: 'SET' },
+        { code: 'BAG', name: 'BAG', short: 'BAG' }
+      ];
+
+      const unitStmt = db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)");
+      for (const u of unitsToSeed) {
+        unitStmt.run(u.code, u.name, u.short, 1);
+      }
+
+      const initialProducts = [
+        { id: "A000000001", name: "Cooking Oil 1L", brand: "Dalda", mg: "00001", pp: 500, tp: 550, rp: 600, stock: 100, unit: "EA", conv: 1, convUnit: "L", min: 20, reorder: 40 },
+        { id: "A000000002", name: "Tea 400g", brand: "Tapal", mg: "00003", pp: 600, tp: 650, rp: 700, stock: 50, unit: "EA", conv: 400, convUnit: "GR", min: 10, reorder: 20 },
+        { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EA", conv: 1, convUnit: "EA", min: 50, reorder: 100 },
+        { id: "A000000004", name: "Milk 1L", brand: "MilkPak", mg: "00002", pp: 250, tp: 280, rp: 320, stock: 150, unit: "EA", conv: 1, convUnit: "L", min: 30, reorder: 60 },
+        { id: "A000000005", name: "Biscuits 12pk", brand: "Peek Freans", mg: "00004", pp: 400, tp: 450, rp: 500, stock: 80, unit: "PK", conv: 12, convUnit: "EA", min: 15, reorder: 30 }
+      ];
+
+      const productStmt = db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const batchStmt = db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)");
+      
+      for (const p of initialProducts) {
+        productStmt.run(p.id, p.name, p.brand, p.mg, p.pp, p.tp, p.rp, p.stock, p.unit, p.conv, p.convUnit, p.min, p.reorder);
+        batchStmt.run(p.id, null, p.stock, p.stock, p.pp);
+      }
+
+      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+        "Bismillah General Store", "Ahmed Ali", "Saddar, Karachi", "03111111111", 50000
       );
-      const deliveryId = delivery.lastInsertRowid;
+      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+        "Madina Super Mart", "Muhammad Usman", "Gulshan-e-Iqbal, Karachi", "03222222222", 100000
+      );
+      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
+        "Al-Jadeed Mart", "Ibrahim Khan", "North Nazimabad, Karachi", "03333333333", 75000
+      );
 
-      // Link order items to delivery items
-      const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(orderId) as any[];
-      for (const oi of orderItems) {
-        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
-          deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
+      // Seed Suppliers
+      db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
+        "MSK Company", "Saleem Ahmed", "03444444444", "SITE Area, Karachi"
+      );
+      db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
+        "Unilever Pakistan", "Zubair Ali", "03555555555", "Avari Towers, Karachi"
+      );
+
+      // Seed Order Bookers
+      const ob1 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "Zeeshan Ahmed", "Ahmed Khan", "03001234567", "42101-1111111-1", "2024-01-01"
+      );
+      const ob2 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "Kamran Shah", "Shah Jahan", "03007654321", "42101-2222222-2", "2024-01-15"
+      );
+
+      // Seed Salesmen
+      const sm1 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
+      );
+      const sm2 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "M. Yasin", "M. Yousuf", "03112223334", "42101-3333333-3", "2024-03-01"
+      );
+
+      // Seed some orders and items
+      const seedOrders = [
+        { retailer: 1, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000001", qty: 2, price: 550 }, { id: "A000000002", qty: 1, price: 650 }], status: 'delivered' },
+        { retailer: 2, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000003", qty: 10, price: 120 }], status: 'pending' },
+        { retailer: 3, order_booker: ob2.lastInsertRowid, items: [{ id: "A000000001", qty: 5, price: 550 }, { id: "A000000004", qty: 6, price: 280 }, { id: "A000000005", qty: 2, price: 450 }], status: 'delivered' }
+      ];
+
+      for (const o of seedOrders) {
+        const total = o.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
+        const estDelivery = new Date();
+        estDelivery.setDate(estDelivery.getDate() + 1);
+        
+        const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
+          o.retailer, o.order_booker, total, o.status, estDelivery.toISOString()
         );
+        const orderId = order.lastInsertRowid;
+
+        for (const item of o.items) {
+          db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
+            orderId, item.id, item.qty, item.price, o.status === 'delivered' ? 'Delivered' : 'Pending'
+          );
+          
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.qty, item.id);
+          
+          let remainingToReduce = item.qty;
+          const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.id) as any[];
+          
+          for (const batch of batches) {
+            if (remainingToReduce <= 0) break;
+            const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
+            db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?").run(reduce, batch.id);
+            remainingToReduce -= reduce;
+          }
+        }
+
+        if (o.status === 'delivered') {
+          const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
+            orderId, sm1.lastInsertRowid, total, 'completed'
+          );
+          const deliveryId = delivery.lastInsertRowid;
+
+          const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(orderId) as any[];
+          for (const oi of orderItems) {
+            db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
+              deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
+            );
+          }
+
+          db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
+            o.retailer, `Order #${orderId}`, total, total
+          );
+        }
       }
 
-      db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
-        o.retailer, `Order #${orderId}`, total, total
+      // Seed Purchases
+      const p1_items = [{ id: "A000000001", qty: 100, price: 450 }];
+      const p1_total = p1_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
+      const purchase1 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
+        1, p1_total, 'received'
       );
-    }
-  }
+      db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
+        purchase1.lastInsertRowid, p1_items[0].id, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
+      );
+      db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        p1_items[0].id, purchase1.lastInsertRowid, p1_items[0].qty, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
+      );
+      db.prepare("UPDATE products SET stock_quantity = stock_quantity + 100 WHERE product_id = ?").run("A000000001");
 
-  // Seed Purchases
-  const p1_items = [{ id: "A000000001", qty: 100, price: 450 }];
-  const p1_total = p1_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-  const purchase1 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-    1, p1_total, 'received'
-  );
-  db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-    purchase1.lastInsertRowid, p1_items[0].id, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
-  );
-  db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    p1_items[0].id, purchase1.lastInsertRowid, p1_items[0].qty, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
-  );
-  db.prepare("UPDATE products SET stock_quantity = stock_quantity + 100 WHERE product_id = ?").run("A000000001");
+      const p2_items = [{ id: "A000000002", qty: 50, price: 580 }];
+      const p2_total = p2_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
+      const purchase2 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
+        2, p2_total, 'received'
+      );
+      db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
+        purchase2.lastInsertRowid, p2_items[0].id, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
+      );
+      db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        p2_items[0].id, purchase2.lastInsertRowid, p2_items[0].qty, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
+      );
+      db.prepare("UPDATE products SET stock_quantity = stock_quantity + 50 WHERE product_id = ?").run("A000000002");
 
-  const p2_items = [{ id: "A000000002", qty: 50, price: 580 }];
-  const p2_total = p2_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-  const purchase2 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-    2, p2_total, 'received'
-  );
-  db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-    purchase2.lastInsertRowid, p2_items[0].id, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
-  );
-  db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    p2_items[0].id, purchase2.lastInsertRowid, p2_items[0].qty, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
-  );
-  db.prepare("UPDATE products SET stock_quantity = stock_quantity + 50 WHERE product_id = ?").run("A000000002");
+      // Seed Drivers
+      const driver1 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "Junaid Khan", "Abdul Khan", "03001112223", "42101-1234567-1", "2024-01-15"
+      );
+      const driver2 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
+        "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
+      );
 
-  // Seed Drivers
-  const driver1 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "Junaid Khan", "Abdul Khan", "03001112223", "42101-1234567-1", "2024-01-15"
-  );
-  const driver2 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-    "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
-  );
-
-  // Seed Load Plan
-  const plan1 = db.prepare("INSERT INTO load_plans (vehicle_id, driver_id, status) VALUES (?, ?, ?)").run(
-    "KHI-1234", driver1.lastInsertRowid, "draft"
-  );
-  db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(
-    plan1.lastInsertRowid, 2
-  );
+      // Seed Load Plan
+      const plan1 = db.prepare("INSERT INTO load_plans (vehicle_id, driver_id, status) VALUES (?, ?, ?)").run(
+        "KHI-1234", driver1.lastInsertRowid, "draft"
+      );
+      db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(
+        plan1.lastInsertRowid, 2
+      );
+    })();
   }
 } catch (err) {
   console.error("CRITICAL: Initial seeding failed:", err);
@@ -492,22 +490,25 @@ try {
 try {
   const unitCount = db.prepare("SELECT COUNT(*) as count FROM units").get() as { count: number };
   if (unitCount.count === 0) {
-    const initialUnits = [
-      { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
-      { code: 'MT', name: 'METRIC TON', short: 'MT' },
-      { code: 'PC', name: 'PIECES', short: 'PCS' },
-      { code: 'GR', name: 'GRAM', short: 'GRM' },
-      { code: 'L', name: 'LITER', short: 'LTR' },
-      { code: 'BX', name: 'BOX', short: 'BOX' },
-      { code: 'DZ', name: 'DOZEN', short: 'DZN' },
-      { code: 'CT', name: 'CARTON', short: 'CTN' },
-      { code: 'EA', name: 'EACH', short: 'EA' },
-      { code: 'PK', name: 'PACK', short: 'PACK' }
-    ];
+    db.transaction(() => {
+      const initialUnits = [
+        { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
+        { code: 'MT', name: 'METRIC TON', short: 'MT' },
+        { code: 'PC', name: 'PIECES', short: 'PCS' },
+        { code: 'GR', name: 'GRAM', short: 'GRM' },
+        { code: 'L', name: 'LITER', short: 'LTR' },
+        { code: 'BX', name: 'BOX', short: 'BOX' },
+        { code: 'DZ', name: 'DOZEN', short: 'DZN' },
+        { code: 'CT', name: 'CARTON', short: 'CTN' },
+        { code: 'EA', name: 'EACH', short: 'EA' },
+        { code: 'PK', name: 'PACK', short: 'PACK' }
+      ];
 
-    for (const u of initialUnits) {
-      db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)").run(u.code, u.name, u.short, 1);
-    }
+      const stmt = db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)");
+      for (const u of initialUnits) {
+        stmt.run(u.code, u.name, u.short, 1);
+      }
+    })();
   }
 } catch (err) {
   console.error("Unit seeding failed:", err);
@@ -517,25 +518,26 @@ try {
 try {
   const deliveryCount = db.prepare("SELECT COUNT(*) as count FROM deliveries").get() as { count: number };
   if (deliveryCount.count === 0) {
-    const deliveredOrders = db.prepare("SELECT * FROM orders WHERE status = 'delivered'").all() as any[];
-    const firstSalesman = db.prepare("SELECT id FROM salesmen LIMIT 1").get() as { id: number } | undefined;
-    
-    if (deliveredOrders.length > 0 && firstSalesman) {
-      for (const order of deliveredOrders) {
-        const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
-          order.id, firstSalesman.id, order.total_amount, 'completed'
-        );
-        const deliveryId = delivery.lastInsertRowid;
+    db.transaction(() => {
+      const deliveredOrders = db.prepare("SELECT * FROM orders WHERE status = 'delivered'").all() as any[];
+      const firstSalesman = db.prepare("SELECT id FROM salesmen LIMIT 1").get() as { id: number } | undefined;
+      
+      if (deliveredOrders.length > 0 && firstSalesman) {
+        const deliveryStmt = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)");
+        const deliveryItemStmt = db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)");
         
-        const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as any[];
-        for (const oi of orderItems) {
-          db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
-            deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
-          );
+        for (const order of deliveredOrders) {
+          const delivery = deliveryStmt.run(order.id, firstSalesman.id, order.total_amount, 'completed');
+          const deliveryId = delivery.lastInsertRowid;
+          
+          const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as any[];
+          for (const oi of orderItems) {
+            deliveryItemStmt.run(deliveryId, oi.id, oi.product_id, oi.quantity, oi.price);
+          }
         }
+        console.log(`Seeded ${deliveredOrders.length} deliveries for existing delivered orders.`);
       }
-      console.log(`Seeded ${deliveredOrders.length} deliveries for existing delivered orders.`);
-    }
+    })();
   }
 } catch (err) {
   console.warn("Delivery catch-up seeding failed:", err);
@@ -543,91 +545,102 @@ try {
 
 // Seed Locations (Idempotent)
 try {
-  const country = db.prepare("INSERT OR IGNORE INTO countries (name) VALUES (?)").run("Pakistan");
-  const countryId = country.lastInsertRowid || (db.prepare("SELECT id FROM countries WHERE name = ?").get("Pakistan") as any)?.id;
+  const countryCount = db.prepare("SELECT COUNT(*) as count FROM countries").get() as { count: number };
+  if (countryCount.count === 0) {
+    db.transaction(() => {
+      const country = db.prepare("INSERT OR IGNORE INTO countries (name) VALUES (?)").run("Pakistan");
+      const countryId = country.lastInsertRowid || (db.prepare("SELECT id FROM countries WHERE name = ?").get("Pakistan") as any)?.id;
 
-  if (countryId) {
-    const province = db.prepare("INSERT OR IGNORE INTO provinces (country_id, name) VALUES (?, ?)").run(countryId, "Sindh");
-    const provinceId = province.lastInsertRowid || (db.prepare("SELECT id FROM provinces WHERE name = ? AND country_id = ?").get("Sindh", countryId) as any)?.id;
+      if (countryId) {
+        const province = db.prepare("INSERT OR IGNORE INTO provinces (country_id, name) VALUES (?, ?)").run(countryId, "Sindh");
+        const provinceId = province.lastInsertRowid || (db.prepare("SELECT id FROM provinces WHERE name = ? AND country_id = ?").get("Sindh", countryId) as any)?.id;
 
-    if (provinceId) {
-      const city = db.prepare("INSERT OR IGNORE INTO cities (province_id, name) VALUES (?, ?)").run(provinceId, "Karachi");
-      const cityId = city.lastInsertRowid || (db.prepare("SELECT id FROM cities WHERE name = ? AND province_id = ?").get("Karachi", provinceId) as any)?.id;
+        if (provinceId) {
+          const city = db.prepare("INSERT OR IGNORE INTO cities (province_id, name) VALUES (?, ?)").run(provinceId, "Karachi");
+          const cityId = city.lastInsertRowid || (db.prepare("SELECT id FROM cities WHERE name = ? AND province_id = ?").get("Karachi", provinceId) as any)?.id;
 
-      if (cityId) {
-        const locationData = [
-          {
-            town: "Gulshan-e-Iqbal Town",
-            areas: [
+          if (cityId) {
+            const locationData = [
               {
-                name: "Gulshan-e-Iqbal",
-                subareas: ["UC-2 Gulshan-e-Iqbal (Main)", "UC-1 Essa Nagri", "UC-8 National Stadium Area"]
+                town: "Gulshan-e-Iqbal Town",
+                areas: [
+                  {
+                    name: "Gulshan-e-Iqbal",
+                    subareas: ["UC-2 Gulshan-e-Iqbal (Main)", "UC-1 Essa Nagri", "UC-8 National Stadium Area"]
+                  },
+                  {
+                    name: "Gulistan-e-Jauhar (Safoora Town)",
+                    subareas: ["UC-7 Gulistan-e-Jauhar", "UC-8 Safari Park Area", "UC-6 Pahlwan Goth"]
+                  },
+                  {
+                    name: "Gulzar-e-Hijri",
+                    subareas: ["UC-2 Gulzar-e-Hijri", "UC-3 Sachal Goth", "UC-4 Al-Azhar Garden"]
+                  }
+                ]
               },
               {
-                name: "Gulistan-e-Jauhar (Safoora Town)",
-                subareas: ["UC-7 Gulistan-e-Jauhar", "UC-8 Safari Park Area", "UC-6 Pahlwan Goth"]
+                town: "North Nazimabad Town",
+                areas: [
+                  {
+                    name: "North Nazimabad",
+                    subareas: ["UC-1 Sir Syed Town", "UC-5 Taimooria", "UC-7 Hyderi"]
+                  },
+                  {
+                    name: "Buffer Zone",
+                    subareas: ["UC-4 Buffer Zone I", "UC-6 Sakhi Hassan", "UC-10 Shadman Town"]
+                  },
+                  {
+                    name: "Sakhi Hassan & Surrounds",
+                    subareas: ["UC-2 Farooq-e-Azam", "UC-3 Siddiq-e-Akbar", "UC-9 Pahar Gunj"]
+                  }
+                ]
               },
               {
-                name: "Gulzar-e-Hijri",
-                subareas: ["UC-2 Gulzar-e-Hijri", "UC-3 Sachal Goth", "UC-4 Al-Azhar Garden"]
+                town: "Saddar Town",
+                areas: [
+                  {
+                    name: "Saddar & Civil Lines",
+                    subareas: ["UC-9 Hijrat Colony", "UC-10 Frere Town", "UC-11 Clifton / Boat Basin"]
+                  },
+                  {
+                    name: "Garden & Kharadar",
+                    subareas: ["UC-4 Nanakwara", "UC-5 Old Town (Kharadar)", "UC-6 City Railway Colony"]
+                  },
+                  {
+                    name: "Aram Bagh",
+                    subareas: ["UC-1 Bhim Pura", "UC-2 Ranchore Line", "UC-3 Gazdarabad"]
+                  }
+                ]
               }
-            ]
-          },
-          {
-            town: "North Nazimabad Town",
-            areas: [
-              {
-                name: "North Nazimabad",
-                subareas: ["UC-1 Sir Syed Town", "UC-5 Taimooria", "UC-7 Hyderi"]
-              },
-              {
-                name: "Buffer Zone",
-                subareas: ["UC-4 Buffer Zone I", "UC-6 Sakhi Hassan", "UC-10 Shadman Town"]
-              },
-              {
-                name: "Sakhi Hassan & Surrounds",
-                subareas: ["UC-2 Farooq-e-Azam", "UC-3 Siddiq-e-Akbar", "UC-9 Pahar Gunj"]
-              }
-            ]
-          },
-          {
-            town: "Saddar Town",
-            areas: [
-              {
-                name: "Saddar & Civil Lines",
-                subareas: ["UC-9 Hijrat Colony", "UC-10 Frere Town", "UC-11 Clifton / Boat Basin"]
-              },
-              {
-                name: "Garden & Kharadar",
-                subareas: ["UC-4 Nanakwara", "UC-5 Old Town (Kharadar)", "UC-6 City Railway Colony"]
-              },
-              {
-                name: "Aram Bagh",
-                subareas: ["UC-1 Bhim Pura", "UC-2 Ranchore Line", "UC-3 Gazdarabad"]
-              }
-            ]
-          }
-        ];
+            ];
 
-        for (const t of locationData) {
-          const town = db.prepare("INSERT OR IGNORE INTO towns (city_id, name) VALUES (?, ?)").run(cityId, t.town);
-          const townId = town.lastInsertRowid || (db.prepare("SELECT id FROM towns WHERE name = ? AND city_id = ?").get(t.town, cityId) as any)?.id;
+            const townStmt = db.prepare("INSERT OR IGNORE INTO towns (city_id, name) VALUES (?, ?)");
+            const areaStmt = db.prepare("INSERT OR IGNORE INTO areas (town_id, name) VALUES (?, ?)");
+            const subareaStmt = db.prepare("INSERT OR IGNORE INTO subareas (area_id, name) VALUES (?, ?)");
+            const findTownStmt = db.prepare("SELECT id FROM towns WHERE name = ? AND city_id = ?");
+            const findAreaStmt = db.prepare("SELECT id FROM areas WHERE name = ? AND town_id = ?");
 
-          if (townId) {
-            for (const a of t.areas) {
-              const area = db.prepare("INSERT OR IGNORE INTO areas (town_id, name) VALUES (?, ?)").run(townId, a.name);
-              const areaId = area.lastInsertRowid || (db.prepare("SELECT id FROM areas WHERE name = ? AND town_id = ?").get(a.name, townId) as any)?.id;
+            for (const t of locationData) {
+              const town = townStmt.run(cityId, t.town);
+              const townId = town.lastInsertRowid || (findTownStmt.get(t.town, cityId) as any)?.id;
 
-              if (areaId) {
-                for (const sa of a.subareas) {
-                  db.prepare("INSERT OR IGNORE INTO subareas (area_id, name) VALUES (?, ?)").run(areaId, sa);
+              if (townId) {
+                for (const a of t.areas) {
+                  const area = areaStmt.run(townId, a.name);
+                  const areaId = area.lastInsertRowid || (findAreaStmt.get(a.name, townId) as any)?.id;
+
+                  if (areaId) {
+                    for (const sa of a.subareas) {
+                      subareaStmt.run(areaId, sa);
+                    }
+                  }
                 }
               }
             }
           }
         }
       }
-    }
+    })();
   }
 } catch (err) {
   console.warn("Location seeding skipped or failed:", err);
@@ -716,6 +729,87 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error("Dashboard stats fetch failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/batch-init", (req, res) => {
+    try {
+      // Reuse existing logic or write queries directly
+      const stats = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get();
+      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get();
+      const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get();
+      const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get();
+      const statusCounts = db.prepare("SELECT status as name, COUNT(*) as value FROM orders GROUP BY status").all();
+      const salesTrend = db.prepare("SELECT strftime('%Y-%m-%d', order_date) as name, SUM(total_amount) as value FROM orders WHERE order_date >= date('now', '-7 days') AND status = 'delivered' GROUP BY name ORDER BY name ASC").all();
+
+      const products = db.prepare("SELECT p.*, mg.mat_description as material_group_name FROM products p LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp").all();
+      const shops = db.prepare("SELECT * FROM shops").all();
+      const suppliers = db.prepare("SELECT * FROM suppliers").all();
+      const orders = db.prepare("SELECT o.*, r.shop_name, ob.name as order_booker_name FROM orders o JOIN shops r ON o.shop_id = r.id JOIN order_bookers ob ON o.order_booker_id = ob.id ORDER BY o.order_date DESC").all();
+      const purchases = db.prepare("SELECT p.*, s.name as supplier_name FROM purchases p JOIN suppliers s ON p.supplier_id = s.id ORDER BY p.purchase_date DESC").all();
+      const loadPlans = db.prepare("SELECT lp.*, d.name as driver_name FROM load_plans lp JOIN drivers d ON lp.driver_id = d.id ORDER BY lp.plan_date DESC").all();
+      const materialGroups = db.prepare("SELECT * FROM material_groups").all();
+      const drivers = db.prepare("SELECT * FROM drivers").all();
+      const orderBookers = db.prepare("SELECT * FROM order_bookers").all();
+      const salesmen = db.prepare("SELECT * FROM salesmen").all();
+      const units = db.prepare("SELECT * FROM units").all();
+      const deliveries = db.prepare("SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name FROM deliveries d JOIN orders o ON d.order_id = o.id JOIN shops r ON o.shop_id = r.id JOIN salesmen s ON d.salesman_id = s.id ORDER BY d.delivery_date DESC").all();
+      
+      const valuation = db.prepare(`
+        SELECT 
+          SUM(remaining_quantity * pb.purchase_price) as totalValueAtPP,
+          SUM(remaining_quantity * p.trade_price) as totalPotentialRevenueAtTP
+        FROM product_batches pb
+        JOIN products p ON pb.product_id = p.product_id
+        WHERE remaining_quantity > 0
+      `).get() as any;
+
+      // Mock daily sales for chart if not already gathered from DB
+      const chartData = [
+        { name: "Mon", sales: 45000 },
+        { name: "Tue", sales: 52000 },
+        { name: "Wed", sales: 48000 },
+        { name: "Thu", sales: 61000 },
+        { name: "Fri", sales: 55000 },
+        { name: "Sat", sales: 67000 },
+        { name: "Sun", sales: 42000 },
+      ];
+
+      res.json({
+        stats: {
+          totalSales: stats.total || 0,
+          pendingOrders: pendingOrders.count || 0,
+          lowStock: lowStock.count || 0,
+          totalShops: totalShops.count || 0,
+          orderStatusCounts: statusCounts.map((s: any) => ({
+            name: s.name.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            value: s.value
+          })),
+          salesTrend
+        },
+        products,
+        shops,
+        suppliers,
+        orders,
+        purchases,
+        loadPlans,
+        materialGroups,
+        drivers,
+        orderBookers,
+        salesmen,
+        units,
+        deliveries,
+        valuation: {
+          totalValueAtPP: valuation.totalValueAtPP || 0,
+          totalPotentialRevenueAtTP: valuation.totalPotentialRevenueAtTP || 0,
+          totalPotentialProfit: (valuation.totalPotentialRevenueAtTP || 0) - (valuation.totalValueAtPP || 0),
+          averageMarginPercent: valuation.totalPotentialRevenueAtTP > 0 ? (((valuation.totalPotentialRevenueAtTP || 0) - (valuation.totalValueAtPP || 0)) / valuation.totalPotentialRevenueAtTP) * 100 : 0
+        },
+        chartData
+      });
+    } catch (err: any) {
+      console.error("Batch init failed:", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -907,18 +1001,18 @@ async function startServer() {
   });
 
   app.post("/api/orders", (req, res) => {
-    const { shop_id, order_booker_id, order_date, items } = req.body;
+    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items } = req.body;
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     const transaction = db.transaction(() => {
-      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, order_date) VALUES (?, ?, ?, ?, ?)").run(
-        shop_id, order_booker_id, total_amount, 'pending', order_date || new Date().toISOString()
+      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, order_date, estimated_delivery_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?)").run(
+        shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, 'pending'
       );
       const orderId = order.lastInsertRowid;
 
       for (const item of items) {
-        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?, ?)").run(
-          orderId, item.product_id, item.quantity, item.price, 'Pending', item.estimated_delivery_date
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
+          orderId, item.product_id, item.quantity, item.price, 'Pending'
         );
         
         // Reduce stock
@@ -1040,30 +1134,75 @@ async function startServer() {
 
   app.put("/api/orders/:id", (req, res) => {
     const { id } = req.params;
-    const { shop_id, order_booker_id, order_date, items } = req.body;
+    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items } = req.body;
+    
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: "Items array is required" });
+    }
+
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     try {
       db.transaction(() => {
-        db.prepare(`
-          UPDATE orders 
-          SET shop_id = ?, order_booker_id = ?, order_date = ?, total_amount = ?
-          WHERE id = ?
-        `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), total_amount, id);
+        // 1. Return old stock
+        const oldItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(id) as any[];
+        for (const oldItem of oldItems) {
+          // Add back to product stock
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
+            .run(oldItem.quantity, oldItem.product_id);
+          
+          // Return to batches (Last-In-First-Return or just back to the most recent batch)
+          // We'll return to the batches that have space or the most recent one
+          db.prepare(`
+            UPDATE product_batches 
+            SET remaining_quantity = remaining_quantity + ? 
+            WHERE id = (
+              SELECT id FROM product_batches 
+              WHERE product_id = ? 
+              ORDER BY received_date DESC 
+              LIMIT 1
+            )
+          `).run(oldItem.quantity, oldItem.product_id);
+        }
 
+        // 2. Delete old items
         db.prepare("DELETE FROM order_items WHERE order_id = ?").run(id);
 
+        // 3. Update Order Header
+        db.prepare(`
+          UPDATE orders 
+          SET shop_id = ?, order_booker_id = ?, order_date = ?, estimated_delivery_date = ?, total_amount = ?
+          WHERE id = ?
+        `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, id);
+
+        // 4. Process New Items
         for (const item of items) {
           db.prepare(`
-            INSERT INTO order_items (order_id, product_id, quantity, price, status, estimated_delivery_date)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).run(id, item.product_id, item.quantity, item.price, item.status || 'Pending', item.estimated_delivery_date);
+            INSERT INTO order_items (order_id, product_id, quantity, price, status)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(id, item.product_id, item.quantity, item.price, item.status || 'Pending');
+
+          // Reduce stock
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
+            .run(item.quantity, item.product_id);
+
+          // FIFO Batch reduction
+          let remainingToReduce = item.quantity;
+          const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
+          
+          for (const batch of batches) {
+            if (remainingToReduce <= 0) break;
+            const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
+            db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?")
+              .run(reduce, batch.id);
+            remainingToReduce -= reduce;
+          }
         }
       })();
       res.json({ success: true });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Order update failed", err);
-      res.status(500).json({ error: "Failed to update order" });
+      res.status(500).json({ error: "Failed to update order: " + err.message });
     }
   });
 
@@ -1609,21 +1748,6 @@ async function startServer() {
     res.json(data);
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
   app.get('/api/units', (req, res) => {
     try {
       const units = db.prepare("SELECT * FROM units ORDER BY name ASC").all();
@@ -1663,6 +1787,21 @@ async function startServer() {
       res.status(500).json({ error: "Cannot delete unit as it may be in use" });
     }
   });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -601,21 +601,34 @@ export default function App() {
   }, [isCommandExpanded]);
 
   useEffect(() => {
-    fetchStats();
-    fetchProducts();
-    fetchShops();
-    fetchSuppliers();
-    fetchOrders();
-    fetchChartData();
-    fetchPurchases();
-    fetchLoadPlans();
-    fetchValuation();
-    fetchMaterialGroups();
-    fetchDrivers();
-    fetchOrderBookers();
-    fetchSalesmen();
-    fetchUnits();
-    fetchDeliveries();
+    const fetchBatchInit = async () => {
+      try {
+        const res = await fetch('/api/batch-init');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        
+        setStats(data.stats);
+        setProducts(data.products);
+        setShops(data.shops);
+        setSuppliers(data.suppliers);
+        setOrders(data.orders);
+        setChartData(data.chartData);
+        setPurchases(data.purchases);
+        setLoadPlans(data.loadPlans);
+        setValuation(data.valuation);
+        setMaterialGroups(data.materialGroups);
+        setDrivers(data.drivers);
+        setOrderBookers(data.orderBookers);
+        setSalesmen(data.salesmen);
+        setUnits(data.units);
+        setDeliveries(data.deliveries);
+      } catch (err) {
+        console.error("Batch initialization failed:", err);
+        // Fallback or retry logic if needed
+      }
+    };
+
+    fetchBatchInit();
   }, []);
 
   // Filtered Data Computation
@@ -2353,6 +2366,7 @@ export default function App() {
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Booker</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Est. Delivery</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
@@ -2376,6 +2390,9 @@ export default function App() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <span className="text-sm text-slate-600">{new Date(order.order_date).toLocaleDateString()}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-sm font-bold text-indigo-600">{order.estimated_delivery_date ? new Date(order.estimated_delivery_date).toLocaleDateString() : 'N/A'}</span>
                                 </td>
                                 <td className="px-6 py-4">
                                   <span className="text-sm font-bold text-slate-900">{formatPKR(order.total_amount)}</span>
