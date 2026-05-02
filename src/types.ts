@@ -72,6 +72,10 @@ export interface Order {
   sales_tax_amount?: number;
   additional_tax_pct?: number;
   additional_tax_amount?: number;
+  discount_pct?: number;
+  discount_amount?: number;
+  extra_discount_pct?: number;
+  extra_discount_amount?: number;
 }
 
 export interface OrderItem {
@@ -88,6 +92,10 @@ export interface OrderItem {
   sales_tax_amount?: number;
   additional_tax_pct?: number;
   additional_tax_amount?: number;
+  discount_pct?: number;
+  discount_amount?: number;
+  extra_discount_pct?: number;
+  extra_discount_amount?: number;
 }
 
 export interface StockValuationReport {
@@ -235,4 +243,8 @@ export interface DeliveryItem {
   sales_tax_amount?: number;
   additional_tax_pct?: number;
   additional_tax_amount?: number;
+  discount_pct?: number;
+  discount_amount?: number;
+  extra_discount_pct?: number;
+  extra_discount_amount?: number;
 }

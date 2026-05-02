@@ -100,6 +100,13 @@ export const DeliveryModal = ({
   const addItem = (item: OrderItem) => {
     if (deliveryItems.find(di => di.order_item_id === item.id)) return;
     const remaining = item.quantity - (item.delivered_quantity || 0);
+    
+    // Calculate taxes and discounts for the remaining quantity
+    const salesTaxAmount = (item.price * remaining * (item.sales_tax_pct || 0)) / 100;
+    const additionalTaxAmount = (item.price * remaining * (item.additional_tax_pct || 0)) / 100;
+    const discountAmount = (item.price * remaining * (item.discount_pct || 0)) / 100;
+    const extraDiscountAmount = (item.price * remaining * (item.extra_discount_pct || 0)) / 100;
+
     setDeliveryItems([...deliveryItems, {
       order_item_id: item.id,
       product_id: item.product_id,
@@ -107,7 +114,15 @@ export const DeliveryModal = ({
       quantity: remaining,
       price: item.price,
       max_quantity: remaining,
-      order_ref: item.order_id
+      order_ref: item.order_id,
+      sales_tax_pct: item.sales_tax_pct || 0,
+      sales_tax_amount: salesTaxAmount,
+      additional_tax_pct: item.additional_tax_pct || 0,
+      additional_tax_amount: additionalTaxAmount,
+      discount_pct: item.discount_pct || 0,
+      discount_amount: discountAmount,
+      extra_discount_pct: item.extra_discount_pct || 0,
+      extra_discount_amount: extraDiscountAmount
     }]);
   };
 
@@ -118,7 +133,19 @@ export const DeliveryModal = ({
   const updateItemQuantity = (orderItemId: number, qty: number) => {
     setDeliveryItems(deliveryItems.map(di => {
       if (di.order_item_id === orderItemId) {
-        return { ...di, quantity: Math.min(qty, di.max_quantity) };
+        const newQty = Math.min(qty, di.max_quantity);
+        const salesTaxAmount = (di.price * newQty * (di.sales_tax_pct || 0)) / 100;
+        const additionalTaxAmount = (di.price * newQty * (di.additional_tax_pct || 0)) / 100;
+        const discountAmount = (di.price * newQty * (di.discount_pct || 0)) / 100;
+        const extraDiscountAmount = (di.price * newQty * (di.extra_discount_pct || 0)) / 100;
+        return { 
+          ...di, 
+          quantity: newQty,
+          sales_tax_amount: salesTaxAmount,
+          additional_tax_amount: additionalTaxAmount,
+          discount_amount: discountAmount,
+          extra_discount_amount: extraDiscountAmount
+        };
       }
       return di;
     }));
@@ -309,7 +336,7 @@ export const DeliveryModal = ({
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-sm font-bold text-slate-500 uppercase">Total Amount</span>
                   <span className="text-xl font-bold text-indigo-600">
-                    {formatPKR(deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0))}
+                    {formatPKR(deliveryItems.reduce((sum, item: any) => sum + (item.quantity * item.price) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0) - (item.discount_amount || 0) - (item.extra_discount_amount || 0), 0))}
                   </span>
                 </div>
                 <button 

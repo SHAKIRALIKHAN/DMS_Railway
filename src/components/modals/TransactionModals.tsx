@@ -362,6 +362,10 @@ export const NewOrderModal = ({
             sales_tax_amount: item.sales_tax_amount || 0,
             additional_tax_pct: item.additional_tax_pct || 0,
             additional_tax_amount: item.additional_tax_amount || 0,
+            discount_pct: item.discount_pct || 0,
+            discount_amount: item.discount_amount || 0,
+            extra_discount_pct: item.extra_discount_pct || 0,
+            extra_discount_amount: item.extra_discount_amount || 0,
             product_name: products.find(p => p.product_id === item.product_id)?.product_name || 'Unknown Product'
           })));
         } catch (err) {
@@ -404,7 +408,16 @@ export const NewOrderModal = ({
       const newQty = existing.quantity + 1;
       const newTaxAmount = (existing.price * newQty * existing.sales_tax_pct) / 100;
       const newAddTaxAmount = (existing.price * newQty * (existing.additional_tax_pct || 0)) / 100;
-      setItems(items.map(i => i.product_id === product.product_id ? { ...i, quantity: newQty, sales_tax_amount: newTaxAmount, additional_tax_amount: newAddTaxAmount } : i));
+      const newDiscountAmount = (existing.price * newQty * (existing.discount_pct || 0)) / 100;
+      const newExtraDiscountAmount = (existing.price * newQty * (existing.extra_discount_pct || 0)) / 100;
+      setItems(items.map(i => i.product_id === product.product_id ? { 
+        ...i, 
+        quantity: newQty, 
+        sales_tax_amount: newTaxAmount, 
+        additional_tax_amount: newAddTaxAmount,
+        discount_amount: newDiscountAmount,
+        extra_discount_amount: newExtraDiscountAmount
+      } : i));
     } else {
       setItems([...items, { 
         product_id: product.product_id, 
@@ -414,7 +427,11 @@ export const NewOrderModal = ({
         sales_tax_pct: 0,
         sales_tax_amount: 0,
         additional_tax_pct: 0,
-        additional_tax_amount: 0
+        additional_tax_amount: 0,
+        discount_pct: 0,
+        discount_amount: 0,
+        extra_discount_pct: 0,
+        extra_discount_amount: 0
       }]);
     }
     setSearchQuery('');
@@ -429,9 +446,18 @@ export const NewOrderModal = ({
     setItems(items.map(i => {
       if (i.product_id === productId) {
         const newQty = Math.max(1, qty);
-        const newTaxAmount = (i.price * newQty * i.sales_tax_pct) / 100;
+        const newTaxAmount = (i.price * newQty * (i.sales_tax_pct || 0)) / 100;
         const newAddTaxAmount = (i.price * newQty * (i.additional_tax_pct || 0)) / 100;
-        return { ...i, quantity: newQty, sales_tax_amount: newTaxAmount, additional_tax_amount: newAddTaxAmount };
+        const newDiscountAmount = (i.price * newQty * (i.discount_pct || 0)) / 100;
+        const newExtraDiscountAmount = (i.price * newQty * (i.extra_discount_pct || 0)) / 100;
+        return { 
+          ...i, 
+          quantity: newQty, 
+          sales_tax_amount: newTaxAmount, 
+          additional_tax_amount: newAddTaxAmount,
+          discount_amount: newDiscountAmount,
+          extra_discount_amount: newExtraDiscountAmount
+        };
       }
       return i;
     }));
@@ -459,10 +485,34 @@ export const NewOrderModal = ({
     }));
   };
 
+  const updateDiscount = (productId: string, pct: number) => {
+    setItems(items.map(i => {
+      if (i.product_id === productId) {
+        const newPct = Math.max(0, pct);
+        const newAmount = (i.price * i.quantity * newPct) / 100;
+        return { ...i, discount_pct: newPct, discount_amount: newAmount };
+      }
+      return i;
+    }));
+  };
+
+  const updateExtraDiscount = (productId: string, pct: number) => {
+    setItems(items.map(i => {
+      if (i.product_id === productId) {
+        const newPct = Math.max(0, pct);
+        const newAmount = (i.price * i.quantity * newPct) / 100;
+        return { ...i, extra_discount_pct: newPct, extra_discount_amount: newAmount };
+      }
+      return i;
+    }));
+  };
+
   const itemsTotal = items.reduce((sum, i) => sum + (i.quantity * i.price), 0);
   const salesTaxTotal = items.reduce((sum, i) => sum + (i.sales_tax_amount || 0), 0);
   const additionalTaxTotal = items.reduce((sum, i) => sum + (i.additional_tax_amount || 0), 0);
-  const finalTotal = itemsTotal + salesTaxTotal + additionalTaxTotal;
+  const discountTotal = items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
+  const extraDiscountTotal = items.reduce((sum, i) => sum + (i.extra_discount_amount || 0), 0);
+  const finalTotal = itemsTotal + salesTaxTotal + additionalTaxTotal - discountTotal - extraDiscountTotal;
 
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -487,6 +537,10 @@ export const NewOrderModal = ({
           sales_tax_amount: salesTaxTotal,
           additional_tax_pct: 0,
           additional_tax_amount: additionalTaxTotal,
+          discount_pct: 0,
+          discount_amount: discountTotal,
+          extra_discount_pct: 0,
+          extra_discount_amount: extraDiscountTotal,
           items
         })
       });
@@ -645,7 +699,9 @@ export const NewOrderModal = ({
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right text-xs">Excl. Tax</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax (%)</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right whitespace-nowrap">Add. Tax (%)</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax Amount</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Disc (%)</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right whitespace-nowrap">E. Disc (%)</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Adj. Amount</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Total</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center"></th>
                   </tr>
@@ -707,12 +763,36 @@ export const NewOrderModal = ({
                           onChange={e => updateAdditionalTax(item.product_id, parseFloat(e.target.value) || 0)}
                         />
                       </td>
+                      <td className="px-4 py-4 text-right">
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          min="0"
+                          className="w-16 px-2 py-1 bg-white border border-slate-200 rounded text-right text-[10px] outline-none focus:border-indigo-600"
+                          value={item.discount_pct}
+                          onChange={e => updateDiscount(item.product_id, parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          min="0"
+                          className="w-16 px-2 py-1 bg-white border border-slate-200 rounded text-right text-[10px] outline-none focus:border-indigo-600"
+                          value={item.extra_discount_pct}
+                          onChange={e => updateExtraDiscount(item.product_id, parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
                       <td className="px-4 py-4 text-right text-[10px] font-medium text-slate-600 leading-tight">
-                        <p>ST: {formatPKR(item.sales_tax_amount)}</p>
-                        <p>AT: {formatPKR(item.additional_tax_amount)}</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-emerald-600">+ ST: {formatPKR(item.sales_tax_amount)}</span>
+                          <span className="text-emerald-600">+ AT: {formatPKR(item.additional_tax_amount)}</span>
+                          <span className="text-rose-600">- DS: {formatPKR(item.discount_amount)}</span>
+                          <span className="text-rose-600">- ED: {formatPKR(item.extra_discount_amount)}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-slate-900 text-sm">
-                        {formatPKR((item.quantity * item.price) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0))}
+                        {formatPKR((item.quantity * item.price) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0) - (item.discount_amount || 0) - (item.extra_discount_amount || 0))}
                       </td>
                       <td className="px-4 py-4 text-right">
                         <button 
@@ -727,7 +807,7 @@ export const NewOrderModal = ({
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={12} className="px-6 py-12 text-center text-slate-400">
                         <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
                         <p className="text-sm font-medium">No items added to the order</p>
                       </td>
@@ -751,6 +831,10 @@ export const NewOrderModal = ({
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Add. Tax Total</p>
                     <p className="text-xl font-bold">{formatPKR(additionalTaxTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Discount Total</p>
+                    <p className="text-xl font-bold">{formatPKR(discountTotal + extraDiscountTotal)}</p>
                   </div>
                   <div className="h-10 w-px bg-white/20"></div>
                   <div>

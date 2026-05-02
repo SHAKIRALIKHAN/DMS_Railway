@@ -228,17 +228,19 @@ export const OrderDetailsModal = ({
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Add. Tax (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Disc (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">E. Disc (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right text-xs">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
                   </tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
@@ -256,29 +258,43 @@ export const OrderDetailsModal = ({
                       {item.additional_tax_pct || 0}%
                       <span className="block text-[8px] opacity-70">({formatPKR(item.additional_tax_amount || 0)})</span>
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{formatPKR((item.price * item.quantity) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0))}</td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.discount_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.discount_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.extra_discount_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.extra_discount_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{formatPKR((item.price * item.quantity) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0) - (item.discount_amount || 0) - (item.extra_discount_amount || 0))}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50/50 text-xs">
-                  <td colSpan={5} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Subtotal</td>
-                  <td className="px-4 py-2 text-right font-medium text-slate-900">{formatPKR(order.total_amount - (order.sales_tax_amount || 0) - (order.additional_tax_amount || 0))}</td>
+                  <td colSpan={7} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Subtotal</td>
+                  <td className="px-4 py-2 text-right font-medium text-slate-900">{formatPKR(order.total_amount - (order.sales_tax_amount || 0) - (order.additional_tax_amount || 0) + (order.discount_amount || 0) + (order.extra_discount_amount || 0))}</td>
                 </tr>
                 {order.sales_tax_amount && order.sales_tax_amount > 0 ? (
                   <tr className="bg-slate-50/50 text-xs">
-                    <td colSpan={5} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Sales Tax Total</td>
+                    <td colSpan={7} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Sales Tax Total</td>
                     <td className="px-4 py-2 text-right font-medium text-slate-900">{formatPKR(order.sales_tax_amount || 0)}</td>
                   </tr>
                 ) : null}
                 {order.additional_tax_amount && order.additional_tax_amount > 0 ? (
                   <tr className="bg-slate-50/50 text-xs">
-                    <td colSpan={5} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Additional Tax Total</td>
+                    <td colSpan={7} className="px-4 py-2 font-medium text-slate-500 text-right uppercase tracking-wider">Additional Tax Total</td>
                     <td className="px-4 py-2 text-right font-medium text-slate-900">{formatPKR(order.additional_tax_amount || 0)}</td>
                   </tr>
                 ) : null}
+                {(order.discount_amount || 0) + (order.extra_discount_amount || 0) > 0 ? (
+                  <tr className="bg-slate-50/50 text-xs text-rose-600">
+                    <td colSpan={7} className="px-4 py-2 font-medium text-right uppercase tracking-wider">Discount Total</td>
+                    <td className="px-4 py-2 text-right font-medium">-{formatPKR((order.discount_amount || 0) + (order.extra_discount_amount || 0))}</td>
+                  </tr>
+                ) : null}
                 <tr className="bg-slate-100/50">
-                  <td colSpan={5} className="px-4 py-3 text-sm font-bold text-slate-900 text-right uppercase tracking-wider">Grand Total</td>
+                  <td colSpan={7} className="px-4 py-3 text-sm font-bold text-slate-900 text-right uppercase tracking-wider">Grand Total</td>
                   <td className="px-4 py-3 text-right text-lg font-bold text-indigo-600">{formatPKR(order.total_amount)}</td>
                 </tr>
               </tfoot>
@@ -530,12 +546,16 @@ export const DeliveryDetailsModal = ({
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Qty</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Add. Tax (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Disc (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">E. Disc (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Subtotal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
                     <td className="px-4 py-3">
@@ -549,7 +569,25 @@ export const DeliveryDetailsModal = ({
                     </td>
                     <td className="px-4 py-3 text-center text-sm font-medium text-slate-600">{item.quantity}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatPKR(item.price)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{formatPKR(item.quantity * item.price)}</td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.sales_tax_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.sales_tax_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.additional_tax_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.additional_tax_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.discount_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.discount_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600">
+                      {item.extra_discount_pct || 0}%
+                      <span className="block text-[8px] opacity-70">({formatPKR(item.extra_discount_amount || 0)})</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
+                      {formatPKR((item.quantity * item.price) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0) - (item.discount_amount || 0) - (item.extra_discount_amount || 0))}
+                    </td>
                   </tr>
                 ))}
               </tbody>

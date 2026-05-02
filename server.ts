@@ -15,22 +15,6 @@ try {
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   
-  // Migration for orders is_cancelled
-  try { db.exec("ALTER TABLE orders ADD COLUMN is_cancelled TEXT DEFAULT ''"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  
-  try { db.exec("ALTER TABLE order_items ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE order_items ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE order_items ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE order_items ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE delivery_items ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE delivery_items ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE delivery_items ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE delivery_items ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
-  
   // Initialize Database Schema
   try {
     db.prepare("SELECT unit_code FROM units LIMIT 1").get();
@@ -129,6 +113,12 @@ try {
     total_amount REAL NOT NULL,
     sales_tax_pct REAL DEFAULT 0,
     sales_tax_amount REAL DEFAULT 0,
+    additional_tax_pct REAL DEFAULT 0,
+    additional_tax_amount REAL DEFAULT 0,
+    discount_pct REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    extra_discount_pct REAL DEFAULT 0,
+    extra_discount_amount REAL DEFAULT 0,
     is_cancelled TEXT DEFAULT '',
     FOREIGN KEY (shop_id) REFERENCES shops(id),
     FOREIGN KEY (order_booker_id) REFERENCES order_bookers(id)
@@ -141,6 +131,14 @@ try {
     quantity INTEGER NOT NULL,
     price REAL NOT NULL,
     status TEXT DEFAULT 'Pending',
+    sales_tax_pct REAL DEFAULT 0,
+    sales_tax_amount REAL DEFAULT 0,
+    additional_tax_pct REAL DEFAULT 0,
+    additional_tax_amount REAL DEFAULT 0,
+    discount_pct REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    extra_discount_pct REAL DEFAULT 0,
+    extra_discount_amount REAL DEFAULT 0,
     FOREIGN KEY (order_id) REFERENCES orders(id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
   );
@@ -227,6 +225,14 @@ try {
     product_id TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     price REAL NOT NULL,
+    sales_tax_pct REAL DEFAULT 0,
+    sales_tax_amount REAL DEFAULT 0,
+    additional_tax_pct REAL DEFAULT 0,
+    additional_tax_amount REAL DEFAULT 0,
+    discount_pct REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    extra_discount_pct REAL DEFAULT 0,
+    extra_discount_amount REAL DEFAULT 0,
     FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
     FOREIGN KEY (order_item_id) REFERENCES order_items(id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
@@ -288,6 +294,35 @@ try {
       UNIQUE(area_id, name)
     );
   `);
+
+  // Run Migrations (Idempotent)
+  try { db.exec("ALTER TABLE orders ADD COLUMN is_cancelled TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN discount_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN extra_discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN extra_discount_amount REAL DEFAULT 0"); } catch(e) {}
+  
+  try { db.exec("ALTER TABLE order_items ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN discount_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN extra_discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE order_items ADD COLUMN extra_discount_amount REAL DEFAULT 0"); } catch(e) {}
+  
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN additional_tax_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN discount_amount REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_amount REAL DEFAULT 0"); } catch(e) {}
 
   // Migration for order_items estimated_delivery_date
   try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
@@ -1022,19 +1057,61 @@ async function startServer() {
   });
 
   app.post("/api/orders", (req, res) => {
-    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount } = req.body;
+    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items } = req.body;
+    let { 
+      sales_tax_pct, sales_tax_amount, 
+      additional_tax_pct, additional_tax_amount,
+      discount_pct, discount_amount,
+      extra_discount_pct, extra_discount_amount
+    } = req.body;
+    
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: "Items array is required" });
+    }
+
+    // Recalculate totals server-side for robustness
     const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-    const total_amount = items_total + (sales_tax_amount || 0) + (additional_tax_amount || 0);
+    const calculated_sales_tax = items.reduce((sum: number, item: any) => sum + (item.sales_tax_amount || 0), 0);
+    const calculated_additional_tax = items.reduce((sum: number, item: any) => sum + (item.additional_tax_amount || 0), 0);
+    const calculated_discount = items.reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
+    const calculated_extra_discount = items.reduce((sum: number, item: any) => sum + (item.extra_discount_amount || 0), 0);
+
+    sales_tax_amount = calculated_sales_tax;
+    additional_tax_amount = calculated_additional_tax;
+    discount_amount = calculated_discount;
+    extra_discount_amount = calculated_extra_discount;
+
+    const total_amount = items_total + sales_tax_amount + additional_tax_amount - discount_amount - extra_discount_amount;
+
+    console.log(`[Order Create] Shop: ${shop_id}, Items Total: ${items_total}, Tax: ${sales_tax_amount + additional_tax_amount}, Discount: ${discount_amount + extra_discount_amount}, Grand Total: ${total_amount}`);
 
     const transaction = db.transaction(() => {
-      const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, order_date, estimated_delivery_date, total_amount, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, sales_tax_pct || 0, sales_tax_amount || 0, additional_tax_pct || 0, additional_tax_amount || 0, 'pending'
+      const order = db.prepare(`
+        INSERT INTO orders (
+          shop_id, order_booker_id, order_date, estimated_delivery_date, total_amount, 
+          sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
+          discount_pct, discount_amount, extra_discount_pct, extra_discount_amount,
+          status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, 
+        sales_tax_pct || 0, sales_tax_amount || 0, additional_tax_pct || 0, additional_tax_amount || 0,
+        discount_pct || 0, discount_amount || 0, extra_discount_pct || 0, extra_discount_amount || 0,
+        'pending'
       );
       const orderId = order.lastInsertRowid;
 
       for (const item of items) {
-        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-          orderId, item.product_id, item.quantity, item.price, 'pending', item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0
+        db.prepare(`
+          INSERT INTO order_items (
+            order_id, product_id, quantity, price, status, 
+            sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
+            discount_pct, discount_amount, extra_discount_pct, extra_discount_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          orderId, item.product_id, item.quantity, item.price, 'pending', 
+          item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0,
+          item.discount_pct || 0, item.discount_amount || 0, item.extra_discount_pct || 0, item.extra_discount_amount || 0
         );
       }
       return orderId;
@@ -1142,14 +1219,34 @@ async function startServer() {
 
   app.put("/api/orders/:id", (req, res) => {
     const { id } = req.params;
-    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount } = req.body;
+    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items } = req.body;
+    let { 
+      sales_tax_pct, sales_tax_amount, 
+      additional_tax_pct, additional_tax_amount,
+      discount_pct, discount_amount,
+      extra_discount_pct, extra_discount_amount
+    } = req.body;
     
     if (!items || !Array.isArray(items)) {
       return res.status(400).json({ error: "Items array is required" });
     }
 
+    // Recalculate totals server-side for robustness
     const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-    const total_amount = items_total + (sales_tax_amount || 0) + (additional_tax_amount || 0);
+    const calculated_sales_tax = items.reduce((sum: number, item: any) => sum + (item.sales_tax_amount || 0), 0);
+    const calculated_additional_tax = items.reduce((sum: number, item: any) => sum + (item.additional_tax_amount || 0), 0);
+    const calculated_discount = items.reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
+    const calculated_extra_discount = items.reduce((sum: number, item: any) => sum + (item.extra_discount_amount || 0), 0);
+
+    // Use calculated amounts if not provided or if they differ (prefer server calculation)
+    sales_tax_amount = calculated_sales_tax;
+    additional_tax_amount = calculated_additional_tax;
+    discount_amount = calculated_discount;
+    extra_discount_amount = calculated_extra_discount;
+
+    const total_amount = items_total + sales_tax_amount + additional_tax_amount - discount_amount - extra_discount_amount;
+
+    console.log(`[Order Update] ID: ${id}, Shop: ${shop_id}, Items Total: ${items_total}, Tax: ${sales_tax_amount + additional_tax_amount}, Discount: ${discount_amount + extra_discount_amount}, Grand Total: ${total_amount}`);
 
     try {
       db.transaction(() => {
@@ -1186,16 +1283,29 @@ async function startServer() {
         // 3. Update Order Header
         db.prepare(`
           UPDATE orders 
-          SET shop_id = ?, order_booker_id = ?, order_date = ?, estimated_delivery_date = ?, total_amount = ?, sales_tax_pct = ?, sales_tax_amount = ?, additional_tax_pct = ?, additional_tax_amount = ?, is_cancelled = ''
+          SET shop_id = ?, order_booker_id = ?, order_date = ?, estimated_delivery_date = ?, total_amount = ?, 
+              sales_tax_pct = ?, sales_tax_amount = ?, additional_tax_pct = ?, additional_tax_amount = ?, 
+              discount_pct = ?, discount_amount = ?, extra_discount_pct = ?, extra_discount_amount = ?,
+              is_cancelled = ''
           WHERE id = ?
-        `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, sales_tax_pct || 0, sales_tax_amount || 0, additional_tax_pct || 0, additional_tax_amount || 0, id);
+        `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, 
+               sales_tax_pct || 0, sales_tax_amount || 0, additional_tax_pct || 0, additional_tax_amount || 0, 
+               discount_pct || 0, discount_amount || 0, extra_discount_pct || 0, extra_discount_amount || 0,
+               id);
 
         // 4. Process New Items
         for (const item of items) {
           db.prepare(`
-            INSERT INTO order_items (order_id, product_id, quantity, price, status, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(id, item.product_id, item.quantity, item.price, item.status || 'Pending', item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0);
+            INSERT INTO order_items (
+              order_id, product_id, quantity, price, status, 
+              sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
+              discount_pct, discount_amount, extra_discount_pct, extra_discount_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            id, item.product_id, item.quantity, item.price, item.status || 'Pending', 
+            item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0,
+            item.discount_pct || 0, item.discount_amount || 0, item.extra_discount_pct || 0, item.extra_discount_amount || 0
+          );
         }
       })();
       res.json({ success: true });
@@ -1280,7 +1390,13 @@ async function startServer() {
   app.put("/api/deliveries/:id", (req, res) => {
     const { id } = req.params;
     const { order_id, salesman_id, delivery_date, items } = req.body;
-    const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+    
+    const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+    const tax_total = items.reduce((sum: number, item: any) => sum + (item.sales_tax_amount || 0), 0);
+    const add_tax_total = items.reduce((sum: number, item: any) => sum + (item.additional_tax_amount || 0), 0);
+    const discount_total = items.reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
+    const extra_discount_total = items.reduce((sum: number, item: any) => sum + (item.extra_discount_amount || 0), 0);
+    const totalAmount = items_total + tax_total + add_tax_total - discount_total - extra_discount_total;
 
     const transaction = db.transaction(() => {
       // 0. Store old order ID for cleanup
@@ -1326,9 +1442,17 @@ async function startServer() {
 
       for (const item of items) {
         db.prepare(`
-          INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(id, item.order_item_id, item.product_id, item.quantity, item.price);
+          INSERT INTO delivery_items (
+            delivery_id, order_item_id, product_id, quantity, price, 
+            sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
+            discount_pct, discount_amount, extra_discount_pct, extra_discount_amount
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, item.order_item_id, item.product_id, item.quantity, item.price, 
+          item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0,
+          item.discount_pct || 0, item.discount_amount || 0, item.extra_discount_pct || 0, item.extra_discount_amount || 0
+        );
 
         const stats = db.prepare(`
           SELECT oi.quantity as ordered, COALESCE(SUM(di.quantity), 0) as delivered, oi.order_id
@@ -1432,7 +1556,12 @@ async function startServer() {
       }
 
       // 1. Create Delivery Header
-      const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+      const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+      const tax_total = items.reduce((sum: number, item: any) => sum + (item.sales_tax_amount || 0), 0);
+      const add_tax_total = items.reduce((sum: number, item: any) => sum + (item.additional_tax_amount || 0), 0);
+      const discount_total = items.reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
+      const extra_discount_total = items.reduce((sum: number, item: any) => sum + (item.extra_discount_amount || 0), 0);
+      const totalAmount = items_total + tax_total + add_tax_total - discount_total - extra_discount_total;
 
       const deliveryResult = db.prepare(`
         INSERT INTO deliveries (order_id, salesman_id, delivery_date, total_amount)
@@ -1465,9 +1594,17 @@ async function startServer() {
 
         // Insert delivery item
         db.prepare(`
-          INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price, sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(deliveryId, item.order_item_id, item.product_id, item.quantity, item.price, item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0);
+          INSERT INTO delivery_items (
+            delivery_id, order_item_id, product_id, quantity, price, 
+            sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
+            discount_pct, discount_amount, extra_discount_pct, extra_discount_amount
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          deliveryId, item.order_item_id, item.product_id, item.quantity, item.price, 
+          item.sales_tax_pct || 0, item.sales_tax_amount || 0, item.additional_tax_pct || 0, item.additional_tax_amount || 0,
+          item.discount_pct || 0, item.discount_amount || 0, item.extra_discount_pct || 0, item.extra_discount_amount || 0
+        );
 
         // Update order item status
         const newDeliveredTotal = orderItem.delivered_quantity + item.quantity;
