@@ -68,6 +68,10 @@ export interface Order {
   order_booker_name: string;
   is_cancelled?: string;
   has_delivery?: boolean | number;
+  sales_tax_pct?: number;
+  sales_tax_amount?: number;
+  additional_tax_pct?: number;
+  additional_tax_amount?: number;
 }
 
 export interface OrderItem {
@@ -80,6 +84,10 @@ export interface OrderItem {
   brand: string;
   status: 'pending' | 'delivered' | 'cancelled' | 'partially_delivered';
   delivered_quantity?: number;
+  sales_tax_pct?: number;
+  sales_tax_amount?: number;
+  additional_tax_pct?: number;
+  additional_tax_amount?: number;
 }
 
 export interface StockValuationReport {
@@ -223,4 +231,8 @@ export interface DeliveryItem {
   price: number;
   order_id?: number;
   order_ref?: number;
+  sales_tax_pct?: number;
+  sales_tax_amount?: number;
+  additional_tax_pct?: number;
+  additional_tax_amount?: number;
 }

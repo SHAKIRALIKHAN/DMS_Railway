@@ -340,7 +340,11 @@ export const NewOrderModal = ({
     product_id: string, 
     quantity: number, 
     price: number, 
-    product_name: string
+    product_name: string,
+    sales_tax_pct: number,
+    sales_tax_amount: number,
+    additional_tax_pct: number,
+    additional_tax_amount: number
   }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showLOV, setShowLOV] = useState(false);
@@ -354,6 +358,10 @@ export const NewOrderModal = ({
           const data = await res.json();
           setItems(data.map((item: any) => ({
             ...item,
+            sales_tax_pct: item.sales_tax_pct || 0,
+            sales_tax_amount: item.sales_tax_amount || 0,
+            additional_tax_pct: item.additional_tax_pct || 0,
+            additional_tax_amount: item.additional_tax_amount || 0,
             product_name: products.find(p => p.product_id === item.product_id)?.product_name || 'Unknown Product'
           })));
         } catch (err) {
@@ -393,13 +401,20 @@ export const NewOrderModal = ({
   const addItem = (product: Product) => {
     const existing = items.find(i => i.product_id === product.product_id);
     if (existing) {
-      setItems(items.map(i => i.product_id === product.product_id ? { ...i, quantity: i.quantity + 1 } : i));
+      const newQty = existing.quantity + 1;
+      const newTaxAmount = (existing.price * newQty * existing.sales_tax_pct) / 100;
+      const newAddTaxAmount = (existing.price * newQty * (existing.additional_tax_pct || 0)) / 100;
+      setItems(items.map(i => i.product_id === product.product_id ? { ...i, quantity: newQty, sales_tax_amount: newTaxAmount, additional_tax_amount: newAddTaxAmount } : i));
     } else {
       setItems([...items, { 
         product_id: product.product_id, 
         quantity: 1, 
         price: product.trade_price,
-        product_name: product.product_name
+        product_name: product.product_name,
+        sales_tax_pct: 0,
+        sales_tax_amount: 0,
+        additional_tax_pct: 0,
+        additional_tax_amount: 0
       }]);
     }
     setSearchQuery('');
@@ -411,10 +426,43 @@ export const NewOrderModal = ({
   };
 
   const updateQty = (productId: string, qty: number) => {
-    setItems(items.map(i => i.product_id === productId ? { ...i, quantity: Math.max(1, qty) } : i));
+    setItems(items.map(i => {
+      if (i.product_id === productId) {
+        const newQty = Math.max(1, qty);
+        const newTaxAmount = (i.price * newQty * i.sales_tax_pct) / 100;
+        const newAddTaxAmount = (i.price * newQty * (i.additional_tax_pct || 0)) / 100;
+        return { ...i, quantity: newQty, sales_tax_amount: newTaxAmount, additional_tax_amount: newAddTaxAmount };
+      }
+      return i;
+    }));
   };
 
-  const totalAmount = items.reduce((sum, i) => sum + (i.quantity * i.price), 0);
+  const updateTax = (productId: string, pct: number) => {
+    setItems(items.map(i => {
+      if (i.product_id === productId) {
+        const newPct = Math.max(0, pct);
+        const newTaxAmount = (i.price * i.quantity * newPct) / 100;
+        return { ...i, sales_tax_pct: newPct, sales_tax_amount: newTaxAmount };
+      }
+      return i;
+    }));
+  };
+
+  const updateAdditionalTax = (productId: string, pct: number) => {
+    setItems(items.map(i => {
+      if (i.product_id === productId) {
+        const newPct = Math.max(0, pct);
+        const newTaxAmount = (i.price * i.quantity * newPct) / 100;
+        return { ...i, additional_tax_pct: newPct, additional_tax_amount: newTaxAmount };
+      }
+      return i;
+    }));
+  };
+
+  const itemsTotal = items.reduce((sum, i) => sum + (i.quantity * i.price), 0);
+  const salesTaxTotal = items.reduce((sum, i) => sum + (i.sales_tax_amount || 0), 0);
+  const additionalTaxTotal = items.reduce((sum, i) => sum + (i.additional_tax_amount || 0), 0);
+  const finalTotal = itemsTotal + salesTaxTotal + additionalTaxTotal;
 
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -435,6 +483,10 @@ export const NewOrderModal = ({
           ...masterData,
           shop_id: parseInt(masterData.shop_id),
           order_booker_id: parseInt(masterData.order_booker_id),
+          sales_tax_pct: 0,
+          sales_tax_amount: salesTaxTotal,
+          additional_tax_pct: 0,
+          additional_tax_amount: additionalTaxTotal,
           items
         })
       });
@@ -587,51 +639,82 @@ export const NewOrderModal = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Quantity</th>
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Subtotal</th>
-                    <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right"></th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Quantity</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right text-xs">Excl. Tax</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax (%)</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right whitespace-nowrap">Add. Tax (%)</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax Amount</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Total</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map(item => (
                     <tr key={item.product_id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <p className="text-sm font-bold text-slate-900">{item.product_name}</p>
                         <p className="text-[10px] text-slate-400 font-mono tracking-wider">{item.product_id}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-3">
                           <button 
                             type="button"
                             onClick={() => updateQty(item.product_id, item.quantity - 1)}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                            className="w-6 h-6 flex items-center justify-center bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors"
                           >
                             -
                           </button>
                           <input 
                             type="number" 
-                            className="w-16 text-center bg-transparent font-bold text-slate-900 border-none outline-none focus:ring-0"
+                            className="w-12 text-center bg-transparent font-bold text-slate-900 border-none outline-none focus:ring-0 text-xs"
                             value={item.quantity}
                             onChange={e => updateQty(item.product_id, parseInt(e.target.value) || 1)}
                           />
                           <button 
                             type="button"
                             onClick={() => updateQty(item.product_id, item.quantity + 1)}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                            className="w-6 h-6 flex items-center justify-center bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors"
                           >
                             +
                           </button>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">
+                      <td className="px-4 py-4 text-right text-xs font-medium text-slate-600">
                         {formatPKR(item.price)}
                       </td>
-                      <td className="px-6 py-4 text-right font-bold text-slate-900">
+                      <td className="px-4 py-4 text-right text-xs font-semibold text-slate-700">
                         {formatPKR(item.quantity * item.price)}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-4 text-right">
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          min="0"
+                          className="w-16 px-2 py-1 bg-white border border-slate-200 rounded text-right text-[10px] outline-none focus:border-indigo-600"
+                          value={item.sales_tax_pct}
+                          onChange={e => updateTax(item.product_id, parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          min="0"
+                          className="w-16 px-2 py-1 bg-white border border-slate-200 rounded text-right text-[10px] outline-none focus:border-indigo-600"
+                          value={item.additional_tax_pct}
+                          onChange={e => updateAdditionalTax(item.product_id, parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-right text-[10px] font-medium text-slate-600 leading-tight">
+                        <p>ST: {formatPKR(item.sales_tax_amount)}</p>
+                        <p>AT: {formatPKR(item.additional_tax_amount)}</p>
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold text-slate-900 text-sm">
+                        {formatPKR((item.quantity * item.price) + (item.sales_tax_amount || 0) + (item.additional_tax_amount || 0))}
+                      </td>
+                      <td className="px-4 py-4 text-right">
                         <button 
                           type="button"
                           onClick={() => removeItem(item.product_id)}
@@ -644,7 +727,7 @@ export const NewOrderModal = ({
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={10} className="px-6 py-12 text-center text-slate-400">
                         <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
                         <p className="text-sm font-medium">No items added to the order</p>
                       </td>
@@ -656,11 +739,26 @@ export const NewOrderModal = ({
 
             <div className="bg-indigo-600 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-indigo-100">
               <div className="flex gap-8 items-center">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Bill Amount</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-bold opacity-60">PKR</span>
-                    <p className="text-3xl font-black">{totalAmount.toLocaleString()}</p>
+                <div className="flex gap-12 items-center">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Subtotal</p>
+                    <p className="text-xl font-bold">{formatPKR(itemsTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Sales Tax Total</p>
+                    <p className="text-xl font-bold">{formatPKR(salesTaxTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Add. Tax Total</p>
+                    <p className="text-xl font-bold">{formatPKR(additionalTaxTotal)}</p>
+                  </div>
+                  <div className="h-10 w-px bg-white/20"></div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Grand Total</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-bold opacity-60">PKR</span>
+                      <p className="text-3xl font-black">{finalTotal.toLocaleString()}</p>
+                    </div>
                   </div>
                 </div>
                 {order && order.status?.toLowerCase() !== 'cancelled' && (
