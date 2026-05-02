@@ -33,6 +33,8 @@ import {
   LifeBuoy,
   Filter,
   RotateCcw,
+  Hash,
+  CheckCircle,
   SlidersHorizontal,
   ShoppingBag,
   ChevronDown,
@@ -88,6 +90,236 @@ import { RegisterShopModal, ShopMasterModal, RegisterSupplierModal, SupplierMast
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+const OrderCancellationScreen = ({ onClose, orders, formatPKR }: { onClose: () => void, orders: Order[], formatPKR: (amt: number) => string }) => {
+  const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<boolean>(false);
+  const [fromOrderId, setFromOrderId] = useState<string>('');
+  const [toOrderId, setToOrderId] = useState<string>('');
+
+  const handleSelectRange = () => {
+    const from = parseInt(fromOrderId.replace(/\D/g, ''));
+    const to = parseInt(toOrderId.replace(/\D/g, ''));
+    if (isNaN(from) || isNaN(to)) return;
+
+    const rangeIds = orders
+      .filter(o => o.id >= from && o.id <= to)
+      .map(o => o.id);
+    
+    setSelectedOrderIds(prev => Array.from(new Set([...prev, ...rangeIds])));
+  };
+
+  const toggleOrder = (id: number) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(id) ? prev.filter(oid => oid !== id) : [...prev, id]
+    );
+  };
+
+  const handleCancel = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedOrderIds })
+      });
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error('Server returned an invalid response');
+      }
+
+      if (!response.ok) throw new Error(data.error || 'Failed to cancel orders');
+      
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      console.error('Cancellation error:', err);
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white w-full max-w-4xl max-h-[80vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white"
+      >
+        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <RotateCcw className="text-rose-600" size={24} />
+              Order Cancellation Transaction (ORD02)
+            </h2>
+            <p className="text-slate-500 font-medium">Bulk cancel orders by marking them as cancelled</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-3 hover:bg-white rounded-2xl transition-colors text-slate-400 hover:text-slate-900 border border-transparent hover:border-slate-100"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl flex items-center gap-3">
+              <AlertTriangle size={20} />
+              <p className="text-sm font-bold">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl flex items-center gap-3 animate-bounce">
+              <CheckCircle size={20} />
+              <p className="text-sm font-bold">Orders marked as cancelled successfully!</p>
+            </div>
+          )}
+
+          <div className="mb-8 p-6 bg-slate-50 rounded-3xl border border-slate-200 flex flex-wrap items-end gap-6">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">From Order ID</label>
+              <div className="relative">
+                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text"
+                  placeholder="e.g. 1"
+                  value={fromOrderId}
+                  onChange={(e) => setFromOrderId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-3 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">To Order ID</label>
+              <div className="relative">
+                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text"
+                  placeholder="e.g. 10"
+                  value={toOrderId}
+                  onChange={(e) => setToOrderId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-3 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+              </div>
+            </div>
+            <button 
+              onClick={handleSelectRange}
+              className="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
+            >
+              <CheckCircle size={18} />
+              Select Range
+            </button>
+            <button 
+              onClick={() => setSelectedOrderIds([])}
+              className="px-6 py-3 rounded-2xl text-sm font-bold text-slate-600 hover:bg-white transition-all border border-slate-200"
+            >
+              Clear Selection
+            </button>
+          </div>
+
+          <div className="bg-slate-50 rounded-3xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="px-6 py-4">
+                    <input 
+                      type="checkbox" 
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedOrderIds(orders.map(o => o.id));
+                        else setSelectedOrderIds([]);
+                      }}
+                      checked={selectedOrderIds.length === orders.length && orders.length > 0}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </th>
+                  <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Order ID</th>
+                  <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Shop</th>
+                  <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                  <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Date</th>
+                  <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">No active orders available for cancellation</td>
+                  </tr>
+                ) : (
+                  orders.map(order => (
+                    <tr key={order.id} className={cn("hover:bg-slate-50 transition-colors", selectedOrderIds.includes(order.id) && "bg-rose-50/30")}>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedOrderIds.includes(order.id)}
+                          onChange={() => toggleOrder(order.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                        />
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-slate-900 underline decoration-slate-200 cursor-pointer">
+                        #ORD-{order.id.toString().padStart(4, '0')}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-700">{order.shop_name}</td>
+                      <td className="px-6 py-4 text-sm font-black text-slate-900">{formatPKR(order.total_amount)}</td>
+                      <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(order.order_date).toLocaleDateString()}</td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                          order.status?.toLowerCase() === 'pending' ? "bg-amber-50 text-amber-600" : 
+                          order.status?.toLowerCase() === 'delivered' ? "bg-emerald-50 text-emerald-600" :
+                          order.status?.toLowerCase() === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                          order.status?.toLowerCase() === 'cancelled' ? "bg-rose-50 text-rose-600" :
+                          "bg-slate-50 text-slate-600"
+                        )}>
+                          {order.status?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div className="text-slate-500 text-sm font-bold">
+            {selectedOrderIds.length} orders selected for cancellation
+          </div>
+          <div className="flex gap-4">
+            <button 
+              onClick={onClose}
+              className="px-6 py-3 rounded-2xl text-sm font-bold text-slate-600 hover:bg-white transition-all border border-transparent hover:border-slate-200"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleCancel}
+              disabled={selectedOrderIds.length === 0 || isProcessing}
+              className="bg-rose-600 text-white px-8 py-3 rounded-2xl text-sm font-black hover:bg-rose-700 transition-all shadow-xl shadow-rose-100 disabled:opacity-50 flex items-center gap-2"
+            >
+              {isProcessing ? <RotateCcw className="animate-spin" size={18} /> : <X size={18} />}
+              Confirm Cancellation
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 // --- Sidebar and Stat Components ---
 
@@ -282,6 +514,7 @@ export default function App() {
   const [isShopMasterModalOpen, setIsShopMasterModalOpen] = useState(false);
   const [isSupplierMasterModalOpen, setIsSupplierMasterModalOpen] = useState(false);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
+  const [isOrderCancellationOpen, setIsOrderCancellationOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -477,6 +710,7 @@ export default function App() {
       setIsShopMasterModalOpen(false);
       setIsSupplierMasterModalOpen(false);
       setIsNewOrderModalOpen(false);
+      setIsOrderCancellationOpen(false);
       setIsUnitModalOpen(false);
       setIsLocationModalOpen(false);
       setSelectedOrder(null);
@@ -490,6 +724,10 @@ export default function App() {
       case 'VA01': 
       case 'OR05':
         setIsNewOrderModalOpen(true); 
+        break;
+      case 'ORD02':
+      case 'VA02':
+        setIsOrderCancellationOpen(true);
         break;
       case 'VA03': 
       case 'OR01':
@@ -687,15 +925,17 @@ export default function App() {
   const filteredOrders = orders.filter(order => {
     const f = filters.orders;
     if (f.search && !(
-      order.id.toString().includes(f.search) || 
+      order.id.toString().includes(f.search.replace(/\D/g, '')) || 
       order.shop_name?.toLowerCase().includes(f.search.toLowerCase()) ||
       order.order_booker_name?.toLowerCase().includes(f.search.toLowerCase())
     )) return false;
     if (f.status !== 'any') {
-      if (f.status === 'pending') {
-        if (order.status !== 'pending' && order.status !== 'partially_delivered') return false;
+      const orderStatus = order.status?.toLowerCase();
+      const filterStatus = f.status.toLowerCase();
+      if (filterStatus === 'pending') {
+        if (orderStatus !== 'pending' && orderStatus !== 'partially_delivered') return false;
       } else {
-        if (order.status !== f.status) return false;
+        if (orderStatus !== filterStatus) return false;
       }
     }
     return true;
@@ -1342,6 +1582,18 @@ export default function App() {
                               </div>
                             </button>
                             <button 
+                              onClick={() => setIsOrderCancellationOpen(true)}
+                              className="flex flex-col items-center gap-3 p-6 bg-white/5 hover:bg-white/10 rounded-3xl transition-all border border-white/10 group"
+                            >
+                              <div className="p-3 bg-rose-500/20 rounded-2xl group-hover:scale-110 transition-transform">
+                                <RotateCcw size={24} className="text-rose-400" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-bold">Cancel Orders</p>
+                                <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1">ORD02</p>
+                              </div>
+                            </button>
+                            <button 
                               onClick={() => setIsLocationModalOpen(true)}
                               className="flex flex-col items-center gap-3 p-6 bg-white/5 hover:bg-white/10 rounded-3xl transition-all border border-white/10 group"
                             >
@@ -1403,12 +1655,13 @@ export default function App() {
                               <p className="text-sm font-black text-slate-900">{formatPKR(order.total_amount)}</p>
                               <span className={cn(
                                 "text-[8px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full inline-block mt-1",
-                                order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                                order.status === 'pending' ? "bg-amber-50 text-amber-600" :
-                                order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
-                                "bg-rose-50 text-rose-600"
+                                order.status?.toLowerCase() === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
+                                order.status?.toLowerCase() === 'pending' ? "bg-amber-50 text-amber-600" :
+                                order.status?.toLowerCase() === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                                order.status?.toLowerCase() === 'cancelled' ? "bg-rose-50 text-rose-600" :
+                                "bg-slate-50 text-slate-600"
                               )}>
-                                {order.status.replace('_', ' ')}
+                                {order.status?.replace('_', ' ')}
                               </span>
                             </div>
                           </div>
@@ -2312,7 +2565,7 @@ export default function App() {
                                     </div>
                                     <div>
                                       <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
-                                      <p className="text-[10px] text-slate-400">#ORD-{suggestion.id.toString().padStart(4, '0')} • {suggestion.order_booker_name}</p>
+                                      <p className="text-[10px] text-slate-400">#ORD-{suggestion.id.toString().padStart(4, '0')} • {suggestion.order_booker_name} • <span className={cn((suggestion.status?.toLowerCase() === 'cancelled' || suggestion.is_cancelled === 'X') ? "text-rose-500 font-bold" : "")}>{suggestion.is_cancelled === 'X' ? 'Cancelled' : suggestion.status}</span></p>
                                     </div>
                                   </button>
                                 ))}
@@ -2348,6 +2601,13 @@ export default function App() {
                               <span>Order Bookers</span>
                             </button>
                             <button 
+                              onClick={() => setIsOrderCancellationOpen(true)}
+                              className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center gap-2"
+                            >
+                              <RotateCcw size={18} />
+                              <span>Cancel Orders (ORD02)</span>
+                            </button>
+                            <button 
                               onClick={() => setIsNewOrderModalOpen(true)}
                               className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
                             >
@@ -2362,6 +2622,7 @@ export default function App() {
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-10 text-center">C</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order Booker</th>
@@ -2379,6 +2640,16 @@ export default function App() {
                                 onClick={() => setSelectedOrder(order)}
                                 className="hover:bg-slate-50 transition-colors cursor-pointer group"
                               >
+                                <td className="px-6 py-4 text-center">
+                                  <div className={cn(
+                                    "w-5 h-5 mx-auto rounded border flex items-center justify-center transition-colors shadow-sm",
+                                    order.is_cancelled === 'X' 
+                                      ? "bg-rose-500 border-rose-600 text-white" 
+                                      : "bg-white border-slate-200"
+                                  )}>
+                                    {order.is_cancelled === 'X' && <span className="text-[10px] font-black">X</span>}
+                                  </div>
+                                </td>
                                 <td className="px-6 py-4">
                                   <span className="text-sm font-mono text-slate-500">#ORD-{order.id.toString().padStart(4, '0')}</span>
                                 </td>
@@ -2400,25 +2671,57 @@ export default function App() {
                                 <td className="px-6 py-4">
                                   <span className={cn(
                                     "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
-                                    order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                                    order.status === 'pending' ? "bg-amber-50 text-amber-600" : 
-                                    order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
-                                    "bg-rose-50 text-rose-600"
+                                    order.status?.toLowerCase() === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
+                                    order.status?.toLowerCase() === 'pending' ? "bg-amber-50 text-amber-600" : 
+                                    order.status?.toLowerCase() === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                                    order.status?.toLowerCase() === 'cancelled' ? "bg-rose-50 text-rose-600" :
+                                    "bg-slate-50 text-slate-600"
                                   )}>
-                                    {order.status.replace('_', ' ')}
+                                    {order.status?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingOrder(order);
-                                      setIsNewOrderModalOpen(true);
-                                    }}
-                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                    <Edit size={18} />
-                                  </button>
+                                  <div className="flex justify-end gap-1">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingOrder(order);
+                                        setIsNewOrderModalOpen(true);
+                                      }}
+                                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                                      title="Edit Order"
+                                    >
+                                      <Edit size={18} />
+                                    </button>
+                                    {order.status?.toLowerCase() !== 'cancelled' && order.is_cancelled !== 'X' && order.status?.toLowerCase() !== 'delivered' && (
+                                      <button 
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (!confirm(`Are you sure you want to cancel Order #ORD-${order.id.toString().padStart(4, '0')}?`)) return;
+                                          try {
+                                            const response = await fetch('/api/orders/cancel', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ orderIds: [order.id] })
+                                            });
+                                            if (!response.ok) {
+                                              const data = await response.json();
+                                              throw new Error(data.error || 'Failed to cancel');
+                                            }
+                                            fetchOrders();
+                                            fetchProducts();
+                                            fetchStats();
+                                          } catch (err: any) {
+                                            alert(err.message);
+                                          }
+                                        }}
+                                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
+                                        title="Quick Cancel"
+                                      >
+                                        <RotateCcw size={18} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -2753,6 +3056,11 @@ export default function App() {
           <OrderDetailsModal 
             order={selectedOrder} 
             onClose={() => setSelectedOrder(null)} 
+            onSuccess={() => {
+              fetchOrders();
+              fetchProducts();
+              fetchStats();
+            }}
             formatPKR={formatPKR}
           />
         )}
@@ -2916,6 +3224,22 @@ export default function App() {
               fetchProducts();
               fetchStats();
             }}
+            formatPKR={formatPKR}
+          />
+        )}
+        {isOrderCancellationOpen && (
+          <OrderCancellationScreen 
+            onClose={() => {
+              setIsOrderCancellationOpen(false);
+              fetchOrders();
+              fetchProducts();
+              fetchStats();
+            }}
+            orders={orders.filter(o => 
+              o.status?.toLowerCase() !== 'cancelled' && 
+              o.is_cancelled !== 'X' && 
+              !o.has_delivery
+            )}
             formatPKR={formatPKR}
           />
         )}

@@ -66,6 +66,8 @@ export interface Order {
   total_amount: number;
   shop_name: string;
   order_booker_name: string;
+  is_cancelled?: string;
+  has_delivery?: boolean | number;
 }
 
 export interface OrderItem {
@@ -76,7 +78,7 @@ export interface OrderItem {
   price: number;
   product_name: string;
   brand: string;
-  status: 'Pending' | 'Delivered' | 'Cancelled' | 'Partially Delivered';
+  status: 'pending' | 'delivered' | 'cancelled' | 'partially_delivered';
   delivered_quantity?: number;
 }
 

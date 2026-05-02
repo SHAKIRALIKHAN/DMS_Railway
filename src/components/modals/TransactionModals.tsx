@@ -441,9 +441,36 @@ export const NewOrderModal = ({
       if (res.ok) {
         onSuccess();
         onClose();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to save order");
       }
     } catch (err) {
       console.error("Failed to save order", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    if (!confirm(`Are you sure you want to cancel Order #ORD-${order.id.toString().padStart(4, '0')}? This will reverse stock but cannot be undone.`)) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [order.id] })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to cancel order');
+      
+      alert("Order cancelled successfully");
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -628,16 +655,29 @@ export const NewOrderModal = ({
             </div>
 
             <div className="bg-indigo-600 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-indigo-100">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Bill Amount</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-bold opacity-60">PKR</span>
-                  <p className="text-3xl font-black">{totalAmount.toLocaleString()}</p>
+              <div className="flex gap-8 items-center">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Bill Amount</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-bold opacity-60">PKR</span>
+                    <p className="text-3xl font-black">{totalAmount.toLocaleString()}</p>
+                  </div>
                 </div>
+                {order && order.status?.toLowerCase() !== 'cancelled' && (
+                  <button 
+                    type="button"
+                    onClick={handleCancelOrder}
+                    disabled={isSubmitting}
+                    className="bg-rose-500 text-white px-6 py-4 rounded-2xl font-black text-sm hover:bg-rose-600 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 size={18} />
+                    <span>Cancel Order</span>
+                  </button>
+                )}
               </div>
               <button 
                 type="submit"
-                disabled={isSubmitting || items.length === 0}
+                disabled={isSubmitting || items.length === 0 || order?.status?.toLowerCase() === 'cancelled'}
                 className="bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2 disabled:opacity-50"
               >
                 {isSubmitting ? 'Processing...' : (

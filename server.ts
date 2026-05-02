@@ -15,6 +15,9 @@ try {
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   
+  // Migration for orders is_cancelled
+  try { db.exec("ALTER TABLE orders ADD COLUMN is_cancelled TEXT DEFAULT ''"); } catch(e) {}
+  
   // Initialize Database Schema
   try {
     db.prepare("SELECT unit_code FROM units LIMIT 1").get();
@@ -111,6 +114,7 @@ try {
     estimated_delivery_date DATETIME,
     status TEXT DEFAULT 'pending',
     total_amount REAL NOT NULL,
+    is_cancelled TEXT DEFAULT '',
     FOREIGN KEY (shop_id) REFERENCES shops(id),
     FOREIGN KEY (order_booker_id) REFERENCES order_bookers(id)
   );
@@ -657,19 +661,20 @@ async function startServer() {
   // API Routes
   app.get("/api/stats", (req, res) => {
     try {
-      const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get() as { total: number };
-      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get() as { count: number };
+      const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered' AND is_cancelled != 'X'").get() as { total: number };
+      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'partially_delivered') AND is_cancelled != 'X'").get() as { count: number };
       const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
       const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
       
       const statusCounts = db.prepare(`
         SELECT status as name, COUNT(*) as value 
         FROM orders 
+        WHERE is_cancelled != 'X'
         GROUP BY status
       `).all() as { name: string; value: number }[];
 
       const formattedStatusCounts = statusCounts.map(s => ({
-        name: s.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+        name: (s.name || 'unknown').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
         value: s.value
       }));
 
@@ -783,7 +788,7 @@ async function startServer() {
           lowStock: lowStock.count || 0,
           totalShops: totalShops.count || 0,
           orderStatusCounts: statusCounts.map((s: any) => ({
-            name: s.name.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            name: (s.name || 'unknown').split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
             value: s.value
           })),
           salesTrend
@@ -991,7 +996,8 @@ async function startServer() {
 
   app.get("/api/orders", (req, res) => {
     const orders = db.prepare(`
-      SELECT o.*, r.shop_name, ob.name as order_booker_name 
+      SELECT o.*, r.shop_name, ob.name as order_booker_name,
+      (SELECT COUNT(*) FROM deliveries WHERE order_id = o.id) > 0 as has_delivery
       FROM orders o
       JOIN shops r ON o.shop_id = r.id
       JOIN order_bookers ob ON o.order_booker_id = ob.id
@@ -1012,22 +1018,8 @@ async function startServer() {
 
       for (const item of items) {
         db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
-          orderId, item.product_id, item.quantity, item.price, 'Pending'
+          orderId, item.product_id, item.quantity, item.price, 'pending'
         );
-        
-        // Reduce stock
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.quantity, item.product_id);
-        
-        // FIFO Batch reduction
-        let remainingToReduce = item.quantity;
-        const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
-        
-        for (const batch of batches) {
-          if (remainingToReduce <= 0) break;
-          const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
-          db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?").run(reduce, batch.id);
-          remainingToReduce -= reduce;
-        }
       }
       return orderId;
     });
@@ -1144,26 +1136,32 @@ async function startServer() {
 
     try {
       db.transaction(() => {
-        // 1. Return old stock
-        const oldItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(id) as any[];
-        for (const oldItem of oldItems) {
-          // Add back to product stock
-          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
-            .run(oldItem.quantity, oldItem.product_id);
-          
-          // Return to batches (Last-In-First-Return or just back to the most recent batch)
-          // We'll return to the batches that have space or the most recent one
-          db.prepare(`
-            UPDATE product_batches 
-            SET remaining_quantity = remaining_quantity + ? 
-            WHERE id = (
-              SELECT id FROM product_batches 
-              WHERE product_id = ? 
-              ORDER BY received_date DESC 
-              LIMIT 1
-            )
-          `).run(oldItem.quantity, oldItem.product_id);
+        // 0. Check for dependencies that block update
+        
+        // Check Deliveries (Header or Items)
+        const deliveryDetails = db.prepare(`
+          SELECT 
+            (SELECT COUNT(*) FROM deliveries WHERE order_id = ?) as header_count,
+            (SELECT COUNT(*) FROM delivery_items di JOIN order_items oi ON di.order_item_id = oi.id WHERE oi.order_id = ?) as item_count
+        `).get(id, id) as { header_count: number; item_count: number };
+
+        if (deliveryDetails.header_count > 0 || deliveryDetails.item_count > 0) {
+          throw new Error(`Cannot modify order: It is already linked to a Delivery record${deliveryDetails.item_count > 0 ? " with items" : ""}.`);
         }
+
+        // Check Load Plans (Allow editing if all associated plans are in 'draft')
+        const activePlans = db.prepare(`
+          SELECT lp.id, lp.status 
+          FROM load_plans lp
+          JOIN load_plan_items lpi ON lp.id = lpi.plan_id
+          WHERE lpi.order_id = ? AND lp.status != 'draft'
+        `).all(id) as any[];
+
+        if (activePlans.length > 0) {
+          throw new Error(`Cannot modify order: It is assigned to an active Load Plan (#${activePlans[0].id}, Status: ${activePlans[0].status}).`);
+        }
+
+        // 1. (Stock deduction is now handled at delivery time)
 
         // 2. Delete old items
         db.prepare("DELETE FROM order_items WHERE order_id = ?").run(id);
@@ -1171,7 +1169,7 @@ async function startServer() {
         // 3. Update Order Header
         db.prepare(`
           UPDATE orders 
-          SET shop_id = ?, order_booker_id = ?, order_date = ?, estimated_delivery_date = ?, total_amount = ?
+          SET shop_id = ?, order_booker_id = ?, order_date = ?, estimated_delivery_date = ?, total_amount = ?, is_cancelled = ''
           WHERE id = ?
         `).run(shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, id);
 
@@ -1181,28 +1179,59 @@ async function startServer() {
             INSERT INTO order_items (order_id, product_id, quantity, price, status)
             VALUES (?, ?, ?, ?, ?)
           `).run(id, item.product_id, item.quantity, item.price, item.status || 'Pending');
-
-          // Reduce stock
-          db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
-            .run(item.quantity, item.product_id);
-
-          // FIFO Batch reduction
-          let remainingToReduce = item.quantity;
-          const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
-          
-          for (const batch of batches) {
-            if (remainingToReduce <= 0) break;
-            const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
-            db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?")
-              .run(reduce, batch.id);
-            remainingToReduce -= reduce;
-          }
         }
       })();
       res.json({ success: true });
     } catch (err: any) {
       console.error("Order update failed", err);
       res.status(500).json({ error: "Failed to update order: " + err.message });
+    }
+  });
+
+  app.post("/api/orders/cancel", (req, res) => {
+    const { orderIds } = req.body;
+    if (!orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ error: "Order IDs array is required" });
+    }
+
+    try {
+      console.log(`[Order Cancel] Attempting to cancel orders: ${JSON.stringify(orderIds)}`);
+      
+      const transaction = db.transaction(() => {
+        for (const id of orderIds) {
+          // 1. Check if order exists
+          const order = db.prepare("SELECT status, is_cancelled FROM orders WHERE id = ?").get(id) as any;
+          if (!order) {
+            throw new Error(`Order #ORD-${id.toString().padStart(4, '0')} not found.`);
+          }
+          
+          if (order.is_cancelled === 'X') continue;
+
+          // 2. Check for dependencies (Deliveries)
+          const deliveryDetails = db.prepare(`
+            SELECT 
+              (SELECT COUNT(*) FROM deliveries WHERE order_id = ?) as header_count,
+              (SELECT COUNT(*) FROM delivery_items di JOIN order_items oi ON di.order_item_id = oi.id WHERE oi.order_id = ?) as item_count
+          `).get(id, id) as { header_count: number; item_count: number };
+
+          if (deliveryDetails.header_count > 0 || deliveryDetails.item_count > 0) {
+            throw new Error(`Order #ORD-${id.toString().padStart(4, '0')} cannot be cancelled: It is already linked to a Delivery record.`);
+          }
+
+          // 3. Update status to 'cancelled' and set flag 'X'
+          db.prepare("UPDATE orders SET status = 'cancelled', is_cancelled = 'X' WHERE id = ?").run(id);
+          db.prepare("UPDATE order_items SET status = 'cancelled' WHERE order_id = ?").run(id);
+          
+          // 4. Cleanup related records
+          db.prepare("DELETE FROM load_plan_items WHERE order_id = ?").run(id);
+        }
+      });
+
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Order cancellation failed", err);
+      res.status(400).json({ error: err.message || "Failed to cancel orders" });
     }
   });
 
@@ -1255,14 +1284,14 @@ async function startServer() {
         `).get(row.order_item_id) as any;
         
         let status = 'pending';
-        if (stats.delivered >= stats.ordered) status = 'Delivered';
-        else if (stats.delivered > 0) status = 'Partially Delivered';
+        if (stats.delivered >= stats.ordered) status = 'delivered';
+        else if (stats.delivered > 0) status = 'partially_delivered';
         db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(status, row.order_item_id);
       }
       
       if (oldOrderId && oldOrderId !== order_id) {
         const items = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(oldOrderId) as any[];
-        const allDelivered = items.length > 0 && items.every(i => i.status === 'Delivered');
+        const allDelivered = items.length > 0 && items.every(i => i.status === 'delivered');
         db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', oldOrderId);
       }
 
@@ -1294,8 +1323,8 @@ async function startServer() {
         affectedOrderIds.add(stats.order_id);
 
         let status = 'pending';
-        if (stats.delivered >= stats.ordered) status = 'Delivered';
-        else if (stats.delivered > 0) status = 'Partially Delivered';
+        if (stats.delivered >= stats.ordered) status = 'delivered';
+        else if (stats.delivered > 0) status = 'partially_delivered';
         db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(status, item.order_item_id);
       }
 
@@ -1303,8 +1332,8 @@ async function startServer() {
       for (const oid of affectedOrderIds) {
         const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(oid) as any[];
         if (orderItems.length > 0) {
-          const allDelivered = orderItems.every(item => item.status === 'Delivered');
-          const someDelivered = orderItems.some(item => item.status === 'Delivered' || item.status === 'Partially Delivered');
+          const allDelivered = orderItems.every(item => item.status === 'delivered');
+          const someDelivered = orderItems.some(item => item.status === 'delivered' || item.status === 'partially_delivered');
           
           let orderStatus = 'pending';
           if (allDelivered) orderStatus = 'delivered';
@@ -1379,6 +1408,12 @@ async function startServer() {
     const { order_id, salesman_id, delivery_date, items } = req.body;
     
     const transaction = db.transaction(() => {
+      // Check if order is cancelled
+      const orderData = db.prepare("SELECT status FROM orders WHERE id = ?").get(order_id) as any;
+      if (orderData?.status === "cancelled") {
+        throw new Error("Cannot create delivery for a cancelled order.");
+      }
+
       // 1. Create Delivery Header
       const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
@@ -1419,17 +1454,30 @@ async function startServer() {
 
         // Update order item status
         const newDeliveredTotal = orderItem.delivered_quantity + item.quantity;
-        let status = 'Partially Delivered';
+        let status = 'partially_delivered';
         if (newDeliveredTotal >= orderItem.quantity) {
-          status = 'Delivered';
+          status = 'delivered';
         }
         db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(status, item.order_item_id);
+
+        // DEDUCT STOCK AT DELIVERY TIME
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+        
+        let remainingToReduce = item.quantity;
+        const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
+        for (const batch of batches) {
+          if (remainingToReduce <= 0) break;
+          const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
+          db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?").run(reduce, batch.id);
+          remainingToReduce -= reduce;
+        }
       }
 
       // 3. Update Order Statuses
       for (const oid of affectedOrderIds) {
         const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(oid) as any[];
-        const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'Delivered');
+        const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'delivered');
         db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', oid);
       }
 

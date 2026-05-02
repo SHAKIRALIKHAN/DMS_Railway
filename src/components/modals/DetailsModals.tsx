@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Shop, Order, Purchase, LedgerEntry, OrderItem, Delivery, DeliveryItem } from '../../types';
 
@@ -115,14 +115,17 @@ export const LedgerModal = ({
 export const OrderDetailsModal = ({ 
   order, 
   onClose, 
+  onSuccess,
   formatPKR 
 }: { 
   order: Order, 
   onClose: () => void, 
+  onSuccess?: () => void,
   formatPKR: (amount: number) => string 
 }) => {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -150,6 +153,29 @@ export const OrderDetailsModal = ({
     };
     fetchItems();
   }, [order.id]);
+
+  const handleCancel = async () => {
+    if (!confirm(`Are you sure you want to cancel Order #ORD-${order.id.toString().padStart(4, '0')}? This will reverse stock and cannot be undone.`)) return;
+    
+    setIsCancelling(true);
+    try {
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [order.id] })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to cancel order');
+      
+      alert("Order cancelled successfully");
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
@@ -180,12 +206,13 @@ export const OrderDetailsModal = ({
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Status</p>
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full inline-block",
-                order.status === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
-                order.status === 'pending' ? "bg-amber-50 text-amber-600" : 
-                order.status === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
-                "bg-rose-50 text-rose-600"
+                order.status?.toLowerCase() === 'delivered' ? "bg-emerald-50 text-emerald-600" : 
+                order.status?.toLowerCase() === 'pending' ? "bg-amber-50 text-amber-600" : 
+                order.status?.toLowerCase() === 'partially_delivered' ? "bg-blue-50 text-blue-600" :
+                order.status?.toLowerCase() === 'cancelled' ? "bg-rose-50 text-rose-600" :
+                "bg-slate-50 text-slate-600"
               )}>
-                {order.status.replace('_', ' ')}
+                {order.status?.replace('_', ' ')}
               </span>
               <p className="text-xs text-slate-500 mt-1">{new Date(order.order_date).toLocaleString()}</p>
               <p className="text-xs font-bold text-indigo-600 mt-1 uppercase">Delivery: {order.estimated_delivery_date ? new Date(order.estimated_delivery_date).toLocaleDateString() : 'N/A'}</p>
@@ -233,7 +260,19 @@ export const OrderDetailsModal = ({
           </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+          <div>
+            {order.status?.toLowerCase() !== 'cancelled' && (
+              <button 
+                onClick={handleCancel}
+                disabled={isCancelling}
+                className="px-6 py-2 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 size={16} />
+                {isCancelling ? 'Processing...' : 'Cancel Order'}
+              </button>
+            )}
+          </div>
           <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
             Close (F3)
           </button>
