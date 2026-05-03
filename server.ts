@@ -209,12 +209,14 @@ try {
 
   CREATE TABLE IF NOT EXISTS deliveries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id INTEGER NOT NULL,
+    order_id INTEGER,
+    shop_id INTEGER,
     salesman_id INTEGER NOT NULL,
     delivery_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status TEXT DEFAULT 'completed',
     total_amount REAL NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id),
+    FOREIGN KEY (shop_id) REFERENCES shops(id),
     FOREIGN KEY (salesman_id) REFERENCES salesmen(id)
   );
 
@@ -1550,10 +1552,12 @@ async function startServer() {
     
     const transaction = db.transaction(() => {
       // Check if order is cancelled
-      const orderData = db.prepare("SELECT status FROM orders WHERE id = ?").get(order_id) as any;
+      const orderData = db.prepare("SELECT status, shop_id FROM orders WHERE id = ?").get(order_id) as any;
       if (orderData?.status === "cancelled") {
         throw new Error("Cannot create delivery for a cancelled order.");
       }
+
+      const shop_id = orderData.shop_id;
 
       // 1. Create Delivery Header
       const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
@@ -1564,16 +1568,13 @@ async function startServer() {
       const totalAmount = items_total + tax_total + add_tax_total - discount_total - extra_discount_total;
 
       const deliveryResult = db.prepare(`
-        INSERT INTO deliveries (order_id, salesman_id, delivery_date, total_amount)
-        VALUES (?, ?, ?, ?)
-      `).run(order_id, salesman_id, delivery_date, totalAmount);
+        INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, total_amount)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(order_id, shop_id, salesman_id, delivery_date, totalAmount);
       
       const deliveryId = deliveryResult.lastInsertRowid;
 
       // 2. Process Items
-      const affectedOrderIds = new Set<number>();
-      affectedOrderIds.add(order_id);
-
       for (const item of items) {
         // Validation: Check remaining balance for this order item
         const orderItem = db.prepare(`
@@ -1585,7 +1586,6 @@ async function startServer() {
         `).get(item.order_item_id) as any;
 
         if (!orderItem) throw new Error(`Order item ${item.order_item_id} not found`);
-        affectedOrderIds.add(orderItem.order_id);
         
         const remaining = orderItem.quantity - orderItem.delivered_quantity;
         if (item.quantity > remaining) {
@@ -1628,22 +1628,19 @@ async function startServer() {
         }
       }
 
-      // 3. Update Order Statuses
-      for (const oid of affectedOrderIds) {
-        const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(oid) as any[];
-        const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'delivered');
-        db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', oid);
-      }
+      // 3. Update Order Status
+      const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(order_id) as any[];
+      const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'delivered');
+      db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', order_id);
 
       // 4. Update Client Ledger (Debit the shop for the delivery)
-      const order = db.prepare("SELECT shop_id FROM orders WHERE id = ?").get(order_id) as any;
-      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(order.shop_id) as any;
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
       const currentBalance = (lastLedger?.balance || 0) + totalAmount;
 
       db.prepare(`
         INSERT INTO client_ledger (shop_id, date, description, debit, balance)
         VALUES (?, ?, ?, ?, ?)
-      `).run(order.shop_id, delivery_date, `Delivery #DEL-${deliveryId} for Order #ORD-${order_id}`, totalAmount, currentBalance);
+      `).run(shop_id, delivery_date, `Delivery #DEL-${deliveryId} for Order #ORD-${order_id}`, totalAmount, currentBalance);
 
       return deliveryId;
     });

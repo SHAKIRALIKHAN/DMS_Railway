@@ -2594,13 +2594,6 @@ export default function App() {
 
                           <div className="flex gap-2">
                             <button 
-                              onClick={() => setIsOrderBookerModalOpen(true)}
-                              className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
-                            >
-                              <Users size={18} />
-                              <span>Order Bookers</span>
-                            </button>
-                            <button 
                               onClick={() => setIsOrderCancellationOpen(true)}
                               className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center gap-2"
                             >
@@ -2787,13 +2780,6 @@ export default function App() {
                         </div>
 
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => setIsSalesmanModalOpen(true)}
-                            className="bg-white text-slate-700 px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                          >
-                            <Users size={18} />
-                            <span>Salesmen</span>
-                          </button>
                           <button 
                             onClick={() => {
                               setSelectedDelivery(null);

@@ -236,11 +236,11 @@ export const OrderDetailsModal = ({
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm italic">Loading items...</td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm italic">No items found</td>
                   </tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
@@ -555,7 +555,7 @@ export const DeliveryDetailsModal = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
                     <td className="px-4 py-3">

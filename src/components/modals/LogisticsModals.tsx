@@ -23,7 +23,7 @@ export const DeliveryModal = ({
   const [selectedSalesmanId, setSelectedSalesmanId] = useState<number | null>(delivery?.salesman_id || null);
   const [deliveryDate, setDeliveryDate] = useState(delivery?.delivery_date || new Date().toISOString().split('T')[0]);
   const [pendingItems, setPendingItems] = useState<OrderItem[]>([]);
-  const [deliveryItems, setDeliveryItems] = useState<{order_item_id: number, product_id: string, product_name: string, quantity: number, price: number, max_quantity: number, order_ref: number}[]>([]);
+  const [deliveryItems, setDeliveryItems] = useState<{order_item_id: number, product_id: string, product_name: string, quantity: number, price: number, max_quantity: number, order_ref: number, sales_tax_pct?: number, sales_tax_amount?: number, additional_tax_pct?: number, additional_tax_amount?: number, discount_pct?: number, discount_amount?: number, extra_discount_pct?: number, extra_discount_amount?: number}[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Keyboard shortcuts
@@ -101,12 +101,6 @@ export const DeliveryModal = ({
     if (deliveryItems.find(di => di.order_item_id === item.id)) return;
     const remaining = item.quantity - (item.delivered_quantity || 0);
     
-    // Calculate taxes and discounts for the remaining quantity
-    const salesTaxAmount = (item.price * remaining * (item.sales_tax_pct || 0)) / 100;
-    const additionalTaxAmount = (item.price * remaining * (item.additional_tax_pct || 0)) / 100;
-    const discountAmount = (item.price * remaining * (item.discount_pct || 0)) / 100;
-    const extraDiscountAmount = (item.price * remaining * (item.extra_discount_pct || 0)) / 100;
-
     setDeliveryItems([...deliveryItems, {
       order_item_id: item.id,
       product_id: item.product_id,
@@ -116,13 +110,13 @@ export const DeliveryModal = ({
       max_quantity: remaining,
       order_ref: item.order_id,
       sales_tax_pct: item.sales_tax_pct || 0,
-      sales_tax_amount: salesTaxAmount,
+      sales_tax_amount: (item.price * remaining * (item.sales_tax_pct || 0)) / 100,
       additional_tax_pct: item.additional_tax_pct || 0,
-      additional_tax_amount: additionalTaxAmount,
+      additional_tax_amount: (item.price * remaining * (item.additional_tax_pct || 0)) / 100,
       discount_pct: item.discount_pct || 0,
-      discount_amount: discountAmount,
+      discount_amount: (item.price * remaining * (item.discount_pct || 0)) / 100,
       extra_discount_pct: item.extra_discount_pct || 0,
-      extra_discount_amount: extraDiscountAmount
+      extra_discount_amount: (item.price * remaining * (item.extra_discount_pct || 0)) / 100
     }]);
   };
 
@@ -134,17 +128,13 @@ export const DeliveryModal = ({
     setDeliveryItems(deliveryItems.map(di => {
       if (di.order_item_id === orderItemId) {
         const newQty = Math.min(qty, di.max_quantity);
-        const salesTaxAmount = (di.price * newQty * (di.sales_tax_pct || 0)) / 100;
-        const additionalTaxAmount = (di.price * newQty * (di.additional_tax_pct || 0)) / 100;
-        const discountAmount = (di.price * newQty * (di.discount_pct || 0)) / 100;
-        const extraDiscountAmount = (di.price * newQty * (di.extra_discount_pct || 0)) / 100;
         return { 
           ...di, 
           quantity: newQty,
-          sales_tax_amount: salesTaxAmount,
-          additional_tax_amount: additionalTaxAmount,
-          discount_amount: discountAmount,
-          extra_discount_amount: extraDiscountAmount
+          sales_tax_amount: (di.price * newQty * (di.sales_tax_pct || 0)) / 100,
+          additional_tax_amount: (di.price * newQty * (di.additional_tax_pct || 0)) / 100,
+          discount_amount: (di.price * newQty * (di.discount_pct || 0)) / 100,
+          extra_discount_amount: (di.price * newQty * (di.extra_discount_pct || 0)) / 100
         };
       }
       return di;
