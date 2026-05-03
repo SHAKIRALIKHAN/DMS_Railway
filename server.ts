@@ -1548,16 +1548,29 @@ async function startServer() {
   });
 
   app.post("/api/deliveries", (req, res) => {
-    const { order_id, salesman_id, delivery_date, items } = req.body;
+    const { order_id, order_ids, salesman_id, delivery_date, items } = req.body;
     
     const transaction = db.transaction(() => {
-      // Check if order is cancelled
-      const orderData = db.prepare("SELECT status, shop_id FROM orders WHERE id = ?").get(order_id) as any;
-      if (orderData?.status === "cancelled") {
-        throw new Error("Cannot create delivery for a cancelled order.");
+      const targetOrderIds = order_ids || [order_id];
+      if (!targetOrderIds || targetOrderIds.length === 0) throw new Error("No orders specified");
+
+      // Validation: Retailer Matching (One shop per batch)
+      const ordersData = db.prepare(`
+        SELECT shop_id, id, status FROM orders WHERE id IN (${targetOrderIds.map(() => '?').join(',')})
+      `).all(...targetOrderIds) as any[];
+
+      if (ordersData.length === 0) throw new Error("Orders not found");
+
+      const shopIds = new Set(ordersData.map(o => o.shop_id));
+      if (shopIds.size > 1) {
+        throw new Error("Validation Error: Delivery batch contains multiple retailers.");
+      }
+      
+      if (ordersData.some(o => o.status === 'cancelled')) {
+        throw new Error("Cannot create delivery for cancelled orders.");
       }
 
-      const shop_id = orderData.shop_id;
+      const shop_id = ordersData[0].shop_id;
 
       // 1. Create Delivery Header
       const items_total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
@@ -1570,9 +1583,13 @@ async function startServer() {
       const deliveryResult = db.prepare(`
         INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, total_amount)
         VALUES (?, ?, ?, ?, ?)
-      `).run(order_id, shop_id, salesman_id, delivery_date, totalAmount);
+      `).run(targetOrderIds[0], shop_id, salesman_id, delivery_date, totalAmount);
       
       const deliveryId = deliveryResult.lastInsertRowid;
+
+      // Track unique order IDs actually used in this delivery
+      const affectedOrderIds = new Set<number>();
+      for (const id of targetOrderIds) affectedOrderIds.add(id);
 
       // 2. Process Items
       for (const item of items) {
@@ -1580,7 +1597,9 @@ async function startServer() {
         const orderItem = db.prepare(`
           SELECT 
             oi.*,
-            COALESCE((SELECT SUM(di.quantity) FROM delivery_items di WHERE di.order_item_id = oi.id), 0) as delivered_quantity
+            COALESCE((SELECT SUM(di.quantity) FROM delivery_items di 
+                      JOIN deliveries d ON di.delivery_id = d.id 
+                      WHERE di.order_item_id = oi.id AND d.status != 'cancelled'), 0) as delivered_quantity
           FROM order_items oi
           WHERE oi.id = ?
         `).get(item.order_item_id) as any;
@@ -1608,13 +1627,10 @@ async function startServer() {
 
         // Update order item status
         const newDeliveredTotal = orderItem.delivered_quantity + item.quantity;
-        let status = 'partially_delivered';
-        if (newDeliveredTotal >= orderItem.quantity) {
-          status = 'delivered';
-        }
-        db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(status, item.order_item_id);
+        const itemStatus = newDeliveredTotal >= orderItem.quantity ? 'delivered' : 'partially_delivered';
+        db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(itemStatus, item.order_item_id);
 
-        // DEDUCT STOCK AT DELIVERY TIME
+        // Update stock
         db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
           .run(item.quantity, item.product_id);
         
@@ -1628,19 +1644,25 @@ async function startServer() {
         }
       }
 
-      // 3. Update Order Status
-      const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(order_id) as any[];
-      const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'delivered');
-      db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', order_id);
+      // 3. Update Order Statuses for all affected orders
+      for (const oid of affectedOrderIds) {
+        const orderItems = db.prepare("SELECT status FROM order_items WHERE order_id = ?").all(oid) as any[];
+        const allDelivered = orderItems.length > 0 && orderItems.every(item => item.status === 'delivered');
+        db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(allDelivered ? 'delivered' : 'pending', oid);
+      }
 
       // 4. Update Client Ledger (Debit the shop for the delivery)
       const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
       const currentBalance = (lastLedger?.balance || 0) + totalAmount;
 
+      const batchDesc = targetOrderIds.length > 1 
+        ? `Consolidated Delivery #DEL-${deliveryId} for Orders [${targetOrderIds.map(id => '#ORD-'+id).join(', ')}]` 
+        : `Delivery #DEL-${deliveryId} for Order #ORD-${targetOrderIds[0]}`;
+
       db.prepare(`
         INSERT INTO client_ledger (shop_id, date, description, debit, balance)
         VALUES (?, ?, ?, ?, ?)
-      `).run(shop_id, delivery_date, `Delivery #DEL-${deliveryId} for Order #ORD-${order_id}`, totalAmount, currentBalance);
+      `).run(shop_id, delivery_date, batchDesc, totalAmount, currentBalance);
 
       return deliveryId;
     });
