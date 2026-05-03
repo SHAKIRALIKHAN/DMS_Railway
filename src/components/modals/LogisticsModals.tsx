@@ -153,11 +153,11 @@ export const DeliveryModal = ({
   const totalValue = deliveryItems.reduce((s, i) => s + (i.quantity * i.price), 0);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white w-full max-w-6xl h-[92vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="bg-white w-full h-full overflow-hidden flex flex-col"
       >
         {/* Header: Shop Selection */}
         <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-center bg-white">
