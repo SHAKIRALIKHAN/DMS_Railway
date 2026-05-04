@@ -17,6 +17,7 @@ import {
   Phone,
   Truck, 
   FileText, 
+  Printer,
   CreditCard,
   Store,
   ChevronRight,
@@ -3410,6 +3411,7 @@ export default function App() {
               fetchInvoices();
               setIsInvoiceModalOpen(false);
             }}
+            formatPKR={formatPKR}
           />
         )}
       </AnimatePresence>

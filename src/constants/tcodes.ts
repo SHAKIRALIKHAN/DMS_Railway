@@ -301,5 +301,23 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Manage',
     roleAssociation: 'Z_UNIT_MANAGER',
     description: 'Comprehensive management of measurement units (e.g. PCS, KG, BOX).'
+  },
+  {
+    module: 'Invoice Management',
+    parentModule: 'Sales',
+    tCode: 'INV01',
+    transactionName: 'Invoice Transaction',
+    actionType: 'Create',
+    roleAssociation: 'Z_INVOICE_ADMIN',
+    description: 'Convert deliveries into final bills/invoices for shops.'
+  },
+  {
+    module: 'Location Management',
+    parentModule: 'Master Data',
+    tCode: 'LOC01',
+    transactionName: 'Location Master',
+    actionType: 'Manage',
+    roleAssociation: 'Z_LOCATION_MANAGER',
+    description: 'Manage provinces, cities, towns, areas and sub-areas.'
   }
 ];
