@@ -278,3 +278,24 @@ export interface InvoiceItem {
   special_discount_pct: number;
   net_amount: number;
 }
+
+export interface Return {
+  id: number;
+  return_date: string;
+  shop_id: number;
+  shop_name?: string;
+  total_amount: number;
+  status: 'completed';
+}
+
+export interface ReturnItem {
+  id: number;
+  return_id: number;
+  delivery_id: number;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  unit_price: number;
+  original_delivered_qty?: number;
+  uom?: string;
+}

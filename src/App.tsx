@@ -86,6 +86,7 @@ import {
 
 // Modal component imports
 import { InvoiceTransactionModal } from './components/modals/InvoiceModals';
+import { ReturnModal } from './components/modals/ReturnModals';
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
 import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
@@ -517,6 +518,7 @@ export default function App() {
   const [isShopMasterModalOpen, setIsShopMasterModalOpen] = useState(false);
   const [isSupplierMasterModalOpen, setIsSupplierMasterModalOpen] = useState(false);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [isOrderCancellationOpen, setIsOrderCancellationOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
@@ -741,6 +743,13 @@ export default function App() {
       case 'DL01':
         setActiveTab('transactions');
         setTransactionsSubTab('deliveries');
+        break;
+      
+      case 'INV01':
+        setIsInvoiceModalOpen(true);
+        break;
+      case 'RT01':
+        setIsReturnModalOpen(true);
         break;
       
       // Material Management (MM) / Product (PR)
@@ -3366,6 +3375,17 @@ export default function App() {
             formatPKR={formatPKR}
           />
         )}
+        {isReturnModalOpen && (
+          <ReturnModal 
+            onClose={() => {
+              setIsReturnModalOpen(false);
+              fetchProducts();
+              fetchStats();
+            }}
+            shops={shops}
+          />
+        )}
+
         {isOrderCancellationOpen && (
           <OrderCancellationScreen 
             onClose={() => {

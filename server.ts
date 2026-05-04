@@ -94,6 +94,27 @@ try {
     joining_date DATE NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    shop_id INTEGER NOT NULL,
+    total_amount REAL DEFAULT 0,
+    status TEXT DEFAULT 'completed',
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_id INTEGER NOT NULL,
+    delivery_id INTEGER NOT NULL,
+    product_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price REAL NOT NULL,
+    FOREIGN KEY (return_id) REFERENCES returns(id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (delivery_id) REFERENCES deliveries(id)
+  );
+
   CREATE TABLE IF NOT EXISTS salesmen (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -1118,6 +1139,74 @@ async function startServer() {
     } catch (err: any) {
       res.status(400).json({ error: "Failed to delete shop. It may have associated records (Orders/Payments)." });
     }
+  });
+
+  // API to fetch completed deliveries for a shop (for returns)
+  app.get("/api/shops/:id/completed-deliveries", (req, res) => {
+    const { id } = req.params;
+    try {
+      const deliveries = db.prepare(`
+        SELECT d.*, o.id as order_ref 
+        FROM deliveries d
+        JOIN orders o ON d.order_id = o.id
+        WHERE CAST(d.shop_id AS INTEGER) = CAST(? AS INTEGER) 
+        AND d.status = 'completed'
+        ORDER BY d.delivery_date DESC
+      `).all(id);
+      res.json(deliveries);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API to process a return
+  app.post("/api/returns", (req, res) => {
+    const { shop_id, items } = req.body; // items: Array<{delivery_id, product_id, quantity, unit_price}>
+    
+    const transaction = db.transaction(() => {
+      // 1. Create Return Header
+      const header = db.prepare("INSERT INTO returns (shop_id, status) VALUES (?, ?)").run(shop_id, 'completed');
+      const returnId = header.lastInsertRowid;
+
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+
+        // 2. Insert Return Item
+        db.prepare(`
+          INSERT INTO return_items (return_id, delivery_id, product_id, quantity, unit_price)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(returnId, item.delivery_id, item.product_id, item.quantity, item.unit_price);
+
+        // 3. Update Stock (using stock_quantity column)
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.quantity, item.product_id);
+        
+        total += item.quantity * item.unit_price;
+      }
+
+      // 4. Update Header total
+      db.prepare("UPDATE returns SET total_amount = ? WHERE id = ?").run(total, returnId);
+
+      return returnId;
+    });
+
+    try {
+      const result = transaction();
+      res.json({ success: true, returnId: result });
+    } catch (err: any) {
+      console.error("Return processing error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/returns", (req, res) => {
+    const returns = db.prepare(`
+      SELECT r.*, s.shop_name 
+      FROM returns r 
+      JOIN shops s ON r.shop_id = s.id 
+      ORDER BY r.return_date DESC
+    `).all();
+    res.json(returns);
   });
 
   app.get("/api/orders", (req, res) => {

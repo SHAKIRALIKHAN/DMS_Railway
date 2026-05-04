@@ -319,5 +319,14 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Manage',
     roleAssociation: 'Z_LOCATION_MANAGER',
     description: 'Manage provinces, cities, towns, areas and sub-areas.'
+  },
+  {
+    module: 'Return Management',
+    parentModule: 'Sales',
+    tCode: 'RT01',
+    transactionName: 'Delivery Return Transaction',
+    actionType: 'Create',
+    roleAssociation: 'Z_RETURN_CLERK',
+    description: 'Process customer returns (Reverse Logistics) and restock inventory.'
   }
 ];
