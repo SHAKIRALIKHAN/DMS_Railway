@@ -215,10 +215,11 @@ try {
     delivery_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     status TEXT DEFAULT 'completed',
     total_amount REAL NOT NULL,
+    invoice_id INTEGER,
     FOREIGN KEY (order_id) REFERENCES orders(id),
     FOREIGN KEY (shop_id) REFERENCES shops(id),
     FOREIGN KEY (salesman_id) REFERENCES salesmen(id),
-    invoice_id INTEGER REFERENCES invoices(id)
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
   );
 
   CREATE TABLE IF NOT EXISTS delivery_items (
@@ -359,6 +360,9 @@ try {
 
   // Migration for order_items estimated_delivery_date
   try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
+
+  // Migration for deliveries invoice_id
+  try { db.exec("ALTER TABLE deliveries ADD COLUMN invoice_id INTEGER"); } catch(e) {}
 
   // Migration for shops category
   try {
