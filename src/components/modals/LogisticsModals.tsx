@@ -456,6 +456,5 @@ export const DeliveryModal = ({
   );
 };
 
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
+
+// Removed local cn as it's imported

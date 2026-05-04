@@ -1005,7 +1005,6 @@ export default function App() {
         fetchDeliveries();
         fetchProducts();
         fetchOrders();
-        if (selectedShop) fetchLedger(selectedShop.id);
         fetchStats();
       } else {
         const err = await res.json();

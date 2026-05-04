@@ -222,6 +222,7 @@ export interface Delivery {
   order_ref: number;
   salesman_id: number;
   salesman_name: string;
+  shop_id: number;
   shop_name: string;
   delivery_date: string;
   total_amount: number;

@@ -364,6 +364,22 @@ try {
   // Migration for deliveries invoice_id
   try { db.exec("ALTER TABLE deliveries ADD COLUMN invoice_id INTEGER"); } catch(e) {}
 
+  // Migration for deliveries shop_id and backfill
+  try {
+    const cols = db.prepare("PRAGMA table_info(deliveries)").all() as any[];
+    if (!cols.find(c => c.name === 'shop_id')) {
+      db.exec("ALTER TABLE deliveries ADD COLUMN shop_id INTEGER");
+    }
+    // Always try to backfill missing shop_ids
+    db.exec(`
+      UPDATE deliveries 
+      SET shop_id = (SELECT shop_id FROM orders WHERE orders.id = deliveries.order_id)
+      WHERE shop_id IS NULL OR shop_id = 0
+    `);
+  } catch (e) {
+    console.warn("Deliveries shop_id migration/backfill error:", e);
+  }
+
   // Migration for shops category
   try {
     db.prepare("SELECT category FROM shops LIMIT 1").get();
@@ -511,8 +527,8 @@ try {
         }
 
         if (o.status === 'delivered') {
-          const delivery = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)").run(
-            orderId, sm1.lastInsertRowid, total, 'completed'
+          const delivery = db.prepare("INSERT INTO deliveries (order_id, shop_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?, ?)").run(
+            orderId, o.retailer, sm1.lastInsertRowid, total, 'completed'
           );
           const deliveryId = delivery.lastInsertRowid;
 
@@ -614,11 +630,11 @@ try {
       const firstSalesman = db.prepare("SELECT id FROM salesmen LIMIT 1").get() as { id: number } | undefined;
       
       if (deliveredOrders.length > 0 && firstSalesman) {
-        const deliveryStmt = db.prepare("INSERT INTO deliveries (order_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?)");
+        const deliveryStmt = db.prepare("INSERT INTO deliveries (order_id, shop_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?, ?)");
         const deliveryItemStmt = db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)");
         
         for (const order of deliveredOrders) {
-          const delivery = deliveryStmt.run(order.id, firstSalesman.id, order.total_amount, 'completed');
+          const delivery = deliveryStmt.run(order.id, order.shop_id, firstSalesman.id, order.total_amount, 'completed');
           const deliveryId = delivery.lastInsertRowid;
           
           const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as any[];
@@ -1054,14 +1070,23 @@ async function startServer() {
 
   app.get("/api/shops/:id/pending-deliveries", (req, res) => {
     const { id } = req.params;
-    const deliveries = db.prepare(`
-      SELECT d.*, o.id as order_ref
-      FROM deliveries d
-      JOIN orders o ON d.order_id = o.id
-      WHERE d.shop_id = ? AND d.invoice_id IS NULL AND d.status != 'cancelled'
-      ORDER BY d.delivery_date ASC
-    `).all(id);
-    res.json(deliveries);
+    try {
+      // Robust query for pending deliveries
+      const deliveries = db.prepare(`
+        SELECT d.*, o.id as order_ref, o.order_date
+        FROM deliveries d
+        JOIN orders o ON d.order_id = o.id
+        WHERE CAST(d.shop_id AS INTEGER) = CAST(? AS INTEGER) 
+        AND (d.invoice_id IS NULL OR d.invoice_id = 0 OR d.invoice_id = '') 
+        AND d.status != 'cancelled'
+        ORDER BY d.delivery_date ASC
+      `).all(id);
+      console.log(`[PendingDeliveries] Shop ID: ${id}, Found: ${deliveries.length}`);
+      res.json(deliveries);
+    } catch (err: any) {
+      console.error("Error fetching pending deliveries:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/shops", (req, res) => {
