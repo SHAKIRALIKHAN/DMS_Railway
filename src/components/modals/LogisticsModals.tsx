@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
-import { X, Save, Truck, Plus, CheckCircle2, ShoppingCart, ArrowRight } from 'lucide-react';
+import { X, Save, Truck, Plus, CheckCircle2, ShoppingCart, ArrowRight, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Salesman, Order, OrderItem, Delivery, DeliveryItem } from '../../types';
+import { cn } from '../../lib/utils';
 
 export const DeliveryModal = ({ 
   onClose, 
@@ -25,6 +26,8 @@ export const DeliveryModal = ({
   const [selectedSalesmanId, setSelectedSalesmanId] = useState<number | null>(null);
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryItems, setDeliveryItems] = useState<any[]>([]);
+  const [orderQuery, setOrderQuery] = useState('');
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showShopDropdown, setShowShopDropdown] = useState(false);
 
@@ -32,19 +35,58 @@ export const DeliveryModal = ({
   const availableShops = useMemo(() => {
     const shopMap = new Map<number, {id: number, name: string}>();
     orders.forEach(o => {
-      if (o.status === 'pending') {
+      if (o.status === 'pending' || (delivery && o.shop_id === delivery.shop_id)) {
         shopMap.set(o.shop_id, { id: o.shop_id, name: o.shop_name });
       }
     });
     return Array.from(shopMap.values()).filter(s => 
       s.name.toLowerCase().includes(shopSearch.toLowerCase())
     );
-  }, [orders, shopSearch]);
+  }, [orders, shopSearch, delivery]);
 
   // 2. Order List State: Orders for selected shop only
   const shopOrders = useMemo(() => {
-    return orders.filter(o => o.shop_id === selectedShopId && o.status === 'pending');
-  }, [selectedShopId, orders]);
+    return orders.filter(o => 
+      o.shop_id === selectedShopId && (o.status === 'pending' || selectedOrderIds.includes(o.id))
+    );
+  }, [selectedShopId, orders, selectedOrderIds]);
+
+  // Initialization for Edit Mode
+  useEffect(() => {
+    if (delivery) {
+      setSelectedShopId(delivery.shop_id || null);
+      setShopSearch(delivery.shop_name || '');
+      setSelectedSalesmanId(delivery.salesman_id || null);
+      setDeliveryDate(new Date(delivery.delivery_date).toISOString().split('T')[0]);
+      
+      // Fetch items for this delivery to identify orders and initial quantities
+      const fetchDeliveryContext = async () => {
+        try {
+          const res = await fetch(`/api/deliveries/${delivery.id}/items`);
+          const items = await res.json();
+          
+          // Identify unique orders from delivery items
+          const oids = Array.from(new Set(items.map((i: any) => i.order_ref))) as number[];
+          setSelectedOrderIds(oids);
+          
+          // Initial delivery items state
+          setDeliveryItems(items.map((i: any) => ({
+            order_item_id: i.order_item_id,
+            product_id: i.product_id,
+            product_name: i.product_name,
+            brand: i.brand,
+            quantity: i.quantity,
+            price: i.price,
+            max_quantity: i.quantity + (i.remaining_on_order || 9999), // Approximate or fetch real max later
+            order_ref: i.order_ref
+          })));
+        } catch (err) {
+          console.error("Failed to load delivery context", err);
+        }
+      };
+      fetchDeliveryContext();
+    }
+  }, [delivery]);
 
   // Zero-Conflict Policy: Clear logic when Shop changes
   const handleShopSelect = (shopId: number) => {
@@ -55,34 +97,33 @@ export const DeliveryModal = ({
     setShopSearch(availableShops.find(s => s.id === shopId)?.name || '');
   };
 
-  // 3. Product Grid State: Flattened items from all selected orders
   useEffect(() => {
     if (selectedOrderIds.length > 0) {
       const fetchFlatItems = async () => {
         try {
-          const allBatchItems: OrderItem[] = [];
+          const allBatchItems: any[] = [];
           for (const oid of selectedOrderIds) {
-            const res = await fetch(`/api/orders/${oid}/pending-items`);
+            const url = `/api/orders/${oid}/pending-items${delivery ? `?excludeDeliveryId=${delivery.id}` : ''}`;
+            const res = await fetch(url);
             const data = await res.json();
             allBatchItems.push(...data);
           }
           
           setDeliveryItems(prev => {
-            // Reconcile previous allocations with new fetch
-            const reconciled = allBatchItems.map(item => {
+            return allBatchItems.map(item => {
               const existing = prev.find(p => p.order_item_id === item.id);
-              return existing || {
+              const max = item.quantity - (item.delivered_quantity || 0);
+              return {
                 order_item_id: item.id,
                 product_id: item.product_id,
                 product_name: item.product_name,
                 brand: item.brand,
-                quantity: item.quantity - (item.delivered_quantity || 0),
+                quantity: existing?.quantity || 0,
                 price: item.price,
-                max_quantity: item.quantity - (item.delivered_quantity || 0),
+                max_quantity: max,
                 order_ref: item.order_id
               };
             });
-            return reconciled;
           });
         } catch (err) {
           console.error("Grid sync failed", err);
@@ -92,12 +133,40 @@ export const DeliveryModal = ({
     } else {
       setDeliveryItems([]);
     }
-  }, [selectedOrderIds]);
+  }, [selectedOrderIds, delivery]);
 
   const toggleOrder = (oid: number) => {
     setSelectedOrderIds(prev => 
       prev.includes(oid) ? prev.filter(id => id !== oid) : [...prev, oid]
     );
+  };
+
+  const addOrderByNumber = (oidStr: string) => {
+    const oid = parseInt(oidStr);
+    if (isNaN(oid)) return;
+    
+    const targetOrder = orders.find(o => o.id === oid);
+    if (!targetOrder) {
+      setErrorStatus(`Order #ORD-${oid.toString().padStart(4, '0')} not found.`);
+      return;
+    }
+
+    if (selectedShopId && targetOrder.shop_id !== selectedShopId) {
+      setErrorStatus("Validation Error: This delivery already contains items for a different shop. Cannot merge items from multiple shops into one delivery.");
+      return;
+    }
+
+    if (!selectedShopId) {
+      handleShopSelect(targetOrder.shop_id);
+    }
+
+    if (!selectedOrderIds.includes(oid)) {
+      setSelectedOrderIds(prev => [...prev, oid]);
+      setErrorStatus(null);
+      setOrderQuery('');
+    } else {
+      setErrorStatus("Order already added to this delivery.");
+    }
   };
 
   const updateQty = (orderItemId: number, val: number) => {
@@ -116,11 +185,15 @@ export const DeliveryModal = ({
     
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/deliveries', {
-        method: 'POST',
+      const url = delivery ? `/api/deliveries/${delivery.id}` : '/api/deliveries';
+      const method = delivery ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order_ids: selectedOrderIds,
+          order_id: selectedOrderIds[0], // backward compatibility
           salesman_id: selectedSalesmanId,
           delivery_date: deliveryDate,
           items: activeItems
@@ -131,7 +204,7 @@ export const DeliveryModal = ({
         onClose();
       } else {
         const err = await res.json();
-        alert(err.error || "Delivery Creation Failed");
+        alert(err.error || `Delivery ${delivery ? 'Update' : 'Creation'} Failed`);
       }
     } catch (err) {
       console.error(err);
@@ -171,9 +244,14 @@ export const DeliveryModal = ({
                 value={shopSearch}
                 onFocus={() => setShowShopDropdown(true)}
                 onChange={(e) => {
-                  setShopSearch(e.target.value);
+                  const val = e.target.value;
+                  setShopSearch(val);
                   setShowShopDropdown(true);
-                  if (selectedShopId) setSelectedShopId(null);
+                  if (selectedShopId) {
+                    setSelectedShopId(null);
+                    setSelectedOrderIds([]);
+                    setDeliveryItems([]);
+                  }
                 }}
                 className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:border-indigo-600 focus:bg-white transition-all outline-none"
               />
@@ -195,6 +273,25 @@ export const DeliveryModal = ({
 
           <div className="flex items-center gap-6">
              <div className="text-right">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Quick Add Order</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    placeholder="Order #"
+                    value={orderQuery}
+                    onChange={e => setOrderQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addOrderByNumber(orderQuery)}
+                    className="w-24 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl text-sm font-mono outline-none focus:border-indigo-600 transition-all"
+                  />
+                  <button 
+                    onClick={() => addOrderByNumber(orderQuery)}
+                    className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+             </div>
+             <div className="text-right">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Dispatch Date</label>
                 <input 
                   type="date"
@@ -208,6 +305,19 @@ export const DeliveryModal = ({
              </button>
           </div>
         </div>
+        
+        {/* Error Banner */}
+        {errorStatus && (
+          <div className="px-10 py-3 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={18} className="text-rose-600" />
+              <p className="text-sm font-bold text-rose-900">{errorStatus}</p>
+            </div>
+            <button onClick={() => setErrorStatus(null)} className="text-rose-400 hover:text-rose-600">
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Middle: Order IDs */}
         <div className="px-10 py-6 bg-slate-50/50 border-b border-slate-100">

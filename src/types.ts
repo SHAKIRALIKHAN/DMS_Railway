@@ -248,3 +248,32 @@ export interface DeliveryItem {
   extra_discount_pct?: number;
   extra_discount_amount?: number;
 }
+
+export interface Invoice {
+  id: number;
+  shop_id: number;
+  shop_name?: string;
+  invoice_date: string;
+  gross_amount: number;
+  total_discount: number;
+  total_tax: number;
+  net_amount: number;
+  status: 'open' | 'paid' | 'cancelled';
+  created_at: string;
+}
+
+export interface InvoiceItem {
+  id: number;
+  invoice_id: number;
+  delivery_id: number;
+  delivery_item_id: number;
+  product_id: string;
+  product_name?: string;
+  uom?: string;
+  quantity: number;
+  unit_price: number;
+  trade_discount_pct: number;
+  tax_pct: number;
+  special_discount_pct: number;
+  net_amount: number;
+}
