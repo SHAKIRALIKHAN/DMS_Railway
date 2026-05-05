@@ -286,6 +286,7 @@ try {
     unit_price REAL NOT NULL,
     trade_discount_pct REAL DEFAULT 0,
     tax_pct REAL DEFAULT 0,
+    additional_tax_pct REAL DEFAULT 0,
     special_discount_pct REAL DEFAULT 0,
     net_amount REAL NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES invoices(id),
@@ -378,6 +379,12 @@ try {
   try { db.exec("ALTER TABLE delivery_items ADD COLUMN discount_amount REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_pct REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_amount REAL DEFAULT 0"); } catch(e) {}
+
+  // Migrations for invoice_items 
+  try { db.exec("ALTER TABLE invoice_items ADD COLUMN trade_discount_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE invoice_items ADD COLUMN tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE invoice_items ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE invoice_items ADD COLUMN special_discount_pct REAL DEFAULT 0"); } catch(e) {}
 
   // Migration for order_items estimated_delivery_date
   try { db.exec("ALTER TABLE order_items ADD COLUMN estimated_delivery_date DATE"); } catch(e) {}
@@ -884,6 +891,7 @@ async function startServer() {
       const salesmen = db.prepare("SELECT * FROM salesmen").all();
       const units = db.prepare("SELECT * FROM units").all();
       const deliveries = db.prepare("SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name FROM deliveries d JOIN orders o ON d.order_id = o.id JOIN shops r ON o.shop_id = r.id JOIN salesmen s ON d.salesman_id = s.id ORDER BY d.delivery_date DESC").all();
+      const returns = db.prepare("SELECT r.*, s.shop_name FROM returns r JOIN shops s ON r.shop_id = s.id ORDER BY r.return_date DESC").all();
       const invoices = db.prepare("SELECT i.*, s.shop_name FROM invoices i JOIN shops s ON i.shop_id = s.id ORDER BY i.created_at DESC").all();
       
       const valuation = db.prepare(`
@@ -930,6 +938,7 @@ async function startServer() {
         salesmen,
         units,
         deliveries,
+        returns,
         invoices,
         valuation: {
           totalValueAtPP: valuation.totalValueAtPP || 0,
@@ -1972,9 +1981,8 @@ async function startServer() {
       }, 0);
       const totalTax = items.reduce((sum: number, item: any) => {
         const itemGross = item.quantity * item.unit_price;
-        const disc = (item.trade_discount_pct || 0) + (item.special_discount_pct || 0);
-        const itemAfterDisc = itemGross - (itemGross * disc / 100);
-        return sum + (itemAfterDisc * (item.tax_pct || 0) / 100);
+        const tax = (item.tax_pct || 0) + (item.additional_tax_pct || 0);
+        return sum + (itemGross * tax / 100);
       }, 0);
       const net = gross - totalDisc + totalTax;
 
@@ -1989,16 +1997,16 @@ async function startServer() {
       const insertItem = db.prepare(`
         INSERT INTO invoice_items (
           invoice_id, delivery_id, delivery_item_id, product_id, 
-          quantity, unit_price, trade_discount_pct, tax_pct, special_discount_pct, net_amount
+          quantity, unit_price, trade_discount_pct, tax_pct, additional_tax_pct, special_discount_pct, net_amount
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const item of items) {
         insertItem.run(
           invoiceId, item.delivery_id, item.delivery_item_id, item.product_id,
           item.quantity, item.unit_price, item.trade_discount_pct || 0,
-          item.tax_pct || 0, item.special_discount_pct || 0, item.net_amount
+          item.tax_pct || 0, item.additional_tax_pct || 0, item.special_discount_pct || 0, item.net_amount
         );
       }
 

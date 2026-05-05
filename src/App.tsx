@@ -79,6 +79,8 @@ import {
   Salesman,
   Delivery,
   DeliveryItem,
+  Return,
+  ReturnItem,
   Unit,
   Invoice,
   InvoiceItem
@@ -478,7 +480,7 @@ export default function App() {
   const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>(
     (localStorage.getItem('dms_masterDataSubTab') as any) || 'products'
   );
-  const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'load_plans' | 'invoices'>(
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'delivery_returns' | 'load_plans' | 'invoices'>(
     (localStorage.getItem('dms_transactionsSubTab') as any) || 'purchases'
   );
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -487,6 +489,7 @@ export default function App() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [returns, setReturns] = useState<Return[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [valuation, setValuation] = useState<StockValuationReport | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -553,6 +556,7 @@ export default function App() {
     orders: JSON.parse(localStorage.getItem('dms_filters_orders') || '{"search": "", "status": "any"}'),
     purchases: JSON.parse(localStorage.getItem('dms_filters_purchases') || '{"search": "", "status": "any"}'),
     deliveries: JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{"search": "", "status": "any"}'),
+    returns: JSON.parse(localStorage.getItem('dms_filters_returns') || '{"search": "", "status": "any"}'),
   });
 
   const [shopSearchInput, setShopSearchInput] = useState(
@@ -595,6 +599,11 @@ export default function App() {
   );
   const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
 
+  const [returnSearchInput, setReturnSearchInput] = useState(
+    JSON.parse(localStorage.getItem('dms_filters_returns') || '{}').search || ""
+  );
+  const [showReturnSuggestions, setShowReturnSuggestions] = useState(false);
+
   const shopSuggestions = shopSearchInput.length > 0 
     ? shops.filter(s => s.shop_name?.toLowerCase().includes(shopSearchInput.toLowerCase())).slice(0, 5)
     : [];
@@ -636,7 +645,14 @@ export default function App() {
         d.id.toString().includes(deliverySearchInput) || 
         d.shop_name?.toLowerCase().includes(deliverySearchInput.toLowerCase()) ||
         d.order_id?.toString().includes(deliverySearchInput) ||
-        d.driver_name?.toLowerCase().includes(deliverySearchInput.toLowerCase())
+        d.driver_name?.toLowerCase().includes((deliverySearchInput || "").toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const returnSuggestions = returnSearchInput.length > 0
+    ? returns.filter(r => 
+        r.id.toString().includes(returnSearchInput) || 
+        r.shop_name?.toLowerCase().includes(returnSearchInput.toLowerCase())
       ).slice(0, 5)
     : [];
 
@@ -678,7 +694,8 @@ export default function App() {
       products: { brand: 'any', mg: 'any', availability: 'any', search: '' },
       orders: { search: '', status: 'any' },
       purchases: { search: '', status: 'any' },
-      deliveries: { search: '', status: 'any' }
+      deliveries: { search: '', status: 'any' },
+      returns: { search: '', status: 'any' }
     };
     if (module === 'shops') setShopSearchInput("");
     if (module === 'suppliers') setSupplierSearchInput("");
@@ -688,6 +705,7 @@ export default function App() {
     if (module === 'orders') setOrderSearchInput("");
     if (module === 'purchases') setPurchaseSearchInput("");
     if (module === 'deliveries') setDeliverySearchInput("");
+    if (module === 'returns') setReturnSearchInput("");
     updateFilter(module, 'RESET', null); // Trigger reset
     const newFilters = { ...filters, [module]: defaults[module] };
     setFilters(newFilters);
@@ -873,6 +891,7 @@ export default function App() {
         setSalesmen(data.salesmen);
         setUnits(data.units);
         setDeliveries(data.deliveries);
+        setReturns(data.returns);
         setInvoices(data.invoices);
       } catch (err) {
         console.error("Batch initialization failed:", err);
@@ -976,6 +995,15 @@ export default function App() {
     return false;
   });
 
+  const filteredReturns = returns.filter(r => {
+    const f = filters.returns;
+    if (r.id.toString().includes(f.search) || 
+      r.shop_name?.toLowerCase().includes(f.search.toLowerCase())
+    ) return true;
+    if (!f.search) return true;
+    return false;
+  });
+
   const fetchUnits = async () => {
     try {
       const res = await fetch('/api/units');
@@ -1003,6 +1031,16 @@ export default function App() {
       setInvoices(data);
     } catch (err) {
       console.error("Failed to fetch invoices", err);
+    }
+  };
+
+  const fetchReturns = async () => {
+    try {
+      const res = await fetch('/api/returns');
+      const data = await res.json();
+      setReturns(data);
+    } catch (err) {
+      console.error("Failed to fetch returns", err);
     }
   };
 
@@ -2559,6 +2597,7 @@ export default function App() {
                     { id: 'purchases', label: 'Purchases', icon: ShoppingBag },
                     { id: 'orders', label: 'Orders', icon: ShoppingCart },
                     { id: 'deliveries', label: 'Deliveries', icon: Truck },
+                    { id: 'delivery_returns', label: 'Delivery Return', icon: RotateCcw },
                     { id: 'invoices', label: 'Invoices', icon: FileText },
                     { id: 'load_plans', label: 'Load Plans', icon: Truck },
                   ].map(tab => (
@@ -2921,6 +2960,125 @@ export default function App() {
                                 <td colSpan={7} className="px-6 py-12 text-center">
                                   <Truck size={48} className="mx-auto text-slate-200 mb-4" />
                                   <p className="text-slate-500 font-medium">No deliveries found</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {transactionsSubTab === 'delivery_returns' && (
+                    <div className="space-y-6">
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={returnSearchInput}
+                              onFocus={() => setShowReturnSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowReturnSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setReturnSearchInput(e.target.value);
+                                updateFilter('returns', 'search', e.target.value);
+                              }}
+                              placeholder="Search by ID or shop..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showReturnSuggestions && returnSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Return Suggestions</span>
+                                </div>
+                                {returnSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setReturnSearchInput(suggestion.id.toString());
+                                      updateFilter('returns', 'search', suggestion.id.toString());
+                                      setShowReturnSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                      <RotateCcw size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
+                                      <p className="text-[10px] text-slate-400">#RET-{suggestion.id.toString().padStart(4, '0')}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              setIsReturnModalOpen(true);
+                            }}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2"
+                          >
+                            <Plus size={18} />
+                            <span>New Delivery Return</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Return ID</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredReturns.map(ret => (
+                              <tr key={ret.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="px-6 py-4">
+                                  <span className="font-mono font-bold text-indigo-600">#RET-{ret.id.toString().padStart(4, '0')}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm font-bold text-slate-900">{ret.shop_name}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm text-slate-600">{new Date(ret.return_date).toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <p className="text-sm font-bold text-slate-900">{formatPKR(ret.total_amount)}</p>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="flex justify-center gap-2">
+                                    <button 
+                                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    >
+                                      <FileText size={18} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {returns.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="px-6 py-12 text-center">
+                                  <RotateCcw size={48} className="mx-auto text-slate-200 mb-4" />
+                                  <p className="text-slate-500 font-medium">No returns found</p>
                                 </td>
                               </tr>
                             )}
@@ -3379,6 +3537,7 @@ export default function App() {
           <ReturnModal 
             onClose={() => {
               setIsReturnModalOpen(false);
+              fetchReturns();
               fetchProducts();
               fetchStats();
             }}

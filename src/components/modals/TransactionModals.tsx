@@ -419,19 +419,29 @@ export const NewOrderModal = ({
         extra_discount_amount: newExtraDiscountAmount
       } : i));
     } else {
+      const sales_tax_pct = (product as any).sales_tax_pct || 0;
+      const additional_tax_pct = (product as any).additional_tax_pct || 0;
+      const discount_pct = (product as any).discount_pct || 0;
+      const extra_discount_pct = (product as any).extra_discount_pct || 0;
+
+      const sales_tax_amount = (product.trade_price * 1 * sales_tax_pct) / 100;
+      const additional_tax_amount = (product.trade_price * 1 * additional_tax_pct) / 100;
+      const discount_amount = (product.trade_price * 1 * discount_pct) / 100;
+      const extra_discount_amount = (product.trade_price * 1 * extra_discount_pct) / 100;
+
       setItems([...items, { 
         product_id: product.product_id, 
         quantity: 1, 
         price: product.trade_price,
         product_name: product.product_name,
-        sales_tax_pct: 0,
-        sales_tax_amount: 0,
-        additional_tax_pct: 0,
-        additional_tax_amount: 0,
-        discount_pct: 0,
-        discount_amount: 0,
-        extra_discount_pct: 0,
-        extra_discount_amount: 0
+        sales_tax_pct,
+        sales_tax_amount,
+        additional_tax_pct,
+        additional_tax_amount,
+        discount_pct,
+        discount_amount,
+        extra_discount_pct,
+        extra_discount_amount
       }]);
     }
     setSearchQuery('');

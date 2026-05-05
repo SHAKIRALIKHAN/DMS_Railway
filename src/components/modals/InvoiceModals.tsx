@@ -65,9 +65,10 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
               delivery_id: dId,
               trade_discount_pct: it.discount_pct || 0,
               tax_pct: it.sales_tax_pct || 0,
+              additional_tax_pct: it.additional_tax_pct || 0,
               special_discount_pct: it.extra_discount_pct || 0,
               unit_price: it.price,
-              net_amount: calculateLineNet(it.quantity, it.price, (it.discount_pct || 0) + (it.extra_discount_pct || 0), it.sales_tax_pct || 0)
+              net_amount: calculateLineNet(it.quantity, it.price, (it.discount_pct || 0) + (it.extra_discount_pct || 0), (it.sales_tax_pct || 0) + (it.additional_tax_pct || 0))
             })));
           }
           setInvoiceItems(allItems);
@@ -83,8 +84,9 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
 
   const calculateLineNet = (qty: number, price: number, discTotalPct: number, taxPct: number) => {
     const gross = qty * price;
-    const afterDisc = gross - (gross * discTotalPct / 100);
-    const net = afterDisc + (afterDisc * taxPct / 100);
+    const discAmount = (gross * discTotalPct / 100);
+    const taxAmount = (gross * taxPct / 100);
+    const net = gross - discAmount + taxAmount;
     return Math.round(net * 100) / 100;
   };
 
@@ -174,6 +176,7 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
         unit_price: it.unit_price,
         trade_discount_pct: it.trade_discount_pct,
         tax_pct: it.tax_pct,
+        additional_tax_pct: it.additional_tax_pct,
         special_discount_pct: it.special_discount_pct,
         net_amount: it.net_amount
       }))
@@ -209,7 +212,7 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
       item.quantity, 
       item.unit_price, 
       (item.trade_discount_pct || 0) + (item.special_discount_pct || 0), 
-      item.tax_pct || 0
+      (item.tax_pct || 0) + (item.additional_tax_pct || 0)
     );
     
     setInvoiceItems(updated);
@@ -218,8 +221,7 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
   const totals = invoiceItems.reduce((acc, it) => {
     const gross = it.quantity * it.unit_price;
     const disc = gross * ((it.trade_discount_pct || 0) + (it.special_discount_pct || 0)) / 100;
-    const afterDisc = gross - disc;
-    const tax = afterDisc * (it.tax_pct || 0) / 100;
+    const tax = gross * ((it.tax_pct || 0) + (it.additional_tax_pct || 0)) / 100;
     
     acc.gross += gross;
     acc.discount += disc;
@@ -396,8 +398,10 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Batch Ref</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Qty</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Unit Price</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Disc (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center whitespace-nowrap">Tax (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center whitespace-nowrap">Add. Tax (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Disc (%)</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">E. Disc (%)</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Net Amount</th>
                 </tr>
               </thead>
@@ -423,34 +427,36 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
                         className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right text-xs font-bold outline-none focus:border-indigo-600 transition-all"
                       />
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[8px] font-bold text-slate-400 uppercase">Trd:</span>
-                          <input 
-                            type="number"
-                            value={item.trade_discount_pct}
-                            onChange={e => updateItemField(idx, 'trade_discount_pct', parseFloat(e.target.value) || 0)}
-                            className="w-10 bg-white border border-slate-200 rounded px-1 py-0.5 text-center text-[10px] font-bold"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[8px] font-bold text-slate-400 uppercase">Spl:</span>
-                          <input 
-                            type="number"
-                            value={item.special_discount_pct}
-                            onChange={e => updateItemField(idx, 'special_discount_pct', parseFloat(e.target.value) || 0)}
-                            className="w-10 bg-white border border-slate-200 rounded px-1 py-0.5 text-center text-[10px] font-bold"
-                          />
-                        </div>
-                      </div>
-                    </td>
                     <td className="px-4 py-4 text-center">
                       <input 
                         type="number"
                         value={item.tax_pct}
                         onChange={e => updateItemField(idx, 'tax_pct', parseFloat(e.target.value) || 0)}
                         className="w-12 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-1 py-1 text-center text-xs font-bold outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input 
+                        type="number"
+                        value={item.additional_tax_pct}
+                        onChange={e => updateItemField(idx, 'additional_tax_pct', parseFloat(e.target.value) || 0)}
+                        className="w-12 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-1 py-1 text-center text-xs font-bold outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input 
+                        type="number"
+                        value={item.trade_discount_pct}
+                        onChange={e => updateItemField(idx, 'trade_discount_pct', parseFloat(e.target.value) || 0)}
+                        className="w-12 bg-rose-50 border border-rose-100 text-rose-700 rounded-lg px-1 py-1 text-center text-xs font-bold outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input 
+                        type="number"
+                        value={item.special_discount_pct}
+                        onChange={e => updateItemField(idx, 'special_discount_pct', parseFloat(e.target.value) || 0)}
+                        className="w-12 bg-rose-50 border border-rose-100 text-rose-700 rounded-lg px-1 py-1 text-center text-xs font-bold outline-none"
                       />
                     </td>
                     <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm">

@@ -77,8 +77,16 @@ export const DeliveryModal = ({
             brand: i.brand,
             quantity: i.quantity,
             price: i.price,
-            max_quantity: i.quantity + (i.remaining_on_order || 9999), // Approximate or fetch real max later
-            order_ref: i.order_ref
+            max_quantity: i.quantity + (i.remaining_on_order || 9999), 
+            order_ref: i.order_ref,
+            sales_tax_pct: i.sales_tax_pct || 0,
+            sales_tax_amount: i.sales_tax_amount || 0,
+            additional_tax_pct: i.additional_tax_pct || 0,
+            additional_tax_amount: i.additional_tax_amount || 0,
+            discount_pct: i.discount_pct || 0,
+            discount_amount: i.discount_amount || 0,
+            extra_discount_pct: i.extra_discount_pct || 0,
+            extra_discount_amount: i.extra_discount_amount || 0
           })));
         } catch (err) {
           console.error("Failed to load delivery context", err);
@@ -121,7 +129,11 @@ export const DeliveryModal = ({
                 quantity: existing?.quantity || 0,
                 price: item.price,
                 max_quantity: max,
-                order_ref: item.order_id
+                order_ref: item.order_id,
+                sales_tax_pct: item.sales_tax_pct || 0,
+                additional_tax_pct: item.additional_tax_pct || 0,
+                discount_pct: item.discount_pct || 0,
+                extra_discount_pct: item.extra_discount_pct || 0
               };
             });
           });
@@ -178,9 +190,29 @@ export const DeliveryModal = ({
     }));
   };
 
+  const calculateLineDetails = (item: any) => {
+    const qty = item.quantity || 0;
+    const price = item.price || 0;
+    const gross = qty * price;
+    
+    // Tax/Discount calculations
+    const sales_tax_amount = (gross * (item.sales_tax_pct || 0)) / 100;
+    const additional_tax_amount = (gross * (item.additional_tax_pct || 0)) / 100;
+    const discount_amount = (gross * (item.discount_pct || 0)) / 100;
+    const extra_discount_amount = (gross * (item.extra_discount_pct || 0)) / 100;
+    
+    return {
+      ...item,
+      sales_tax_amount,
+      additional_tax_amount,
+      discount_amount,
+      extra_discount_amount
+    };
+  };
+
   const handleSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
-    const activeItems = deliveryItems.filter(i => i.quantity > 0);
+    const activeItems = deliveryItems.filter(i => i.quantity > 0).map(calculateLineDetails);
     if (!selectedSalesmanId || activeItems.length === 0) return;
     
     setIsSubmitting(true);
@@ -223,7 +255,10 @@ export const DeliveryModal = ({
     return () => window.removeEventListener('keydown', handleKey);
   }, [selectedOrderIds, selectedSalesmanId, deliveryItems, deliveryDate]);
 
-  const totalValue = deliveryItems.reduce((s, i) => s + (i.quantity * i.price), 0);
+  const totalValue = deliveryItems.reduce((s, i) => {
+    const details = calculateLineDetails(i);
+    return s + (i.quantity * i.price) + details.sales_tax_amount + details.additional_tax_amount - details.discount_amount - details.extra_discount_amount;
+  }, 0);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
