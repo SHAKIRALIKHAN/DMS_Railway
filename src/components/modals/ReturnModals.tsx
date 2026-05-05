@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, RotateCcw, Search, ChevronRight, AlertCircle, ShoppingCart, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shop, Delivery, DeliveryItem } from '../../types';
-import { cn } from '../../lib/utils';
+import { cn, formatPKR } from '../../lib/utils';
 
 interface ReturnModalProps {
   onClose: () => void;
@@ -140,264 +140,217 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
       <motion.div 
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white w-full h-full flex flex-col shadow-2xl relative"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         {/* Header */}
-        <div className="px-10 py-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-rose-600 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-rose-200">
-              <RotateCcw size={32} />
-            </div>
-            <div>
-              <div className="flex items-center gap-4">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Delivery Return</h2>
-                <div className="flex gap-2">
-                  <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-rose-100 italic">Trans RT01</span>
-                </div>
-              </div>
-              <p className="text-slate-400 font-medium mt-1">Process customer returns and restock inventory</p>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-bold text-slate-900">
+              Delivery Return Processing (RT01)
+            </h3>
+            <div className="flex gap-2">
+              <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-rose-100">Inventory Adjust</span>
             </div>
           </div>
-          <motion.button 
-            whileHover={{ rotate: 90, scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={onClose}
-            className="w-14 h-14 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all shadow-sm"
-          >
-            <X size={28} />
-          </motion.button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+            <X size={20} className="text-slate-500" />
+          </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto bg-slate-50/30">
-          <div className="max-w-[1400px] mx-auto p-12">
-            
-            {errorStatus && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-700"
-              >
-                <AlertCircle size={20} />
-                <span className="text-sm font-bold">{errorStatus}</span>
-              </motion.div>
-            )}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {errorStatus && (
+            <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl flex items-center gap-3">
+              <AlertCircle size={20} />
+              <p className="text-sm font-bold">{errorStatus}</p>
+            </div>
+          )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
-              {/* Left Column: Selection */}
-              <div className="xl:col-span-4 space-y-8">
-                
-                {/* Shop SELECT */}
-                <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-1.5 h-6 bg-rose-500 rounded-full" />
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">1. Select Shop</h3>
-                  </div>
-
-                  <div className="relative">
-                    <div className="relative group">
-                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-rose-500 transition-colors" size={20} />
-                      <input 
-                        type="text"
-                        placeholder="Search retailer..."
-                        value={shopSearch}
-                        onFocus={() => setShowShopDropdown(true)}
-                        onChange={(e) => {
-                          setShopSearch(e.target.value);
-                          setShowShopDropdown(true);
-                        }}
-                        className="w-full pl-14 pr-4 py-5 bg-slate-50 border border-slate-200 rounded-3xl text-lg font-black text-slate-900 focus:bg-white focus:border-rose-500 focus:ring-8 focus:ring-rose-50 transition-all outline-none"
-                      />
-                    </div>
-
-                    <AnimatePresence>
-                      {showShopDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 10 }}
-                          className="absolute left-0 right-0 top-full mt-3 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-50 overflow-hidden ring-1 ring-slate-200"
-                        >
-                          <div className="max-h-60 overflow-y-auto py-2">
-                            {shops.filter(s => s.shop_name.toLowerCase().includes(shopSearch.toLowerCase())).map(shop => (
-                              <button
-                                key={shop.id}
-                                onClick={() => handleShopSelect(shop)}
-                                className="w-full px-6 py-4 text-left hover:bg-rose-50/50 flex items-center justify-between group transition-colors"
-                              >
-                                <div>
-                                  <span className="font-black text-slate-900 block group-hover:text-rose-600 transition-colors">{shop.shop_name}</span>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{shop.location}</span>
-                                </div>
-                                <ChevronRight size={18} className="text-slate-200 group-hover:text-rose-400" />
-                              </button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </section>
-
-                {/* Delivery MULTI-SELECT */}
-                {selectedShopId && (
-                  <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-6 bg-rose-500 rounded-full" />
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">2. Deliveries</h3>
+          {/* Header Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Select Retailer</label>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Select shop..."
+                  value={shopSearch}
+                  onFocus={() => setShowShopDropdown(true)}
+                  onChange={(e) => {
+                    setShopSearch(e.target.value);
+                    setShowShopDropdown(true);
+                  }}
+                  className="w-full pl-12 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
+                />
+                <AnimatePresence>
+                  {showShopDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-50 overflow-hidden"
+                    >
+                      <div className="max-h-60 overflow-y-auto py-2">
+                        {shops.filter(s => s.shop_name.toLowerCase().includes(shopSearch.toLowerCase())).map(shop => (
+                          <button
+                            key={shop.id}
+                            onClick={() => handleShopSelect(shop)}
+                            className="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center justify-between group transition-colors"
+                          >
+                            <div>
+                              <span className="font-bold text-slate-900 block group-hover:text-indigo-600 transition-colors">{shop.shop_name}</span>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{shop.location}</span>
+                            </div>
+                            <ChevronRight size={16} className="text-slate-200 group-hover:text-indigo-400" />
+                          </button>
+                        ))}
                       </div>
-                    </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
 
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                      {completedDeliveries.length === 0 ? (
-                        <div className="text-center py-10 text-slate-400 italic">No completed deliveries found.</div>
-                      ) : (
-                        completedDeliveries.map(d => (
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Related Deliveries</label>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowDeliveryDropdown(!showDeliveryDropdown)}
+                  disabled={!selectedShopId}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-left flex justify-between items-center disabled:opacity-50"
+                >
+                  <span className={cn(selectedDeliveryIds.length > 0 ? "text-indigo-600 font-bold" : "text-slate-400")}>
+                    {selectedDeliveryIds.length > 0 
+                      ? `${selectedDeliveryIds.length} Deliveries Selected` 
+                      : "Select deliveries to return from..."}
+                  </span>
+                  <ChevronRight size={16} className={cn("transition-transform", showDeliveryDropdown && "rotate-90")} />
+                </button>
+                
+                <AnimatePresence>
+                  {showDeliveryDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-50 overflow-hidden p-2"
+                    >
+                      <div className="max-h-60 overflow-y-auto space-y-1">
+                        {completedDeliveries.map(d => (
                           <button
                             key={d.id}
                             onClick={() => toggleDeliverySelection(d.id)}
                             className={cn(
-                              "w-full p-5 rounded-2xl border text-left transition-all flex items-center gap-4",
-                              selectedDeliveryIds.includes(d.id)
-                                ? "bg-rose-600 border-rose-600 text-white shadow-xl shadow-rose-200 scale-[1.02]"
-                                : "bg-slate-50 border-slate-100 text-slate-600 hover:border-rose-300"
+                              "w-full px-4 py-3 rounded-lg text-left transition-colors flex items-center justify-between",
+                              selectedDeliveryIds.includes(d.id) ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-600"
                             )}
                           >
-                            <Package size={24} className={selectedDeliveryIds.includes(d.id) ? "text-white" : "text-slate-300"} />
                             <div>
-                              <span className="font-black block leading-none">#DEL-{d.id.toString().padStart(4, '0')}</span>
-                              <span className="text-[10px] font-bold uppercase tracking-widest mt-1.5 opacity-60">
-                                {new Date(d.delivery_date).toLocaleDateString()} • Rs.{d.total_amount.toLocaleString()}
-                              </span>
+                              <p className="text-xs font-bold font-mono italic">#DEL-{d.id.toString().padStart(4, '0')}</p>
+                              <p className="text-[10px] opacity-60 font-medium">{new Date(d.delivery_date).toLocaleDateString()} • {formatPKR(d.total_amount)}</p>
                             </div>
+                            {selectedDeliveryIds.includes(d.id) && <div className="w-2 h-2 bg-indigo-600 rounded-full" />}
                           </button>
-                        ))
-                      )}
-                    </div>
-                  </section>
-                )}
-              </div>
-
-              {/* Right Column: Grid */}
-              <div className="xl:col-span-8 flex flex-col h-full">
-                <section className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden flex flex-col flex-1">
-                  <div className="px-10 py-8 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Items to Return</h3>
-                    <div className="px-4 py-2 bg-white rounded-full border border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                       {returnItems.length} Products Loaded
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-x-auto min-h-[400px]">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-slate-50/30">
-                          <th className="px-10 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Product Selection</th>
-                          <th className="px-6 py-6 text-center text-[11px] font-black text-slate-400 uppercase tracking-widest">Original Qty</th>
-                          <th className="px-6 py-6 text-center text-[11px] font-black text-slate-400 uppercase tracking-widest">UOM</th>
-                          <th className="px-10 py-6 text-center text-[11px] font-black text-rose-500 uppercase tracking-widest">Return Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {returnItems.map((item, idx) => (
-                          <tr key={`${item.delivery_id}-${item.product_id}`} className="group hover:bg-rose-50/30 transition-colors">
-                            <td className="px-10 py-6">
-                              <span className="text-base font-black text-slate-900 group-hover:text-rose-600 transition-colors block leading-tight">{item.product_name}</span>
-                              <div className="flex items-center gap-3 mt-2">
-                                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2.5 py-1 rounded-lg border border-slate-200/50 uppercase tracking-widest italic">{item.product_id}</span>
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Batch: #DEL-{item.delivery_id}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-6 text-center">
-                              <span className="text-lg font-black text-slate-900">{item.quantity}</span>
-                            </td>
-                            <td className="px-6 py-6 text-center">
-                              <span className="text-[10px] font-black bg-slate-200/50 text-slate-500 px-3 py-1.5 rounded-full uppercase italic tracking-widest border border-slate-200/50">
-                                {item.uom}
-                              </span>
-                            </td>
-                            <td className="px-10 py-6">
-                              <div className="flex items-center justify-center">
-                                <input 
-                                  type="number"
-                                  min="0"
-                                  max={item.quantity}
-                                  value={item.return_qty === 0 ? '' : item.return_qty}
-                                  placeholder="0"
-                                  onChange={(e) => handleReturnQtyChange(idx, e.target.value)}
-                                  className={cn(
-                                    "w-32 py-4 bg-slate-50 rounded-2xl text-center text-xl font-black outline-none transition-all border-2",
-                                    item.return_qty > 0 ? "border-rose-400 bg-white text-rose-600 ring-8 ring-rose-50 shadow-lg" : "border-transparent text-slate-400 focus:bg-white focus:border-rose-400"
-                                  )}
-                                />
-                              </div>
-                            </td>
-                          </tr>
                         ))}
-                        {returnItems.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="py-40 text-center opacity-20 flex flex-col items-center">
-                              <RotateCcw size={64} className="mb-4" />
-                              <h4 className="text-2xl font-black uppercase tracking-widest">Select Deliveries</h4>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="px-12 py-8 bg-white border-t border-slate-100 flex items-center justify-between shadow-[0_-20px_40px_rgba(0,0,0,0.02)] shrink-0">
-          <button 
-            onClick={() => {
-              setSelectedShopId(null);
-              setShopSearch('');
-              setSelectedDeliveryIds([]);
-              setReturnItems([]);
-              setErrorStatus(null);
-            }}
-            className="px-10 py-5 text-base font-black text-slate-400 hover:text-rose-500 transition-all uppercase tracking-widest"
-          >
-            Reset
-          </button>
-          
-          <div className="flex gap-4">
-             <button 
-              onClick={onClose}
-              className="px-10 py-5 text-base font-black text-slate-400 hover:text-slate-900 transition-all uppercase tracking-widest"
-            >
-              Cancel
-            </button>
-            <button 
-              disabled={isSubmitting || returnItems.filter(i => i.return_qty > 0).length === 0}
-              onClick={handleSubmit}
-              className={cn(
-                "px-14 py-5 bg-rose-600 text-white rounded-[2rem] text-lg font-black uppercase tracking-widest flex items-center gap-4 transition-all shadow-2xl shadow-rose-200 active:scale-95 disabled:grayscale disabled:opacity-30",
-                !isSubmitting && "hover:bg-rose-700 hover:translate-y-[-4px]"
-              )}
-            >
-              {isSubmitting ? (
-                 <>
-                   <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                   Updating Stock...
-                 </>
-              ) : (
-                <>
-                  <Save size={24} />
-                  Save Return
-                </>
-              )}
-            </button>
+          {/* Items Table */}
+          <div className="border border-slate-100 rounded-2xl overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product Details</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Batch Ref</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered Qty</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">UOM</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-rose-500 uppercase text-center">Return Quantity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {returnItems.map((item, idx) => (
+                  <tr key={`${item.delivery_id}-${item.product_id}`} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-bold text-slate-900">{item.product_name}</p>
+                      <p className="text-[10px] text-slate-400 font-mono tracking-wider italic">{item.product_id}</p>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded border border-slate-200/50 font-mono italic whitespace-nowrap">#DEL-{item.delivery_id}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="text-sm font-bold text-slate-900">{item.quantity}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.uom}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-center">
+                        <input 
+                          type="number"
+                          min="0"
+                          max={item.quantity}
+                          value={item.return_qty === 0 ? '' : item.return_qty}
+                          placeholder="0"
+                          onChange={(e) => handleReturnQtyChange(idx, e.target.value)}
+                          className={cn(
+                            "w-24 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-black outline-none transition-all",
+                            item.return_qty > 0 ? "border-rose-400 bg-white text-rose-600" : "focus:border-indigo-400 focus:bg-white"
+                          )}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {returnItems.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-20 text-center text-slate-400">
+                      <RotateCcw size={48} className="mx-auto mb-4 opacity-10" />
+                      <p className="text-sm font-medium">Select Shop & Deliveries to list returnable products</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* New ORDER Style Summary Bar */}
+          <div className="bg-indigo-600 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-indigo-100">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Return Items Count</p>
+              <p className="text-2xl font-black">{returnItems.filter(i => i.return_qty > 0).length} Line Items</p>
+            </div>
+            
+            <div className="flex gap-4">
+              <button 
+                onClick={onClose}
+                className="px-6 py-4 text-white font-bold opacity-70 hover:opacity-100 transition-opacity uppercase text-xs tracking-widest"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={handleSubmit}
+                disabled={isSubmitting || returnItems.filter(i => i.return_qty > 0).length === 0}
+                className="bg-white text-indigo-600 px-10 py-4 rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Updating Stock...' : (
+                  <>
+                    <Save size={18} />
+                    <span>Post Return (F2)</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
