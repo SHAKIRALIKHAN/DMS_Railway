@@ -544,7 +544,9 @@ export const DeliveryDetailsModal = ({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Qty</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Returned</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-indigo-600 uppercase text-center">Net Qty</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Price</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Tax (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Add. Tax (%)</th>
@@ -555,7 +557,7 @@ export const DeliveryDetailsModal = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-400">Loading items...</td></tr>
                 ) : items.map(item => (
                   <tr key={item.id}>
                     <td className="px-4 py-3">
@@ -568,6 +570,8 @@ export const DeliveryDetailsModal = ({
                       <p className="text-[10px] text-slate-500">{item.brand}</p>
                     </td>
                     <td className="px-4 py-3 text-center text-sm font-medium text-slate-600">{item.quantity}</td>
+                    <td className="px-4 py-3 text-center text-sm font-bold text-rose-500">{item.return_qty || 0}</td>
+                    <td className="px-4 py-3 text-center text-sm font-black text-indigo-600">{item.net_qty}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatPKR(item.price)}</td>
                     <td className="px-4 py-3 text-right text-xs text-slate-600">
                       {item.sales_tax_pct || 0}%

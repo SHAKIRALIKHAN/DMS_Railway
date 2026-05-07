@@ -66,6 +66,7 @@ export interface Order {
   total_amount: number;
   shop_name: string;
   order_booker_name: string;
+  items_summary?: string;
   is_cancelled?: string;
   has_delivery?: boolean | number;
   sales_tax_pct?: number;
@@ -130,6 +131,7 @@ export interface Purchase {
   supplier_id: number;
   supplier_name: string;
   purchase_date: string;
+  items_summary?: string;
   total_amount: number;
   status: 'received' | 'pending';
 }
@@ -160,6 +162,7 @@ export interface LoadPlan {
   vehicle_id: string;
   driver_id: number;
   driver_name?: string;
+  items_summary?: string;
   status: 'draft' | 'dispatched' | 'completed';
 }
 
@@ -226,6 +229,7 @@ export interface Delivery {
   shop_name: string;
   delivery_date: string;
   total_amount: number;
+  items_summary?: string;
   status: 'completed';
 }
 
@@ -237,6 +241,8 @@ export interface DeliveryItem {
   product_name?: string;
   brand?: string;
   quantity: number;
+  return_qty?: number;
+  net_qty?: number;
   price: number;
   order_id?: number;
   order_ref?: number;
@@ -259,6 +265,7 @@ export interface Invoice {
   total_discount: number;
   total_tax: number;
   net_amount: number;
+  items_summary?: string;
   status: 'open' | 'paid' | 'cancelled';
   created_at: string;
 }
@@ -285,6 +292,7 @@ export interface Return {
   shop_id: number;
   shop_name?: string;
   total_amount: number;
+  items_summary?: string;
   status: 'completed';
 }
 

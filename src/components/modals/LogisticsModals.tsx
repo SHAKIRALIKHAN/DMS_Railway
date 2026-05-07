@@ -79,6 +79,8 @@ export const DeliveryModal = ({
             price: i.price,
             max_quantity: i.quantity + (i.remaining_on_order || 9999), 
             order_ref: i.order_ref,
+            return_qty: i.return_qty || 0,
+            net_qty: i.net_qty ?? i.quantity,
             sales_tax_pct: i.sales_tax_pct || 0,
             sales_tax_amount: i.sales_tax_amount || 0,
             additional_tax_pct: i.additional_tax_pct || 0,
@@ -119,19 +121,21 @@ export const DeliveryModal = ({
           
           setDeliveryItems(prev => {
             return allBatchItems.map(item => {
-              const existing = prev.find(p => p.order_item_id === item.id);
-              const max = item.quantity - (item.delivered_quantity || 0);
-              return {
-                order_item_id: item.id,
-                product_id: item.product_id,
-                product_name: item.product_name,
-                brand: item.brand,
-                quantity: existing?.quantity || 0,
-                price: item.price,
-                max_quantity: max,
-                order_ref: item.order_id,
-                sales_tax_pct: item.sales_tax_pct || 0,
-                additional_tax_pct: item.additional_tax_pct || 0,
+                const existing = prev.find(p => p.order_item_id === item.id);
+                const max = item.quantity - (item.delivered_quantity || 0);
+                return {
+                  order_item_id: item.id,
+                  product_id: item.product_id,
+                  product_name: item.product_name,
+                  brand: item.brand,
+                  quantity: existing?.quantity || 0,
+                  price: item.price,
+                  max_quantity: max,
+                  order_ref: item.order_id,
+                  return_qty: existing?.return_qty || 0,
+                  net_qty: existing?.net_qty ?? (existing?.quantity || 0),
+                  sales_tax_pct: item.sales_tax_pct || 0,
+                  additional_tax_pct: item.additional_tax_pct || 0,
                 discount_pct: item.discount_pct || 0,
                 extra_discount_pct: item.extra_discount_pct || 0
               };
@@ -411,6 +415,8 @@ export const DeliveryModal = ({
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Origin Order</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product Description</th>
+                  <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Return Qty</th>
+                  <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Net Qty</th>
                   <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Allocatable</th>
                   <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-500 uppercase w-40">Load Quantity</th>
                 </tr>
@@ -426,6 +432,12 @@ export const DeliveryModal = ({
                     <td className="px-6 py-4">
                       <p className="text-sm font-bold text-slate-900">{item.product_name}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{item.brand}</p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-sm font-bold text-rose-500">{item.return_qty || 0}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-sm font-black text-indigo-600">{item.quantity - (item.return_qty || 0)}</span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-bold text-slate-600">{item.max_quantity}</span>

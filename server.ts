@@ -9,347 +9,358 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Database persistence path
+const dbPath = path.join(process.cwd(), "dms_v7.db");
+console.log(`[Database] Target path: ${dbPath}`);
+
 let db: any;
 try {
-  db = new Database("dms_v7.db");
+  db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
+  console.log(`[Database] Connection established successfully in WAL mode.`);
   
   // Initialize Database Schema
   try {
-    db.prepare("SELECT unit_code FROM units LIMIT 1").get();
+    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='units'").get();
+    if (!tableCheck) {
+      console.log("[Database] 'units' table missing. Triggering schema recreation.");
+      throw new Error("Schema missing");
+    }
   } catch (err) {
-    db.exec("DROP TABLE IF EXISTS units");
+    console.log("[Database] Initial check failed, ensuring baseline tables exist...");
   }
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL,
-    phone TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL
-  );
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        phone TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 
-  CREATE TABLE IF NOT EXISTS material_groups (
-    mat_gp TEXT PRIMARY KEY,
-    mat_description TEXT NOT NULL
-  );
+      CREATE TABLE IF NOT EXISTS material_groups (
+        mat_gp TEXT PRIMARY KEY,
+        mat_description TEXT NOT NULL
+      );
 
-  CREATE TABLE IF NOT EXISTS products (
-    product_id TEXT PRIMARY KEY,
-    product_name TEXT NOT NULL,
-    brand TEXT NOT NULL,
-    material_group_id TEXT,
-    purchase_price REAL NOT NULL,
-    trade_price REAL NOT NULL,
-    retail_price REAL NOT NULL,
-    stock_quantity INTEGER NOT NULL,
-    unit TEXT DEFAULT 'EACH',
-    conversion_value REAL DEFAULT 1,
-    conversion_unit TEXT DEFAULT 'EACH',
-    min_stock_level INTEGER DEFAULT 10,
-    reorder_level INTEGER DEFAULT 20,
-    FOREIGN KEY (material_group_id) REFERENCES material_groups(mat_gp)
-  );
+      CREATE TABLE IF NOT EXISTS products (
+        product_id TEXT PRIMARY KEY,
+        product_name TEXT NOT NULL,
+        brand TEXT NOT NULL,
+        material_group_id TEXT,
+        purchase_price REAL NOT NULL,
+        trade_price REAL NOT NULL,
+        retail_price REAL NOT NULL,
+        stock_quantity INTEGER NOT NULL,
+        unit TEXT DEFAULT 'EACH',
+        conversion_value REAL DEFAULT 1,
+        conversion_unit TEXT DEFAULT 'EACH',
+        min_stock_level INTEGER DEFAULT 10,
+        reorder_level INTEGER DEFAULT 20,
+        FOREIGN KEY (material_group_id) REFERENCES material_groups(mat_gp)
+      );
 
-  CREATE TABLE IF NOT EXISTS units (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    unit_code TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    short_name TEXT NOT NULL,
-    status INTEGER DEFAULT 1
-  );
+      CREATE TABLE IF NOT EXISTS units (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        unit_code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        short_name TEXT NOT NULL,
+        status INTEGER DEFAULT 1
+      );
 
-  CREATE TABLE IF NOT EXISTS product_batches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id TEXT NOT NULL,
-    purchase_id INTEGER,
-    quantity INTEGER NOT NULL,
-    remaining_quantity INTEGER NOT NULL,
-    purchase_price REAL NOT NULL,
-    supplier_batch_no TEXT,
-    storage_location TEXT,
-    received_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (purchase_id) REFERENCES purchases(id)
-  );
+      CREATE TABLE IF NOT EXISTS product_batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id TEXT NOT NULL,
+        purchase_id INTEGER,
+        quantity INTEGER NOT NULL,
+        remaining_quantity INTEGER NOT NULL,
+        purchase_price REAL NOT NULL,
+        supplier_batch_no TEXT,
+        storage_location TEXT,
+        received_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(product_id),
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS shops (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_name TEXT NOT NULL,
-    owner_name TEXT NOT NULL,
-    location TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    credit_limit REAL DEFAULT 0,
-    category TEXT DEFAULT 'Retailer'
-  );
+      CREATE TABLE IF NOT EXISTS shops (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_name TEXT NOT NULL,
+        owner_name TEXT NOT NULL,
+        location TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        credit_limit REAL DEFAULT 0,
+        category TEXT DEFAULT 'Retailer'
+      );
 
-  CREATE TABLE IF NOT EXISTS order_bookers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    father_name TEXT NOT NULL,
-    cell_no TEXT NOT NULL,
-    cnic_no TEXT NOT NULL,
-    joining_date DATE NOT NULL
-  );
+      CREATE TABLE IF NOT EXISTS order_bookers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        father_name TEXT NOT NULL,
+        cell_no TEXT NOT NULL,
+        cnic_no TEXT NOT NULL,
+        joining_date DATE NOT NULL
+      );
 
-  CREATE TABLE IF NOT EXISTS returns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    return_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    shop_id INTEGER NOT NULL,
-    total_amount REAL DEFAULT 0,
-    status TEXT DEFAULT 'completed',
-    FOREIGN KEY (shop_id) REFERENCES shops(id)
-  );
+      CREATE TABLE IF NOT EXISTS returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        shop_id INTEGER NOT NULL,
+        total_amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'completed',
+        FOREIGN KEY (shop_id) REFERENCES shops(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS return_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    return_id INTEGER NOT NULL,
-    delivery_id INTEGER NOT NULL,
-    product_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    unit_price REAL NOT NULL,
-    FOREIGN KEY (return_id) REFERENCES returns(id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (delivery_id) REFERENCES deliveries(id)
-  );
+      CREATE TABLE IF NOT EXISTS return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_id INTEGER NOT NULL,
+        delivery_id INTEGER NOT NULL,
+        delivery_item_id INTEGER,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price REAL NOT NULL,
+        FOREIGN KEY (return_id) REFERENCES returns(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id),
+        FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
+        FOREIGN KEY (delivery_item_id) REFERENCES delivery_items(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS salesmen (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    father_name TEXT NOT NULL,
-    cell_no TEXT NOT NULL,
-    cnic_no TEXT NOT NULL,
-    joining_date DATE NOT NULL
-  );
+      CREATE TABLE IF NOT EXISTS salesmen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        father_name TEXT NOT NULL,
+        cell_no TEXT NOT NULL,
+        cnic_no TEXT NOT NULL,
+        joining_date DATE NOT NULL
+      );
 
-  CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER NOT NULL,
-    order_booker_id INTEGER NOT NULL,
-    order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    estimated_delivery_date DATETIME,
-    status TEXT DEFAULT 'pending',
-    total_amount REAL NOT NULL,
-    sales_tax_pct REAL DEFAULT 0,
-    sales_tax_amount REAL DEFAULT 0,
-    additional_tax_pct REAL DEFAULT 0,
-    additional_tax_amount REAL DEFAULT 0,
-    discount_pct REAL DEFAULT 0,
-    discount_amount REAL DEFAULT 0,
-    extra_discount_pct REAL DEFAULT 0,
-    extra_discount_amount REAL DEFAULT 0,
-    is_cancelled TEXT DEFAULT '',
-    FOREIGN KEY (shop_id) REFERENCES shops(id),
-    FOREIGN KEY (order_booker_id) REFERENCES order_bookers(id)
-  );
+      CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_id INTEGER NOT NULL,
+        order_booker_id INTEGER NOT NULL,
+        order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        estimated_delivery_date DATETIME,
+        status TEXT DEFAULT 'pending',
+        total_amount REAL NOT NULL,
+        sales_tax_pct REAL DEFAULT 0,
+        sales_tax_amount REAL DEFAULT 0,
+        additional_tax_pct REAL DEFAULT 0,
+        additional_tax_amount REAL DEFAULT 0,
+        discount_pct REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
+        extra_discount_pct REAL DEFAULT 0,
+        extra_discount_amount REAL DEFAULT 0,
+        is_cancelled TEXT DEFAULT '',
+        FOREIGN KEY (shop_id) REFERENCES shops(id),
+        FOREIGN KEY (order_booker_id) REFERENCES order_bookers(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS order_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id INTEGER NOT NULL,
-    product_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    status TEXT DEFAULT 'Pending',
-    sales_tax_pct REAL DEFAULT 0,
-    sales_tax_amount REAL DEFAULT 0,
-    additional_tax_pct REAL DEFAULT 0,
-    additional_tax_amount REAL DEFAULT 0,
-    discount_pct REAL DEFAULT 0,
-    discount_amount REAL DEFAULT 0,
-    extra_discount_pct REAL DEFAULT 0,
-    extra_discount_amount REAL DEFAULT 0,
-    FOREIGN KEY (order_id) REFERENCES orders(id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-  );
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL NOT NULL,
+        status TEXT DEFAULT 'Pending',
+        sales_tax_pct REAL DEFAULT 0,
+        sales_tax_amount REAL DEFAULT 0,
+        additional_tax_pct REAL DEFAULT 0,
+        additional_tax_amount REAL DEFAULT 0,
+        discount_pct REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
+        extra_discount_pct REAL DEFAULT 0,
+        extra_discount_amount REAL DEFAULT 0,
+        FOREIGN KEY (order_id) REFERENCES orders(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
 
-  CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    payment_method TEXT NOT NULL,
-    FOREIGN KEY (shop_id) REFERENCES shops(id)
-  );
+      CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        payment_method TEXT NOT NULL,
+        FOREIGN KEY (shop_id) REFERENCES shops(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS suppliers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    contact_person TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    address TEXT NOT NULL
-  );
+      CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        contact_person TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        address TEXT NOT NULL
+      );
 
-  CREATE TABLE IF NOT EXISTS purchases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    supplier_id INTEGER NOT NULL,
-    purchase_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status TEXT DEFAULT 'received',
-    total_amount REAL NOT NULL,
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
-  );
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL,
+        purchase_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'received',
+        total_amount REAL NOT NULL,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS purchase_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    purchase_id INTEGER NOT NULL,
-    product_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    supplier_batch_no TEXT,
-    storage_location TEXT,
-    FOREIGN KEY (purchase_id) REFERENCES purchases(id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-  );
+      CREATE TABLE IF NOT EXISTS purchase_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL NOT NULL,
+        supplier_batch_no TEXT,
+        storage_location TEXT,
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
 
-  CREATE TABLE IF NOT EXISTS drivers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    father_name TEXT NOT NULL,
-    cell_no TEXT NOT NULL,
-    cnic_no TEXT NOT NULL,
-    joining_date DATE NOT NULL
-  );
+      CREATE TABLE IF NOT EXISTS drivers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        father_name TEXT NOT NULL,
+        cell_no TEXT NOT NULL,
+        cnic_no TEXT NOT NULL,
+        joining_date DATE NOT NULL
+      );
 
-  CREATE TABLE IF NOT EXISTS load_plans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    vehicle_id TEXT NOT NULL,
-    driver_id INTEGER NOT NULL,
-    status TEXT DEFAULT 'draft',
-    FOREIGN KEY (driver_id) REFERENCES drivers(id)
-  );
+      CREATE TABLE IF NOT EXISTS load_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        vehicle_id TEXT NOT NULL,
+        driver_id INTEGER NOT NULL,
+        status TEXT DEFAULT 'draft',
+        FOREIGN KEY (driver_id) REFERENCES drivers(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS load_plan_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    order_id INTEGER NOT NULL,
-    FOREIGN KEY (plan_id) REFERENCES load_plans(id),
-    FOREIGN KEY (order_id) REFERENCES orders(id)
-  );
+      CREATE TABLE IF NOT EXISTS load_plan_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        FOREIGN KEY (plan_id) REFERENCES load_plans(id),
+        FOREIGN KEY (order_id) REFERENCES orders(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS deliveries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id INTEGER,
-    shop_id INTEGER,
-    salesman_id INTEGER NOT NULL,
-    delivery_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status TEXT DEFAULT 'completed',
-    total_amount REAL NOT NULL,
-    invoice_id INTEGER,
-    FOREIGN KEY (order_id) REFERENCES orders(id),
-    FOREIGN KEY (shop_id) REFERENCES shops(id),
-    FOREIGN KEY (salesman_id) REFERENCES salesmen(id),
-    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
-  );
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER,
+        shop_id INTEGER,
+        salesman_id INTEGER NOT NULL,
+        delivery_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'completed',
+        total_amount REAL NOT NULL,
+        invoice_id INTEGER,
+        FOREIGN KEY (order_id) REFERENCES orders(id),
+        FOREIGN KEY (shop_id) REFERENCES shops(id),
+        FOREIGN KEY (salesman_id) REFERENCES salesmen(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS delivery_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    delivery_id INTEGER NOT NULL,
-    order_item_id INTEGER NOT NULL,
-    product_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    sales_tax_pct REAL DEFAULT 0,
-    sales_tax_amount REAL DEFAULT 0,
-    additional_tax_pct REAL DEFAULT 0,
-    additional_tax_amount REAL DEFAULT 0,
-    discount_pct REAL DEFAULT 0,
-    discount_amount REAL DEFAULT 0,
-    extra_discount_pct REAL DEFAULT 0,
-    extra_discount_amount REAL DEFAULT 0,
-    FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
-    FOREIGN KEY (order_item_id) REFERENCES order_items(id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-  );
+      CREATE TABLE IF NOT EXISTS delivery_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        delivery_id INTEGER NOT NULL,
+        order_item_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL NOT NULL,
+        sales_tax_pct REAL DEFAULT 0,
+        sales_tax_amount REAL DEFAULT 0,
+        additional_tax_pct REAL DEFAULT 0,
+        additional_tax_amount REAL DEFAULT 0,
+        discount_pct REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
+        extra_discount_pct REAL DEFAULT 0,
+        extra_discount_amount REAL DEFAULT 0,
+        FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
+        FOREIGN KEY (order_item_id) REFERENCES order_items(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
 
-  CREATE TABLE IF NOT EXISTS invoices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER NOT NULL,
-    invoice_date TEXT NOT NULL,
-    gross_amount REAL DEFAULT 0,
-    total_discount REAL DEFAULT 0,
-    total_tax REAL DEFAULT 0,
-    net_amount REAL DEFAULT 0,
-    status TEXT DEFAULT 'open',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (shop_id) REFERENCES shops(id)
-  );
+      CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_id INTEGER NOT NULL,
+        invoice_date TEXT NOT NULL,
+        gross_amount REAL DEFAULT 0,
+        total_discount REAL DEFAULT 0,
+        total_tax REAL DEFAULT 0,
+        net_amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'open',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (shop_id) REFERENCES shops(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS invoice_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id INTEGER NOT NULL,
-    delivery_id INTEGER NOT NULL,
-    delivery_item_id INTEGER NOT NULL,
-    product_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    unit_price REAL NOT NULL,
-    trade_discount_pct REAL DEFAULT 0,
-    tax_pct REAL DEFAULT 0,
-    additional_tax_pct REAL DEFAULT 0,
-    special_discount_pct REAL DEFAULT 0,
-    net_amount REAL NOT NULL,
-    FOREIGN KEY (invoice_id) REFERENCES invoices(id),
-    FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-  );
+      CREATE TABLE IF NOT EXISTS invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        delivery_id INTEGER NOT NULL,
+        delivery_item_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price REAL NOT NULL,
+        trade_discount_pct REAL DEFAULT 0,
+        tax_pct REAL DEFAULT 0,
+        additional_tax_pct REAL DEFAULT 0,
+        special_discount_pct REAL DEFAULT 0,
+        net_amount REAL NOT NULL,
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id),
+        FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
 
-  CREATE TABLE IF NOT EXISTS client_ledger (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER NOT NULL,
-    date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    description TEXT NOT NULL,
-    debit REAL DEFAULT 0,
-    credit REAL DEFAULT 0,
-    balance REAL NOT NULL,
-    FOREIGN KEY (shop_id) REFERENCES shops(id)
-  );
+      CREATE TABLE IF NOT EXISTS client_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_id INTEGER NOT NULL,
+        date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        description TEXT NOT NULL,
+        debit REAL DEFAULT 0,
+        credit REAL DEFAULT 0,
+        balance REAL NOT NULL,
+        FOREIGN KEY (shop_id) REFERENCES shops(id)
+      );
 
-  CREATE TABLE IF NOT EXISTS countries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
-  );
+      CREATE TABLE IF NOT EXISTS countries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      );
 
-  CREATE TABLE IF NOT EXISTS provinces (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    country_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (country_id) REFERENCES countries(id),
-    UNIQUE(country_id, name)
-  );
+      CREATE TABLE IF NOT EXISTS provinces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        country_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (country_id) REFERENCES countries(id),
+        UNIQUE(country_id, name)
+      );
 
-  CREATE TABLE IF NOT EXISTS cities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    province_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (province_id) REFERENCES provinces(id),
-    UNIQUE(province_id, name)
-  );
+      CREATE TABLE IF NOT EXISTS cities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        province_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (province_id) REFERENCES provinces(id),
+        UNIQUE(province_id, name)
+      );
 
-  CREATE TABLE IF NOT EXISTS towns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    city_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (city_id) REFERENCES cities(id),
-    UNIQUE(city_id, name)
-  );
+      CREATE TABLE IF NOT EXISTS towns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (city_id) REFERENCES cities(id),
+        UNIQUE(city_id, name)
+      );
 
-  CREATE TABLE IF NOT EXISTS areas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    town_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (town_id) REFERENCES towns(id),
-    UNIQUE(town_id, name)
-  );
+      CREATE TABLE IF NOT EXISTS areas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        town_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (town_id) REFERENCES towns(id),
+        UNIQUE(town_id, name)
+      );
 
-    CREATE TABLE IF NOT EXISTS subareas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      area_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      FOREIGN KEY (area_id) REFERENCES areas(id),
-      UNIQUE(area_id, name)
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS subareas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        area_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (area_id) REFERENCES areas(id),
+        UNIQUE(area_id, name)
+      );
+    `);
 
   // Run Migrations (Idempotent)
   try { db.exec("ALTER TABLE orders ADD COLUMN is_cancelled TEXT DEFAULT ''"); } catch(e) {}
@@ -380,6 +391,8 @@ try {
   try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_pct REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE delivery_items ADD COLUMN extra_discount_amount REAL DEFAULT 0"); } catch(e) {}
 
+  try { db.exec("ALTER TABLE return_items ADD COLUMN delivery_item_id INTEGER REFERENCES delivery_items(id)"); } catch(e) {}
+  
   // Migrations for invoice_items 
   try { db.exec("ALTER TABLE invoice_items ADD COLUMN trade_discount_pct REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE invoice_items ADD COLUMN tax_pct REAL DEFAULT 0"); } catch(e) {}
@@ -426,199 +439,126 @@ try {
 // Seed initial data if empty
 try {
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+  
   if (userCount.count === 0) {
+    console.log("[Database] No users found. Starting baseline seeding...");
     db.transaction(() => {
-      db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
-        "Admin Karachi", "admin", "03001234567", "admin123"
-      );
-      db.prepare("INSERT INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run(
-        "Salesman A", "salesman", "03007654321", "sales123"
-      );
+      // 1. Users
+      db.prepare("INSERT OR IGNORE INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run("Admin Karachi", "admin", "03001234567", "admin123");
+      db.prepare("INSERT OR IGNORE INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run("Salesman A", "salesman", "03007654321", "sales123");
 
-      // Seed Material Groups
+      // 2. Material Groups
       const materialGroups = [
-        { id: "00001", desc: "OIL" },
-        { id: "00002", desc: "DAIRY" },
-        { id: "00003", desc: "KITCHEN" },
-        { id: "00004", desc: "SNACKS" }
+        { mat_gp: "00001", mat_description: "OIL" },
+        { mat_gp: "00002", mat_description: "DAIRY" },
+        { mat_gp: "00003", mat_description: "KITCHEN" },
+        { mat_gp: "00004", mat_description: "SNACKS" }
       ];
+      const mgStmt = db.prepare("INSERT OR IGNORE INTO material_groups (mat_gp, mat_description) VALUES (?, ?)");
+      for (const mg of materialGroups) mgStmt.run(mg.mat_gp, mg.mat_description);
 
-      const mgStmt = db.prepare("INSERT INTO material_groups (mat_gp, mat_description) VALUES (?, ?)");
-      for (const mg of materialGroups) {
-        mgStmt.run(mg.id, mg.desc);
-      }
-
-      // Seed Units
+      // 3. Units
       const unitsToSeed = [
         { code: 'KG', name: 'KILOGRAM', short: 'KGS' },
-        { code: 'MT', name: 'METRIC TON', short: 'MT' },
         { code: 'PC', name: 'PIECES', short: 'PCS' },
-        { code: 'GR', name: 'GRAM', short: 'GRM' },
         { code: 'L', name: 'LITER', short: 'LTR' },
-        { code: 'BX', name: 'BOX', short: 'BOX' },
-        { code: 'DZ', name: 'DOZEN', short: 'DZN' },
-        { code: 'CT', name: 'CARTON', short: 'CTN' },
         { code: 'EA', name: 'EACH', short: 'EA' },
         { code: 'PK', name: 'PACK', short: 'PACK' },
-        { code: 'SET', name: 'SET', short: 'SET' },
-        { code: 'BAG', name: 'BAG', short: 'BAG' }
+        { code: 'CT', name: 'CARTON', short: 'CTN' }
       ];
-
       const unitStmt = db.prepare("INSERT OR IGNORE INTO units (unit_code, name, short_name, status) VALUES (?, ?, ?, ?)");
-      for (const u of unitsToSeed) {
-        unitStmt.run(u.code, u.name, u.short, 1);
-      }
+      for (const u of unitsToSeed) unitStmt.run(u.code, u.name, u.short, 1);
 
+      // 4. Products & Initial Batches
       const initialProducts = [
         { id: "A000000001", name: "Cooking Oil 1L", brand: "Dalda", mg: "00001", pp: 500, tp: 550, rp: 600, stock: 100, unit: "EA", conv: 1, convUnit: "L", min: 20, reorder: 40 },
         { id: "A000000002", name: "Tea 400g", brand: "Tapal", mg: "00003", pp: 600, tp: 650, rp: 700, stock: 50, unit: "EA", conv: 400, convUnit: "GR", min: 10, reorder: 20 },
-        { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EA", conv: 1, convUnit: "EA", min: 50, reorder: 100 },
-        { id: "A000000004", name: "Milk 1L", brand: "MilkPak", mg: "00002", pp: 250, tp: 280, rp: 320, stock: 150, unit: "EA", conv: 1, convUnit: "L", min: 30, reorder: 60 },
-        { id: "A000000005", name: "Biscuits 12pk", brand: "Peek Freans", mg: "00004", pp: 400, tp: 450, rp: 500, stock: 80, unit: "PK", conv: 12, convUnit: "EA", min: 15, reorder: 30 }
+        { id: "A000000003", name: "Soap Bar", brand: "Lux", mg: "00003", pp: 100, tp: 120, rp: 150, stock: 200, unit: "EA", conv: 1, convUnit: "EA", min: 50, reorder: 100 }
       ];
-
-      const productStmt = db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      const batchStmt = db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)");
-      
+      const productStmt = db.prepare("INSERT OR IGNORE INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const batchStmt = db.prepare("INSERT OR IGNORE INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)");
       for (const p of initialProducts) {
         productStmt.run(p.id, p.name, p.brand, p.mg, p.pp, p.tp, p.rp, p.stock, p.unit, p.conv, p.convUnit, p.min, p.reorder);
         batchStmt.run(p.id, null, p.stock, p.stock, p.pp);
       }
 
-      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-        "Bismillah General Store", "Ahmed Ali", "Saddar, Karachi", "03111111111", 50000
-      );
-      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-        "Madina Super Mart", "Muhammad Usman", "Gulshan-e-Iqbal, Karachi", "03222222222", 100000
-      );
-      db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-        "Al-Jadeed Mart", "Ibrahim Khan", "North Nazimabad, Karachi", "03333333333", 75000
-      );
+      // 5. Shops, Suppliers, Bookers, Salesmen
+      db.prepare("INSERT OR IGNORE INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run("Bismillah General Store", "Ahmed Ali", "Saddar, Karachi", "03111111111", 50000);
+      db.prepare("INSERT OR IGNORE INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run("Madina Super Mart", "Muhammad Usman", "Gulshan-e-Iqbal, Karachi", "03222222222", 100000);
+      db.prepare("INSERT OR IGNORE INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run("MSK Company", "Saleem Ahmed", "03444444444", "SITE Area, Karachi");
+      db.prepare("INSERT OR IGNORE INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run("Zeeshan Ahmed", "Ahmed Khan", "03001234567", "42101-1111111-1", "2024-01-01");
+      db.prepare("INSERT OR IGNORE INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run("Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10");
+    })();
+  }
 
-      // Seed Suppliers
-      db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
-        "MSK Company", "Saleem Ahmed", "03444444444", "SITE Area, Karachi"
-      );
-      db.prepare("INSERT INTO suppliers (name, contact_person, phone, address) VALUES (?, ?, ?, ?)").run(
-        "Unilever Pakistan", "Zubair Ali", "03555555555", "Avari Towers, Karachi"
-      );
+  // --- SEED TRANSACTION DATA ---
+  const orderCount = db.prepare("SELECT COUNT(*) as count FROM orders").get() as { count: number };
+  const purchaseCount = db.prepare("SELECT COUNT(*) as count FROM purchases").get() as { count: number };
+  const returnCount = db.prepare("SELECT COUNT(*) as count FROM returns").get() as { count: number };
 
-      // Seed Order Bookers
-      const ob1 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "Zeeshan Ahmed", "Ahmed Khan", "03001234567", "42101-1111111-1", "2024-01-01"
-      );
-      const ob2 = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "Kamran Shah", "Shah Jahan", "03007654321", "42101-2222222-2", "2024-01-15"
-      );
+  if (orderCount.count === 0 || purchaseCount.count === 0 || returnCount.count === 0) {
+    console.log("[Database] Seeding missing transaction records...");
+    db.transaction(() => {
+      const shopRes = db.prepare("SELECT id FROM shops LIMIT 1").get() as any;
+      const supplierRes = db.prepare("SELECT id FROM suppliers LIMIT 1").get() as any;
+      const bookerRes = db.prepare("SELECT id FROM order_bookers LIMIT 1").get() as any;
+      const salesmanRes = db.prepare("SELECT id FROM salesmen LIMIT 1").get() as any;
 
-      // Seed Salesmen
-      const sm1 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
-      );
-      const sm2 = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "M. Yasin", "M. Yousuf", "03112223334", "42101-3333333-3", "2024-03-01"
-      );
+      if (!shopRes || !supplierRes || !bookerRes || !salesmanRes) return;
 
-      // Seed some orders and items
-      const seedOrders = [
-        { retailer: 1, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000001", qty: 2, price: 550 }, { id: "A000000002", qty: 1, price: 650 }], status: 'delivered' },
-        { retailer: 2, order_booker: ob1.lastInsertRowid, items: [{ id: "A000000003", qty: 10, price: 120 }], status: 'pending' },
-        { retailer: 3, order_booker: ob2.lastInsertRowid, items: [{ id: "A000000001", qty: 5, price: 550 }, { id: "A000000004", qty: 6, price: 280 }, { id: "A000000005", qty: 2, price: 450 }], status: 'delivered' }
-      ];
-
-      for (const o of seedOrders) {
-        const total = o.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-        const estDelivery = new Date();
-        estDelivery.setDate(estDelivery.getDate() + 1);
-        
-        const order = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status, estimated_delivery_date) VALUES (?, ?, ?, ?, ?)").run(
-          o.retailer, o.order_booker, total, o.status, estDelivery.toISOString()
-        );
-        const orderId = order.lastInsertRowid;
-
-        for (const item of o.items) {
-          db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(
-            orderId, item.id, item.qty, item.price, o.status === 'delivered' ? 'Delivered' : 'Pending'
-          );
-          
-          db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.qty, item.id);
-          
-          let remainingToReduce = item.qty;
-          const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.id) as any[];
-          
-          for (const batch of batches) {
-            if (remainingToReduce <= 0) break;
-            const reduce = Math.min(batch.remaining_quantity, remainingToReduce);
-            db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE id = ?").run(reduce, batch.id);
-            remainingToReduce -= reduce;
-          }
-        }
-
-        if (o.status === 'delivered') {
-          const delivery = db.prepare("INSERT INTO deliveries (order_id, shop_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?, ?)").run(
-            orderId, o.retailer, sm1.lastInsertRowid, total, 'completed'
-          );
-          const deliveryId = delivery.lastInsertRowid;
-
-          const orderItems = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(orderId) as any[];
-          for (const oi of orderItems) {
-            db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(
-              deliveryId, oi.id, oi.product_id, oi.quantity, oi.price
-            );
-          }
-
-          db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(
-            o.retailer, `Order #${orderId}`, total, total
-          );
+      // 1. Seed 3 Purchases
+      if (purchaseCount.count === 0) {
+        const pItems = [
+          { pid: "A000000001", qty: 50, price: 500 },
+          { pid: "A000000002", qty: 30, price: 600 },
+          { pid: "A000000003", qty: 100, price: 100 }
+        ];
+        for (const item of pItems) {
+          const pTotal = item.qty * item.price;
+          const pId = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(supplierRes.id, pTotal, 'received').lastInsertRowid;
+          db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price) VALUES (?, ?, ?, ?)").run(pId, item.pid, item.qty, item.price);
+          db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(item.pid, pId, item.qty, item.qty, item.price);
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.qty, item.pid);
         }
       }
 
-      // Seed Purchases
-      const p1_items = [{ id: "A000000001", qty: 100, price: 450 }];
-      const p1_total = p1_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-      const purchase1 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-        1, p1_total, 'received'
-      );
-      db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-        purchase1.lastInsertRowid, p1_items[0].id, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
-      );
-      db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-        p1_items[0].id, purchase1.lastInsertRowid, p1_items[0].qty, p1_items[0].qty, p1_items[0].price, "B-001", "Warehouse A"
-      );
-      db.prepare("UPDATE products SET stock_quantity = stock_quantity + 100 WHERE product_id = ?").run("A000000001");
+      // 2. Seed 3 Orders & Deliveries
+      if (orderCount.count === 0) {
+        const dItems = [
+          { pid: "A000000001", qty: 10, price: 550 },
+          { pid: "A000000002", qty: 5, price: 650 },
+          { pid: "A000000003", qty: 20, price: 120 }
+        ];
+        for (const item of dItems) {
+          const dTotal = item.qty * item.price;
+          const oId = db.prepare("INSERT INTO orders (shop_id, order_booker_id, total_amount, status) VALUES (?, ?, ?, ?)").run(shopRes.id, bookerRes.id, dTotal, 'delivered').lastInsertRowid;
+          const oiId = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, ?, ?, ?, ?)").run(oId, item.pid, item.qty, item.price, 'delivered').lastInsertRowid;
+          const delId = db.prepare("INSERT INTO deliveries (order_id, shop_id, salesman_id, total_amount, status) VALUES (?, ?, ?, ?, ?)").run(oId, shopRes.id, salesmanRes.id, dTotal, 'completed').lastInsertRowid;
+          db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, ?, ?, ?)").run(delId, oiId, item.pid, item.qty, item.price);
+          
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.qty, item.pid);
+          db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE product_id = ? AND remaining_quantity >= ?").run(item.qty, item.pid, item.qty);
+          
+          const lastBal = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shopRes.id) as any;
+          db.prepare("INSERT INTO client_ledger (shop_id, description, debit, balance) VALUES (?, ?, ?, ?)").run(shopRes.id, `Delivery #${delId}`, dTotal, (lastBal?.balance || 0) + dTotal);
+        }
+      }
 
-      const p2_items = [{ id: "A000000002", qty: 50, price: 580 }];
-      const p2_total = p2_items.reduce((sum, i) => sum + (i.qty * i.price), 0);
-      const purchase2 = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-        2, p2_total, 'received'
-      );
-      db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
-        purchase2.lastInsertRowid, p2_items[0].id, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
-      );
-      db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-        p2_items[0].id, purchase2.lastInsertRowid, p2_items[0].qty, p2_items[0].qty, p2_items[0].price, "B-002", "Warehouse B"
-      );
-      db.prepare("UPDATE products SET stock_quantity = stock_quantity + 50 WHERE product_id = ?").run("A000000002");
-
-      // Seed Drivers
-      const driver1 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "Junaid Khan", "Abdul Khan", "03001112223", "42101-1234567-1", "2024-01-15"
-      );
-      const driver2 = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        "Asif Ali", "Ali Ahmed", "03004445556", "42101-7654321-2", "2024-02-10"
-      );
-
-      // Seed Load Plan
-      const plan1 = db.prepare("INSERT INTO load_plans (vehicle_id, driver_id, status) VALUES (?, ?, ?)").run(
-        "KHI-1234", driver1.lastInsertRowid, "draft"
-      );
-      db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(
-        plan1.lastInsertRowid, 2
-      );
+      // 3. Seed 3 Returns
+      if (returnCount.count === 0) {
+        const activeDels = db.prepare("SELECT d.id as del_id, di.id as di_id, d.shop_id, di.product_id, di.quantity, di.price FROM deliveries d JOIN delivery_items di ON d.id = di.delivery_id LIMIT 3").all() as any[];
+        for (const r of activeDels) {
+          const rQty = 1;
+          const rTotal = rQty * r.price;
+          const retId = db.prepare("INSERT INTO returns (shop_id, total_amount, status) VALUES (?, ?, ?)").run(r.shop_id, rTotal, 'completed').lastInsertRowid;
+          db.prepare("INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)").run(retId, r.del_id, r.di_id, r.product_id, rQty, r.price);
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(rQty, r.product_id);
+        }
+      }
     })();
   }
 } catch (err) {
-  console.error("CRITICAL: Initial seeding failed:", err);
+  console.error("CRITICAL: Initial seeding check failed:", err);
 }
 
 // Seed Units separately
@@ -882,17 +822,62 @@ async function startServer() {
       const products = db.prepare("SELECT p.*, mg.mat_description as material_group_name FROM products p LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp").all();
       const shops = db.prepare("SELECT * FROM shops").all();
       const suppliers = db.prepare("SELECT * FROM suppliers").all();
-      const orders = db.prepare("SELECT o.*, r.shop_name, ob.name as order_booker_name FROM orders o JOIN shops r ON o.shop_id = r.id JOIN order_bookers ob ON o.order_booker_id = ob.id ORDER BY o.order_date DESC").all();
-      const purchases = db.prepare("SELECT p.*, s.name as supplier_name FROM purchases p JOIN suppliers s ON p.supplier_id = s.id ORDER BY p.purchase_date DESC").all();
-      const loadPlans = db.prepare("SELECT lp.*, d.name as driver_name FROM load_plans lp JOIN drivers d ON lp.driver_id = d.id ORDER BY lp.plan_date DESC").all();
+      const orders = db.prepare(`
+        SELECT o.*, r.shop_name, ob.name as order_booker_name,
+        (SELECT GROUP_CONCAT(COALESCE(p.product_name, oi.product_id), ', ') FROM order_items oi LEFT JOIN products p ON oi.product_id = p.product_id WHERE oi.order_id = o.id) as items_summary
+        FROM orders o 
+        LEFT JOIN shops r ON o.shop_id = r.id 
+        LEFT JOIN order_bookers ob ON o.order_booker_id = ob.id 
+        ORDER BY o.order_date DESC
+      `).all();
+
+      const purchases = db.prepare(`
+        SELECT p.*, s.name as supplier_name,
+        (SELECT GROUP_CONCAT(COALESCE(prod.product_name, pi.product_id), ', ') FROM purchase_items pi LEFT JOIN products prod ON pi.product_id = prod.product_id WHERE pi.purchase_id = p.id) as items_summary
+        FROM purchases p 
+        LEFT JOIN suppliers s ON p.supplier_id = s.id 
+        ORDER BY p.purchase_date DESC
+      `).all();
+
+      const loadPlans = db.prepare(`
+        SELECT lp.*, d.name as driver_name,
+        (SELECT GROUP_CONCAT('ORD-' || lpi.order_id, ', ') FROM load_plan_items lpi WHERE lpi.plan_id = lp.id) as items_summary
+        FROM load_plans lp 
+        LEFT JOIN drivers d ON lp.driver_id = d.id 
+        ORDER BY lp.plan_date DESC
+      `).all();
+
       const materialGroups = db.prepare("SELECT * FROM material_groups").all();
       const drivers = db.prepare("SELECT * FROM drivers").all();
       const orderBookers = db.prepare("SELECT * FROM order_bookers").all();
       const salesmen = db.prepare("SELECT * FROM salesmen").all();
       const units = db.prepare("SELECT * FROM units").all();
-      const deliveries = db.prepare("SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name FROM deliveries d JOIN orders o ON d.order_id = o.id JOIN shops r ON o.shop_id = r.id JOIN salesmen s ON d.salesman_id = s.id ORDER BY d.delivery_date DESC").all();
-      const returns = db.prepare("SELECT r.*, s.shop_name FROM returns r JOIN shops s ON r.shop_id = s.id ORDER BY r.return_date DESC").all();
-      const invoices = db.prepare("SELECT i.*, s.shop_name FROM invoices i JOIN shops s ON i.shop_id = s.id ORDER BY i.created_at DESC").all();
+
+      const deliveries = db.prepare(`
+        SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name,
+        (SELECT GROUP_CONCAT(COALESCE(p.product_name, di.product_id), ', ') FROM delivery_items di LEFT JOIN products p ON di.product_id = p.product_id WHERE di.delivery_id = d.id) as items_summary
+        FROM deliveries d 
+        LEFT JOIN orders o ON d.order_id = o.id 
+        LEFT JOIN shops r ON (d.shop_id = r.id OR o.shop_id = r.id) 
+        LEFT JOIN salesmen s ON d.salesman_id = s.id 
+        ORDER BY d.delivery_date DESC
+      `).all();
+
+      const returns = db.prepare(`
+        SELECT r.*, s.shop_name,
+        (SELECT GROUP_CONCAT(COALESCE(p.product_name, ret.product_id), ', ') FROM return_items ret LEFT JOIN products p ON ret.product_id = p.product_id WHERE ret.return_id = r.id) as items_summary
+        FROM returns r 
+        LEFT JOIN shops s ON r.shop_id = s.id 
+        ORDER BY r.return_date DESC
+      `).all();
+
+      const invoices = db.prepare(`
+        SELECT i.*, s.shop_name,
+        (SELECT GROUP_CONCAT(COALESCE(p.product_name, ii.product_id), ', ') FROM invoice_items ii LEFT JOIN products p ON ii.product_id = p.product_id WHERE ii.invoice_id = i.id) as items_summary
+        FROM invoices i 
+        LEFT JOIN shops s ON i.shop_id = s.id 
+        ORDER BY i.created_at DESC
+      `).all();
       
       const valuation = db.prepare(`
         SELECT 
@@ -1183,9 +1168,9 @@ async function startServer() {
 
         // 2. Insert Return Item
         db.prepare(`
-          INSERT INTO return_items (return_id, delivery_id, product_id, quantity, unit_price)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(returnId, item.delivery_id, item.product_id, item.quantity, item.unit_price);
+          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(returnId, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price);
 
         // 3. Update Stock (using stock_quantity column)
         db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.quantity, item.product_id);
@@ -1195,6 +1180,15 @@ async function startServer() {
 
       // 4. Update Header total
       db.prepare("UPDATE returns SET total_amount = ? WHERE id = ?").run(total, returnId);
+
+      // 5. Update Client Ledger (Credit the shop for the return)
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
+      const currentBalance = (lastLedger?.balance || 0) - total;
+      
+      db.prepare(`
+        INSERT INTO client_ledger (shop_id, description, credit, balance)
+        VALUES (?, ?, ?, ?)
+      `).run(shop_id, `Sales Return #RET-${returnId}`, total, currentBalance);
 
       return returnId;
     });
@@ -1216,6 +1210,120 @@ async function startServer() {
       ORDER BY r.return_date DESC
     `).all();
     res.json(returns);
+  });
+
+  app.get("/api/returns/:id/items", (req, res) => {
+    const { id } = req.params;
+    const items = db.prepare(`
+      SELECT 
+        ri.*, 
+        p.product_name, 
+        p.brand,
+        p.purchase_price,
+        p.trade_price as price,
+        (SELECT quantity FROM delivery_items di WHERE di.id = ri.delivery_item_id) as original_delivered_qty,
+        (SELECT SUM(quantity) FROM return_items orri JOIN returns orr ON orri.return_id = orr.id WHERE orri.delivery_item_id = ri.delivery_item_id AND orr.id != ri.return_id AND orr.status != 'cancelled') as other_returns_qty
+      FROM return_items ri
+      JOIN products p ON ri.product_id = p.product_id
+      WHERE ri.return_id = ?
+    `).all(id) as any[];
+
+    // Calculate net_qty for each item
+    const formatted = items.map(item => ({
+      ...item,
+      quantity: item.original_delivered_qty, // Total delivered initially
+      return_qty: item.other_returns_qty || 0, // Other returns
+      net_qty: item.original_delivered_qty - (item.other_returns_qty || 0), // available to return (including THIS return's current qty)
+      current_return_qty: item.quantity // The qty saved in THIS return
+    }));
+
+    res.json(formatted);
+  });
+
+  app.put("/api/returns/:id", (req, res) => {
+    const { id } = req.params;
+    const { shop_id, items } = req.body;
+
+    const transaction = db.transaction(() => {
+      // 0. Get old return record
+      const oldReturn = db.prepare("SELECT * FROM returns WHERE id = ?").get(id) as any;
+      if (!oldReturn) throw new Error("Return not found");
+
+      // 1. Get old items to reverse stock
+      const oldItems = db.prepare("SELECT * FROM return_items WHERE return_id = ?").all(id) as any[];
+      for (const item of oldItems) {
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+      }
+
+      // 2. Delete old items
+      db.prepare("DELETE FROM return_items WHERE return_id = ?").run(id);
+
+      // 3. Process New Items
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+        db.prepare(`
+          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price);
+
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+        
+        total += item.quantity * item.unit_price;
+      }
+
+      // 4. Update Header
+      db.prepare("UPDATE returns SET total_amount = ?, shop_id = ? WHERE id = ?").run(total, shop_id, id);
+
+      // 5. Update Ledger
+      // Search by description for the specific return
+      const ledgerEntry = db.prepare("SELECT id, credit, balance, shop_id FROM client_ledger WHERE description LIKE ?").get(`%Return #RET-${id}%`) as any;
+      
+      if (ledgerEntry) {
+        if (ledgerEntry.shop_id === shop_id) {
+          const diff = total - ledgerEntry.credit; 
+          db.prepare(`
+            UPDATE client_ledger 
+            SET credit = ?, balance = balance - ?
+            WHERE id = ?
+          `).run(total, diff, ledgerEntry.id);
+
+          db.prepare(`
+            UPDATE client_ledger
+            SET balance = balance - ?
+            WHERE shop_id = ? AND id > ?
+          `).run(diff, shop_id, ledgerEntry.id);
+        } else {
+          // Shop changed! This is complex. We need to "delete" from old shop ledger and "add" to new one.
+          // For simplicity, let's just reverse old and add new.
+          
+          // Revert old ledger entry (reduce credit to 0, which increases balance for the old shop)
+          const oldCredit = ledgerEntry.credit;
+          db.prepare("UPDATE client_ledger SET credit = 0, balance = balance + ?, description = description || ' (MOVED)' WHERE id = ?").run(oldCredit, ledgerEntry.id);
+          db.prepare("UPDATE client_ledger SET balance = balance + ? WHERE shop_id = ? AND id > ?").run(oldCredit, ledgerEntry.shop_id, ledgerEntry.id);
+          
+          // Add new entry for new shop
+          const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
+          const currentBalance = (lastLedger?.balance || 0) - total;
+          db.prepare(`
+            INSERT INTO client_ledger (shop_id, description, credit, balance)
+            VALUES (?, ?, ?, ?)
+          `).run(shop_id, `Sales Return #RET-${id}`, total, currentBalance);
+        }
+      }
+
+      return true;
+    });
+
+    try {
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Return update error:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get("/api/orders", (req, res) => {
@@ -1538,7 +1646,13 @@ async function startServer() {
 
   app.get("/api/deliveries", (req, res) => {
     const deliveries = db.prepare(`
-      SELECT d.*, o.id as order_ref, r.shop_name, s.name as salesman_name
+      SELECT 
+        d.*, 
+        o.id as order_ref, 
+        r.shop_name, 
+        s.name as salesman_name,
+        (SELECT COALESCE(SUM(ri.quantity), 0) FROM return_items ri WHERE ri.delivery_id = d.id) as total_return_qty,
+        (SELECT SUM(di.quantity) FROM delivery_items di WHERE di.delivery_id = d.id) - (SELECT COALESCE(SUM(ri.quantity), 0) FROM return_items ri WHERE ri.delivery_id = d.id) as total_net_qty
       FROM deliveries d
       JOIN orders o ON d.order_id = o.id
       JOIN shops r ON o.shop_id = r.id
@@ -1788,12 +1902,26 @@ async function startServer() {
         p.product_name, 
         p.brand, 
         oi.order_id as order_ref,
+        oi.discount_pct as discount_pct,
+        oi.sales_tax_pct as sales_tax_pct,
+        oi.additional_tax_pct as additional_tax_pct,
+        oi.extra_discount_pct as extra_discount_pct,
         (oi.quantity - (
           SELECT COALESCE(SUM(di2.quantity), 0) 
           FROM delivery_items di2 
           JOIN deliveries d ON di2.delivery_id = d.id
           WHERE di2.order_item_id = oi.id AND d.status != 'cancelled' AND d.id != ?
-        )) as remaining_on_order
+        )) as remaining_on_order,
+        (
+          SELECT COALESCE(SUM(ri.quantity), 0)
+          FROM return_items ri
+          WHERE ri.delivery_item_id = di.id
+        ) as return_qty,
+        (di.quantity - (
+          SELECT COALESCE(SUM(ri.quantity), 0)
+          FROM return_items ri
+          WHERE ri.delivery_item_id = di.id
+        )) as net_qty
       FROM delivery_items di
       JOIN products p ON di.product_id = p.product_id
       JOIN order_items oi ON di.order_item_id = oi.id
@@ -2038,13 +2166,66 @@ async function startServer() {
     `).get(id);
 
     const items = db.prepare(`
-      SELECT ii.*, p.product_name, p.uom
+      SELECT ii.*, p.product_name, p.unit as uom
       FROM invoice_items ii
       JOIN products p ON ii.product_id = p.product_id
       WHERE ii.invoice_id = ?
     `).all(id);
 
     res.json({ ...invoice, items });
+  });
+
+  app.post("/api/invoices/cancel", (req, res) => {
+    const { invoice_id } = req.body;
+    if (!invoice_id) return res.status(400).json({ error: "Invoice ID is required" });
+
+    const transaction = db.transaction(() => {
+      // 1. Verify existence and status
+      const invoice = db.prepare("SELECT * FROM invoices WHERE id = ?").get(invoice_id) as any;
+      if (!invoice) throw new Error("Invoice not found");
+      if (invoice.status === 'cancelled') throw new Error("Invoice already cancelled");
+
+      // 2. Set deliveries back to 'completed' and clear invoice_id
+      db.prepare("UPDATE deliveries SET invoice_id = NULL, status = 'completed' WHERE invoice_id = ?").run(invoice_id);
+
+      // 3. Set invoice status to 'cancelled'
+      db.prepare("UPDATE invoices SET status = 'cancelled' WHERE id = ?").run(invoice_id);
+
+      return true;
+    });
+
+    try {
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Invoice cancellation error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/invoices/bulk-cancel", (req, res) => {
+    const { start_id, end_id } = req.body;
+    if (!start_id || !end_id) return res.status(400).json({ error: "Start and End IDs are required" });
+
+    const transaction = db.transaction(() => {
+      // Find all non-cancelled invoices in range
+      const invoices = db.prepare("SELECT id FROM invoices WHERE id BETWEEN ? AND ? AND status != 'cancelled'").all(start_id, end_id) as any[];
+      
+      for (const inv of invoices) {
+        db.prepare("UPDATE deliveries SET invoice_id = NULL, status = 'completed' WHERE invoice_id = ?").run(inv.id);
+        db.prepare("UPDATE invoices SET status = 'cancelled' WHERE id = ?").run(inv.id);
+      }
+
+      return invoices.length;
+    });
+
+    try {
+      const count = transaction();
+      res.json({ success: true, count });
+    } catch (err: any) {
+      console.error("Bulk invoice cancellation error:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.delete("/api/invoices/:id", (req, res) => {
@@ -2242,6 +2423,49 @@ async function startServer() {
     });
   });
 
+  app.post("/api/payments", (req, res) => {
+    const { shop_id, amount, payment_method, payment_date } = req.body;
+    if (!shop_id || !amount) {
+      return res.status(400).json({ error: "Shop ID and amount are required" });
+    }
+
+    const transaction = db.transaction(() => {
+      // 1. Record payment
+      const paymentRes = db.prepare("INSERT INTO payments (shop_id, amount, payment_method, payment_date) VALUES (?, ?, ?, ?)").run(
+        shop_id, amount, payment_method || 'Cash', payment_date || new Date().toISOString()
+      );
+      
+      // 2. Update Client Ledger (Credit the shop for the payment)
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
+      const currentBalance = (lastLedger?.balance || 0) - amount;
+
+      db.prepare(`
+        INSERT INTO client_ledger (shop_id, date, description, credit, balance)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(shop_id, payment_date || new Date().toISOString(), `Payment Received - ${payment_method || 'Cash'}`, amount, currentBalance);
+
+      return paymentRes.lastInsertRowid;
+    });
+
+    try {
+      const paymentId = transaction();
+      res.json({ success: true, id: paymentId });
+    } catch (err: any) {
+      console.error("Payment processing error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/payments", (req, res) => {
+    const payments = db.prepare(`
+      SELECT p.*, s.shop_name 
+      FROM payments p 
+      JOIN shops s ON p.shop_id = s.id 
+      ORDER BY p.payment_date DESC
+    `).all();
+    res.json(payments);
+  });
+
   app.get("/api/suppliers", (req, res) => {
     const suppliers = db.prepare("SELECT * FROM suppliers").all();
     res.json(suppliers);
@@ -2394,43 +2618,27 @@ async function startServer() {
     res.json(data);
   });
 
-  app.get('/api/units', (req, res) => {
+  // Debug endpoints
+  app.get("/api/debug/db-info", (req, res) => {
     try {
-      const units = db.prepare("SELECT * FROM units ORDER BY name ASC").all();
-      res.json(units);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch units" });
-    }
-  });
-
-  app.post('/api/units', (req, res) => {
-    const { unit_code, name, short_name } = req.body;
-    try {
-      const result = db.prepare("INSERT INTO units (unit_code, name, short_name) VALUES (?, ?, ?)")
-        .run(unit_code, name, short_name);
-      res.json({ id: result.lastInsertRowid });
+      const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get();
+      const orderCount = db.prepare("SELECT COUNT(*) as count FROM orders").get();
+      const invoiceCount = db.prepare("SELECT COUNT(*) as count FROM invoices").get();
+      const deliveryCount = db.prepare("SELECT COUNT(*) as count FROM deliveries").get();
+      
+      res.json({
+        dbPath,
+        cwd: process.cwd(),
+        counts: {
+          users: userCount?.count || 0,
+          orders: orderCount?.count || 0,
+          invoices: invoiceCount?.count || 0,
+          deliveries: deliveryCount?.count || 0
+        },
+        time: new Date().toISOString()
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.put('/api/units/:id', (req, res) => {
-    const { unit_code, name, short_name, status } = req.body;
-    try {
-      db.prepare("UPDATE units SET unit_code = ?, name = ?, short_name = ?, status = ? WHERE id = ?")
-        .run(unit_code, name, short_name, status, req.params.id);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.delete('/api/units/:id', (req, res) => {
-    try {
-      db.prepare("DELETE FROM units WHERE id = ?").run(req.params.id);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: "Cannot delete unit as it may be in use" });
     }
   });
 

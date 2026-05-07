@@ -39,7 +39,8 @@ import {
   SlidersHorizontal,
   ShoppingBag,
   ChevronDown,
-  HelpCircle
+  HelpCircle,
+  XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -516,12 +517,16 @@ export default function App() {
   const [isMaterialGroupModalOpen, setIsMaterialGroupModalOpen] = useState(false);
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isBulkInvoiceCancelOpen, setIsBulkInvoiceCancelOpen] = useState(false);
+  const [bulkCancelRange, setBulkCancelRange] = useState({ start: '', end: '' });
+  const [isBulkCancelling, setIsBulkCancelling] = useState(false);
   const [isOrderBookerModalOpen, setIsOrderBookerModalOpen] = useState(false);
   const [isSalesmanModalOpen, setIsSalesmanModalOpen] = useState(false);
   const [isShopMasterModalOpen, setIsShopMasterModalOpen] = useState(false);
   const [isSupplierMasterModalOpen, setIsSupplierMasterModalOpen] = useState(false);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [editingReturn, setEditingReturn] = useState<Return | null>(null);
   const [isOrderCancellationOpen, setIsOrderCancellationOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
@@ -603,6 +608,9 @@ export default function App() {
     JSON.parse(localStorage.getItem('dms_filters_returns') || '{}').search || ""
   );
   const [showReturnSuggestions, setShowReturnSuggestions] = useState(false);
+
+  const [invoiceSearchInput, setInvoiceSearchInput] = useState("");
+  const [loadPlanSearchInput, setLoadPlanSearchInput] = useState("");
 
   const shopSuggestions = shopSearchInput.length > 0 
     ? shops.filter(s => s.shop_name?.toLowerCase().includes(shopSearchInput.toLowerCase())).slice(0, 5)
@@ -957,10 +965,13 @@ export default function App() {
 
   const filteredOrders = orders.filter(order => {
     const f = filters.orders;
+    const searchLower = f.search.toLowerCase();
     if (f.search && !(
-      order.id.toString().includes(f.search.replace(/\D/g, '')) || 
-      order.shop_name?.toLowerCase().includes(f.search.toLowerCase()) ||
-      order.order_booker_name?.toLowerCase().includes(f.search.toLowerCase())
+      order.id.toString().includes(f.search) || 
+      order.shop_name?.toLowerCase().includes(searchLower) ||
+      order.order_booker_name?.toLowerCase().includes(searchLower) ||
+      order.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(order.order_date).toLocaleDateString().includes(f.search)
     )) return false;
     if (f.status !== 'any') {
       const orderStatus = order.status?.toLowerCase();
@@ -976,32 +987,63 @@ export default function App() {
 
   const filteredPurchases = purchases.filter(p => {
     const f = filters.purchases;
+    const searchLower = f.search.toLowerCase();
     if (f.search && !(
       p.id.toString().includes(f.search) || 
-      p.supplier_name?.toLowerCase().includes(f.search.toLowerCase()) ||
-      p.bill_no?.toLowerCase().includes(f.search.toLowerCase())
+      p.supplier_name?.toLowerCase().includes(searchLower) ||
+      p.bill_no?.toLowerCase().includes(searchLower) ||
+      p.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(p.purchase_date).toLocaleDateString().includes(f.search)
     )) return false;
     return true;
   });
 
   const filteredDeliveries = deliveries.filter(d => {
     const f = filters.deliveries;
-    if (d.id.toString().includes(f.search) || 
-      d.shop_name?.toLowerCase().includes(f.search.toLowerCase()) ||
+    const searchLower = f.search.toLowerCase();
+    if (f.search && !(
+      d.id.toString().includes(f.search) || 
+      d.shop_name?.toLowerCase().includes(searchLower) ||
       d.order_id?.toString().includes(f.search) ||
-      d.driver_name?.toLowerCase().includes(f.search.toLowerCase())
-    ) return true;
-    if (!f.search) return true;
-    return false;
+      d.driver_name?.toLowerCase().includes(searchLower) ||
+      d.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(d.delivery_date).toLocaleDateString().includes(f.search)
+    )) return false;
+    return true;
   });
 
   const filteredReturns = returns.filter(r => {
     const f = filters.returns;
-    if (r.id.toString().includes(f.search) || 
-      r.shop_name?.toLowerCase().includes(f.search.toLowerCase())
-    ) return true;
-    if (!f.search) return true;
-    return false;
+    const searchLower = f.search.toLowerCase();
+    if (f.search && !(
+      r.id.toString().includes(f.search) || 
+      r.shop_name?.toLowerCase().includes(searchLower) ||
+      r.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(r.return_date).toLocaleDateString().includes(f.search)
+    )) return false;
+    return true;
+  });
+
+  const filteredInvoices = invoices.filter(i => {
+    const searchLower = invoiceSearchInput.toLowerCase();
+    if (invoiceSearchInput && !(
+      i.id.toString().includes(invoiceSearchInput) ||
+      i.shop_name?.toLowerCase().includes(searchLower) ||
+      i.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(i.invoice_date).toLocaleDateString().includes(invoiceSearchInput)
+    )) return false;
+    return true;
+  });
+
+  const filteredLoadPlans = loadPlans.filter(lp => {
+    const searchLower = loadPlanSearchInput.toLowerCase();
+    if (loadPlanSearchInput && !(
+      lp.id.toString().includes(loadPlanSearchInput) ||
+      lp.driver_name?.toLowerCase().includes(searchLower) ||
+      lp.items_summary?.toLowerCase().includes(searchLower) ||
+      new Date(lp.plan_date).toLocaleDateString().includes(loadPlanSearchInput)
+    )) return false;
+    return true;
   });
 
   const fetchUnits = async () => {
@@ -1217,6 +1259,70 @@ export default function App() {
       setChartData(data);
     } catch (err) {
       console.error("Failed to fetch chart data", err);
+    }
+  };
+
+  const handleCancelInvoice = async (invoiceId: number) => {
+    if (!confirm('Are you sure you want to cancel this invoice? This will unlock associated deliveries.')) return;
+    try {
+      const res = await fetch('/api/invoices/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: invoiceId })
+      });
+      if (res.ok) {
+        fetchInvoices();
+        fetchDeliveries();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to cancel invoice');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error cancelling invoice');
+    }
+  };
+
+  const handleBulkCancelInvoices = async () => {
+    if (!bulkCancelRange.start || !bulkCancelRange.end) {
+      alert('Please enter both start and end invoice numbers');
+      return;
+    }
+    const start = parseInt(bulkCancelRange.start);
+    const end = parseInt(bulkCancelRange.end);
+    
+    if (isNaN(start) || isNaN(end)) {
+      alert('Invalid invoice number range');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to cancel invoices from #INV-${bulkCancelRange.start.padStart(4, '0')} to #INV-${bulkCancelRange.end.padStart(4, '0')}?`)) return;
+
+    setIsBulkCancelling(true);
+    try {
+      const res = await fetch('/api/invoices/bulk-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          start_id: start, 
+          end_id: end 
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`${data.count} invoices were successfully processed for cancellation.`);
+        setIsBulkInvoiceCancelOpen(false);
+        setBulkCancelRange({ start: '', end: '' });
+        fetchInvoices();
+        fetchDeliveries();
+      } else {
+        alert(data.error || 'Failed to bulk cancel invoices');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error bulk cancelling invoices');
+    } finally {
+      setIsBulkCancelling(false);
     }
   };
 
@@ -2594,12 +2700,12 @@ export default function App() {
                 {/* Sub-tabs Navigation */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                   {[
-                    { id: 'purchases', label: 'Purchases', icon: ShoppingBag },
-                    { id: 'orders', label: 'Orders', icon: ShoppingCart },
-                    { id: 'deliveries', label: 'Deliveries', icon: Truck },
-                    { id: 'delivery_returns', label: 'Delivery Return', icon: RotateCcw },
-                    { id: 'invoices', label: 'Invoices', icon: FileText },
-                    { id: 'load_plans', label: 'Load Plans', icon: Truck },
+                    { id: 'purchases', label: 'Manage Purchases', icon: ShoppingBag },
+                    { id: 'orders', label: 'Manage Orders', icon: ShoppingCart },
+                    { id: 'deliveries', label: 'Manage Deliveries', icon: Truck },
+                    { id: 'delivery_returns', label: 'Manage Returns', icon: RotateCcw },
+                    { id: 'invoices', label: 'Manage Invoices', icon: FileText },
+                    { id: 'load_plans', label: 'Manage Load Plans', icon: Truck },
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -2633,7 +2739,7 @@ export default function App() {
                                 setOrderSearchInput(e.target.value);
                                 updateFilter('orders', 'search', e.target.value);
                               }}
-                              placeholder="Search by order ID, shop or booker..." 
+                              placeholder="Search by Product, Shop, Date..." 
                               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
                             />
                           </div>
@@ -2838,7 +2944,7 @@ export default function App() {
                                 setDeliverySearchInput(e.target.value);
                                 updateFilter('deliveries', 'search', e.target.value);
                               }}
-                              placeholder="Search by ID, shop, order, or driver..." 
+                              placeholder="Search by Product, Shop, Date..." 
                               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
                             />
                           </div>
@@ -2901,6 +3007,8 @@ export default function App() {
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Salesman</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Return Qty</th>
+                              <th className="px-6 py-4 text-xs font-bold text-indigo-600 uppercase tracking-wider text-center">Net Qty</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
                             </tr>
@@ -2924,6 +3032,12 @@ export default function App() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <p className="text-sm text-slate-600">{new Date(delivery.delivery_date).toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className="text-sm font-bold text-rose-500">{delivery.total_return_qty || 0}</span>
+                                </td>
+                                <td className="px-6 py-4 text-center border-x border-slate-50">
+                                  <span className="text-sm font-black text-indigo-600">{delivery.total_net_qty}</span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <p className="text-sm font-bold text-slate-900">{formatPKR(delivery.total_amount)}</p>
@@ -2957,7 +3071,7 @@ export default function App() {
                             ))}
                             {deliveries.length === 0 && (
                               <tr>
-                                <td colSpan={7} className="px-6 py-12 text-center">
+                                <td colSpan={9} className="px-6 py-12 text-center">
                                   <Truck size={48} className="mx-auto text-slate-200 mb-4" />
                                   <p className="text-slate-500 font-medium">No deliveries found</p>
                                 </td>
@@ -2984,7 +3098,7 @@ export default function App() {
                                 setReturnSearchInput(e.target.value);
                                 updateFilter('returns', 'search', e.target.value);
                               }}
-                              placeholder="Search by ID or shop..." 
+                              placeholder="Search by Product, Shop, Date..." 
                               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
                             />
                           </div>
@@ -3066,6 +3180,16 @@ export default function App() {
                                 <td className="px-6 py-4 text-center">
                                   <div className="flex justify-center gap-2">
                                     <button 
+                                      onClick={() => {
+                                        setEditingReturn(ret);
+                                        setIsReturnModalOpen(true);
+                                      }}
+                                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                      title="Edit Return"
+                                    >
+                                      <Edit size={18} />
+                                    </button>
+                                    <button 
                                       className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                     >
                                       <FileText size={18} />
@@ -3103,7 +3227,7 @@ export default function App() {
                                 setPurchaseSearchInput(e.target.value);
                                 updateFilter('purchases', 'search', e.target.value);
                               }}
-                              placeholder="Search by ID, supplier, or bill no..." 
+                              placeholder="Search by Product, Shop, Date..." 
                               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
                             />
                           </div>
@@ -3214,20 +3338,31 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="relative flex-1 max-w-md">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                           <input 
                             type="text"
-                            placeholder="Search Invoices..."
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all shadow-sm"
+                            value={invoiceSearchInput}
+                            onChange={(e) => setInvoiceSearchInput(e.target.value)}
+                            placeholder="Search by Product, Shop, Date..."
+                            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-indigo-600 outline-none transition-all shadow-sm"
                           />
                         </div>
-                        <button 
-                          onClick={() => setIsInvoiceModalOpen(true)}
-                          className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
-                        >
-                          <Plus size={18} />
-                          <span>Generate New Invoice (INV01)</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsInvoiceModalOpen(true)}
+                            className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
+                          >
+                            <Plus size={18} />
+                            <span>Generate New Invoice (INV01)</span>
+                          </button>
+                          <button 
+                            onClick={() => setIsBulkInvoiceCancelOpen(true)}
+                            className="bg-rose-50 text-rose-600 border border-rose-100 px-6 py-3 rounded-xl text-sm font-bold hover:bg-rose-100 transition-all flex items-center gap-2"
+                          >
+                            <XCircle size={18} />
+                            <span>Bulk Cancel Invoices</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -3246,7 +3381,7 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {invoices.map(invoice => (
+                            {filteredInvoices.map(invoice => (
                               <tr key={invoice.id} className="hover:bg-slate-50 transition-colors group">
                                 <td className="px-6 py-4">
                                   <span className="text-sm font-mono font-bold text-slate-700">#INV-{invoice.id.toString().padStart(4, '0')}</span>
@@ -3278,9 +3413,22 @@ export default function App() {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                  <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                                    <Printer size={18} />
-                                  </button>
+                                  <div className="flex justify-end gap-2">
+                                    <button 
+                                      onClick={() => handleCancelInvoice(invoice.id)}
+                                      disabled={invoice.status === 'cancelled'}
+                                      className={cn(
+                                        "p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100",
+                                        invoice.status === 'cancelled' ? "text-slate-200 cursor-not-allowed" : "text-rose-400 hover:bg-rose-50 hover:text-rose-600"
+                                      )}
+                                      title="Cancel Invoice"
+                                    >
+                                      <XCircle size={18} />
+                                    </button>
+                                    <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                                      <Printer size={18} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -3297,8 +3445,21 @@ export default function App() {
 
                   {transactionsSubTab === 'load_plans' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-900">Load Plans</h3>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div className="flex flex-col">
+                          <h3 className="text-lg font-bold text-slate-900">Load Plans</h3>
+                          <p className="text-xs text-slate-500">Manage and track product loadings</p>
+                        </div>
+                        <div className="relative flex-1 max-w-md">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                          <input 
+                            type="text"
+                            value={loadPlanSearchInput}
+                            onChange={(e) => setLoadPlanSearchInput(e.target.value)}
+                            placeholder="Search by Product, Shop, Date..."
+                            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-indigo-600 outline-none transition-all shadow-sm"
+                          />
+                        </div>
                         <div className="flex gap-2">
                           <button 
                             onClick={() => setIsDriverModalOpen(true)}
@@ -3311,7 +3472,7 @@ export default function App() {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {loadPlans.map(plan => (
+                        {filteredLoadPlans.map(plan => (
                           <div key={plan.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <div className="flex justify-between items-start mb-6">
                               <div className="flex items-center gap-3">
@@ -3537,11 +3698,14 @@ export default function App() {
           <ReturnModal 
             onClose={() => {
               setIsReturnModalOpen(false);
+              setEditingReturn(null);
               fetchReturns();
+              fetchDeliveries();
               fetchProducts();
               fetchStats();
             }}
             shops={shops}
+            returnRecord={editingReturn}
           />
         )}
 
@@ -3591,6 +3755,93 @@ export default function App() {
             }}
             formatPKR={formatPKR}
           />
+        )}
+        {isBulkInvoiceCancelOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Bulk Cancel Invoices</h3>
+                  <p className="text-xs text-slate-500 font-medium">Enter invoice range to cancel</p>
+                </div>
+                <button onClick={() => setIsBulkInvoiceCancelOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex gap-3">
+                  <AlertTriangle className="text-rose-500 shrink-0" size={20} />
+                  <p className="text-xs text-rose-600 leading-relaxed font-bold">
+                    This action will cancel all invoices within the specified range. 
+                    Associated deliveries will be unlocked for re-invoicing. This cannot be undone.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Start Invoice #</label>
+                    <div className="relative">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="number"
+                        value={bulkCancelRange.start}
+                        onChange={(e) => setBulkCancelRange(prev => ({ ...prev, start: e.target.value }))}
+                        placeholder="e.g. 1"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">End Invoice #</label>
+                    <div className="relative">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="number"
+                        value={bulkCancelRange.end}
+                        onChange={(e) => setBulkCancelRange(prev => ({ ...prev, end: e.target.value }))}
+                        placeholder="e.g. 10"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {bulkCancelRange.start && bulkCancelRange.end && (
+                  <div className="px-4 py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <p className="text-[10px] text-center text-slate-500 font-bold uppercase tracking-widest">
+                      Processing range: #INV-{bulkCancelRange.start.padStart(4, '0')} to #INV-{bulkCancelRange.end.padStart(4, '0')}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button 
+                  onClick={() => setIsBulkInvoiceCancelOpen(false)}
+                  className="flex-1 px-6 py-3 rounded-xl text-sm font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Invoices
+                </button>
+                <button 
+                  onClick={handleBulkCancelInvoices}
+                  disabled={isBulkCancelling || !bulkCancelRange.start || !bulkCancelRange.end}
+                  className="flex-1 bg-rose-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isBulkCancelling ? (
+                    <RotateCcw className="animate-spin" size={18} />
+                  ) : (
+                    <Trash2 size={18} />
+                  )}
+                  <span>Cancel Range</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

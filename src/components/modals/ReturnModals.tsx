@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, RotateCcw, Search, ChevronRight, AlertCircle, ShoppingCart, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shop, Delivery, DeliveryItem } from '../../types';
+import { Shop, Delivery, DeliveryItem, Return } from '../../types';
 import { cn, formatPKR } from '../../lib/utils';
 
 interface ReturnModalProps {
   onClose: () => void;
   shops: Shop[];
+  returnRecord?: Return | null;
 }
 
-export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
+export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, returnRecord }) => {
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [shopSearch, setShopSearch] = useState('');
   const [showShopDropdown, setShowShopDropdown] = useState(false);
@@ -22,6 +23,29 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
 
+  // Initialize for Edit Mode
+  useEffect(() => {
+    if (returnRecord) {
+      setSelectedShopId(returnRecord.shop_id);
+      setShopSearch(returnRecord.shop_name || '');
+      
+      const fetchReturnContext = async () => {
+        try {
+          const res = await fetch(`/api/returns/${returnRecord.id}/items`);
+          const items = await res.json();
+          
+          // Identify unique deliveries from items
+          const dids = Array.from(new Set(items.map((i: any) => i.delivery_id))) as number[];
+          setSelectedDeliveryIds(dids);
+          setReturnItems(items);
+        } catch (err) {
+          console.error("Failed to load return context", err);
+        }
+      };
+      fetchReturnContext();
+    }
+  }, [returnRecord]);
+
   // Fetch completed deliveries when shop changes
   useEffect(() => {
     if (selectedShopId) {
@@ -29,16 +53,16 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
         .then(res => res.json())
         .then(data => setCompletedDeliveries(data))
         .catch(err => console.error(err));
-    } else {
+    } else if (!returnRecord) {
       setCompletedDeliveries([]);
       setSelectedDeliveryIds([]);
       setReturnItems([]);
     }
-  }, [selectedShopId]);
+  }, [selectedShopId, returnRecord]);
 
   // Fetch items when selected deliveries change
   useEffect(() => {
-    if (selectedDeliveryIds.length > 0) {
+    if (selectedDeliveryIds.length > 0 && !returnRecord) {
       const fetchAllItems = async () => {
         try {
           const allItems: any[] = [];
@@ -48,10 +72,11 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
               const items: DeliveryItem[] = await res.json();
               items.forEach(item => {
                 allItems.push({
-                  ...item,
-                  delivery_id: deliveryId,
-                  return_qty: 0,
-                  uom: item.product_name?.includes('Box') ? 'BOX' : 'EACH' // Simple heuristic
+                   ...item,
+                   delivery_id: deliveryId,
+                   delivery_item_id: item.id, // The ID of the row in delivery_items
+                   current_return_qty: 0, // This is what the user is entering now
+                   uom: item.product_name?.includes('Box') ? 'BOX' : 'EACH' 
                 });
               });
             }
@@ -62,10 +87,10 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
         }
       };
       fetchAllItems();
-    } else {
+    } else if (selectedDeliveryIds.length === 0 && !returnRecord) {
       setReturnItems([]);
     }
-  }, [selectedDeliveryIds]);
+  }, [selectedDeliveryIds, returnRecord]);
 
   const handleShopSelect = (shop: Shop) => {
     setSelectedShopId(shop.id);
@@ -84,19 +109,22 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
     const qty = parseInt(val) || 0;
     const item = returnItems[idx];
     
-    if (qty > item.quantity) {
-      setErrorStatus(`Return quantity for ${item.product_name} cannot exceed delivered quantity (${item.quantity}).`);
+    // Use net_qty from backend which is Delivery_Qty - already_returned_qty (calculated in PUT logic too)
+    const maxReturnable = item.net_qty ?? item.quantity;
+
+    if (qty > maxReturnable) {
+      setErrorStatus(`Return quantity for ${item.product_name} cannot exceed net quantity (${maxReturnable}).`);
       return;
     }
     
     setErrorStatus(null);
     const newItems = [...returnItems];
-    newItems[idx].return_qty = qty;
+    newItems[idx].current_return_qty = qty;
     setReturnItems(newItems);
   };
 
   const handleSubmit = async () => {
-    const itemsToReturn = returnItems.filter(item => item.return_qty > 0);
+    const itemsToReturn = returnItems.filter(item => item.current_return_qty > 0);
     if (itemsToReturn.length === 0) {
       setErrorStatus("Please enter return quantity for at least one item.");
       return;
@@ -104,7 +132,8 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
 
     // Double check validations
     for (const item of itemsToReturn) {
-      if (item.return_qty > item.quantity) {
+      const maxReturnable = item.net_qty ?? item.quantity;
+      if (item.current_return_qty > maxReturnable) {
         setErrorStatus(`Invalid return quantity for ${item.product_name}.`);
         return;
       }
@@ -112,15 +141,19 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/returns', {
-        method: 'POST',
+      const url = returnRecord ? `/api/returns/${returnRecord.id}` : '/api/returns';
+      const method = returnRecord ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shop_id: selectedShopId,
           items: itemsToReturn.map(item => ({
             delivery_id: item.delivery_id,
+            delivery_item_id: item.delivery_item_id,
             product_id: item.product_id,
-            quantity: item.return_qty,
+            quantity: item.current_return_qty,
             unit_price: item.price
           }))
         })
@@ -151,7 +184,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div className="flex items-center gap-4">
             <h3 className="text-lg font-bold text-slate-900">
-              Delivery Return Processing (RT01)
+              {returnRecord ? `Edit Return #RET-${returnRecord.id.toString().padStart(4, '0')}` : 'Delivery Return Processing (RT01)'}
             </h3>
             <div className="flex gap-2">
               <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-rose-100">Inventory Adjust</span>
@@ -273,8 +306,9 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product Details</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Batch Ref</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered Qty</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">UOM</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Returned</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center text-indigo-600">Net Qty</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-rose-500 uppercase text-center">Return Quantity</th>
                 </tr>
               </thead>
@@ -289,23 +323,26 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
                       <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded border border-slate-200/50 font-mono italic whitespace-nowrap">#DEL-{item.delivery_id}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-sm font-bold text-slate-900">{item.quantity}</span>
+                      <span className="text-xs font-bold text-slate-900">{item.quantity}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.uom}</span>
+                      <span className="text-xs font-bold text-rose-500">{item.return_qty || 0}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="text-xs font-black text-indigo-600">{item.net_qty}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-center">
                         <input 
                           type="number"
                           min="0"
-                          max={item.quantity}
-                          value={item.return_qty === 0 ? '' : item.return_qty}
+                          max={item.net_qty}
+                          value={item.current_return_qty === 0 ? '' : item.current_return_qty}
                           placeholder="0"
                           onChange={(e) => handleReturnQtyChange(idx, e.target.value)}
                           className={cn(
                             "w-24 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-black outline-none transition-all",
-                            item.return_qty > 0 ? "border-rose-400 bg-white text-rose-600" : "focus:border-indigo-400 focus:bg-white"
+                            item.current_return_qty > 0 ? "border-rose-400 bg-white text-rose-600" : "focus:border-indigo-400 focus:bg-white"
                           )}
                         />
                       </div>
@@ -328,7 +365,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
           <div className="bg-indigo-600 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg shadow-indigo-100">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Return Items Count</p>
-              <p className="text-2xl font-black">{returnItems.filter(i => i.return_qty > 0).length} Line Items</p>
+              <p className="text-2xl font-black">{returnItems.filter(i => i.current_return_qty > 0).length} Line Items</p>
             </div>
             
             <div className="flex gap-4">
@@ -340,7 +377,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops }) => {
               </button>
               <button 
                 onClick={handleSubmit}
-                disabled={isSubmitting || returnItems.filter(i => i.return_qty > 0).length === 0}
+                disabled={isSubmitting || returnItems.filter(i => i.current_return_qty > 0).length === 0}
                 className="bg-white text-indigo-600 px-10 py-4 rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2 disabled:opacity-50"
               >
                 {isSubmitting ? 'Updating Stock...' : (

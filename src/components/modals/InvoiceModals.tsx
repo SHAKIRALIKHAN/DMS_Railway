@@ -63,12 +63,16 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
             allItems.push(...items.map((it: any) => ({
               ...it,
               delivery_id: dId,
+              // Use net_qty (Delivered - Returned) for invoicing as per ERP rules
+              quantity: it.net_qty, 
+              original_delivery_qty: it.quantity,
+              return_qty: it.return_qty,
               trade_discount_pct: it.discount_pct || 0,
               tax_pct: it.sales_tax_pct || 0,
               additional_tax_pct: it.additional_tax_pct || 0,
               special_discount_pct: it.extra_discount_pct || 0,
               unit_price: it.price,
-              net_amount: calculateLineNet(it.quantity, it.price, (it.discount_pct || 0) + (it.extra_discount_pct || 0), (it.sales_tax_pct || 0) + (it.additional_tax_pct || 0))
+              net_amount: calculateLineNet(it.net_qty, it.price, (it.discount_pct || 0) + (it.extra_discount_pct || 0), (it.sales_tax_pct || 0) + (it.additional_tax_pct || 0))
             })));
           }
           setInvoiceItems(allItems);
@@ -396,7 +400,9 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Batch Ref</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Qty</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Returned</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-indigo-600 uppercase text-center">Billable</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Unit Price</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center whitespace-nowrap">Tax (%)</th>
                   <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center whitespace-nowrap">Add. Tax (%)</th>
@@ -416,7 +422,13 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
                       <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded border border-slate-200/50 font-mono italic">#DEL-{item.delivery_id}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <p className="text-sm font-bold text-slate-900">{item.quantity}</p>
+                      <span className="text-xs font-bold text-slate-500">{item.original_delivery_qty}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="text-xs font-bold text-rose-500">{item.return_qty || 0}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <p className="text-sm font-black text-indigo-600">{item.quantity}</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.uom || 'EACH'}</p>
                     </td>
                     <td className="px-6 py-4 text-right">
