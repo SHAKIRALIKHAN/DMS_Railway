@@ -1,9 +1,11 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 import cors from "cors";
 import morgan from "morgan";
 import Database from "better-sqlite3";
+import multer from "multer";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2639,6 +2641,54 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/download-db", (req, res) => {
+    const filePath = path.join(process.cwd(), "dms_v7.db");
+    res.download(filePath, "karachi_dms_backup.db", (err) => {
+      if (err) {
+        console.error("Error downloading DB:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to download database file" });
+        }
+      }
+    });
+  });
+
+  const upload = multer({ dest: 'uploads/' });
+
+  app.post("/api/upload-db", upload.single('db_file'), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const tempPath = req.file.path;
+    const targetPath = path.join(process.cwd(), "dms_v7.db");
+
+    try {
+      // 1. Close current connection
+      console.log("[Database] Closing connection for update...");
+      db.close();
+
+      // 2. Replace the file
+      fs.copyFileSync(tempPath, targetPath);
+      
+      // 3. Delete temp file
+      fs.unlinkSync(tempPath);
+
+      // 4. Re-open connection
+      console.log("[Database] Re-opening connection...");
+      db = new Database(targetPath);
+      db.pragma('journal_mode = WAL');
+      db.pragma('synchronous = NORMAL');
+
+      res.json({ success: true, message: "Database restored successfully. Application might need a refresh." });
+    } catch (err: any) {
+      console.error("Error uploading DB:", err);
+      // Try to re-open if it failed
+      try { db = new Database(targetPath); } catch(e) {}
+      res.status(500).json({ error: "Failed to restore database: " + err.message });
     }
   });
 

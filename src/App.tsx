@@ -40,7 +40,9 @@ import {
   ShoppingBag,
   ChevronDown,
   HelpCircle,
-  XCircle
+  XCircle,
+  Download,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -536,6 +538,7 @@ export default function App() {
     localStorage.getItem('dms_isCommandExpanded') === null ? true : localStorage.getItem('dms_isCommandExpanded') === 'true'
   );
   const commandInputRef = useRef<HTMLInputElement>(null);
+  const dbFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleShortcut = (e: KeyboardEvent) => {
@@ -598,6 +601,22 @@ export default function App() {
     JSON.parse(localStorage.getItem('dms_filters_purchases') || '{}').search || ""
   );
   const [showPurchaseSuggestions, setShowPurchaseSuggestions] = useState(false);
+
+  // --- Persistence Effects ---
+  useEffect(() => { localStorage.setItem('dms_activeTab', activeTab); }, [activeTab]);
+  useEffect(() => { localStorage.setItem('dms_masterDataSubTab', masterDataSubTab); }, [masterDataSubTab]);
+  useEffect(() => { localStorage.setItem('dms_transactionsSubTab', transactionsSubTab); }, [transactionsSubTab]);
+  useEffect(() => { localStorage.setItem('dms_isSidebarOpen', String(isSidebarOpen)); }, [isSidebarOpen]);
+  useEffect(() => { localStorage.setItem('dms_isCommandExpanded', String(isCommandExpanded)); }, [isCommandExpanded]);
+  useEffect(() => { localStorage.setItem('dms_filters_shops', JSON.stringify(filters.shops)); }, [filters.shops]);
+  useEffect(() => { localStorage.setItem('dms_filters_suppliers', JSON.stringify(filters.suppliers)); }, [filters.suppliers]);
+  useEffect(() => { localStorage.setItem('dms_filters_salesmen', JSON.stringify(filters.salesmen)); }, [filters.salesmen]);
+  useEffect(() => { localStorage.setItem('dms_filters_orderBookers', JSON.stringify(filters.orderBookers)); }, [filters.orderBookers]);
+  useEffect(() => { localStorage.setItem('dms_filters_products', JSON.stringify(filters.products)); }, [filters.products]);
+  useEffect(() => { localStorage.setItem('dms_filters_orders', JSON.stringify(filters.orders)); }, [filters.orders]);
+  useEffect(() => { localStorage.setItem('dms_filters_purchases', JSON.stringify(filters.purchases)); }, [filters.purchases]);
+  useEffect(() => { localStorage.setItem('dms_filters_deliveries', JSON.stringify(filters.deliveries)); }, [filters.deliveries]);
+  useEffect(() => { localStorage.setItem('dms_filters_returns', JSON.stringify(filters.returns)); }, [filters.returns]);
 
   const [deliverySearchInput, setDeliverySearchInput] = useState(
     JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{}').search || ""
@@ -1326,6 +1345,38 @@ export default function App() {
     }
   };
 
+  const handleRestoreDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm('WARNING: This will replace the entire current database with the uploaded file. This action cannot be undone. Do you want to proceed?')) {
+      e.target.value = '';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('db_file', file);
+
+    try {
+      const res = await fetch('/api/upload-db', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        window.location.reload(); // Reload to refresh all data
+      } else {
+        alert(data.error || 'Failed to restore database');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error uploading database file');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const formatPKR = (amount: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
@@ -1440,6 +1491,30 @@ export default function App() {
               >
                 <HelpCircle size={16} />
               </button>
+
+              <button 
+                onClick={() => window.open('/api/download-db', '_blank')}
+                className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
+                title="Download Database Backup"
+              >
+                <Download size={16} />
+              </button>
+
+              <button 
+                onClick={() => dbFileInputRef.current?.click()}
+                className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
+                title="Restore Database Backup"
+              >
+                <Upload size={16} />
+              </button>
+
+              <input 
+                type="file"
+                ref={dbFileInputRef}
+                onChange={handleRestoreDB}
+                className="hidden"
+                accept=".db"
+              />
             </div>
           </div>
 
