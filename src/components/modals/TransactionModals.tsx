@@ -116,7 +116,7 @@ export const PurchaseModal = ({
       });
       if (res.ok) {
         onSuccess();
-        onClose();
+        // Removed onClose()
       }
     } catch (err) {
       console.error("Failed to save purchase", err);
@@ -556,7 +556,7 @@ export const NewOrderModal = ({
       });
       if (res.ok) {
         onSuccess();
-        onClose();
+        // Removed onClose()
       } else {
         const data = await res.json();
         alert(data.error || "Failed to save order");

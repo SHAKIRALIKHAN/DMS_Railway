@@ -237,7 +237,7 @@ export const DeliveryModal = ({
       });
       if (res.ok) {
         onSuccess();
-        onClose();
+        // Removed onClose() to stay on screen
       } else {
         const err = await res.json();
         alert(err.error || `Delivery ${delivery ? 'Update' : 'Creation'} Failed`);

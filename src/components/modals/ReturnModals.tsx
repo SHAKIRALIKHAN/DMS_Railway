@@ -22,8 +22,25 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
   const [returnItems, setReturnItems] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const shopSearchRef = React.useRef<HTMLInputElement>(null);
 
-  // Initialize for Edit Mode
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      } else if (e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        shopSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [returnItems, selectedShopId]); // Added dependencies to ensure handleSubmit has latest state
   useEffect(() => {
     if (returnRecord) {
       setSelectedShopId(returnRecord.shop_id);
@@ -109,7 +126,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
     const qty = parseInt(val) || 0;
     const item = returnItems[idx];
     
-    // Use net_qty from backend which is Delivery_Qty - already_returned_qty (calculated in PUT logic too)
+    // Use net_qty from backend which is Delivery_Qty - already_returned_qty
     const maxReturnable = item.net_qty ?? item.quantity;
 
     if (qty > maxReturnable) {
@@ -120,6 +137,13 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
     setErrorStatus(null);
     const newItems = [...returnItems];
     newItems[idx].current_return_qty = qty;
+    setReturnItems(newItems);
+  };
+
+  const handleReasonChange = (idx: number, val: string) => {
+    if (val.length > 30) return;
+    const newItems = [...returnItems];
+    newItems[idx].reason = val;
     setReturnItems(newItems);
   };
 
@@ -154,13 +178,14 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
             delivery_item_id: item.delivery_item_id,
             product_id: item.product_id,
             quantity: item.current_return_qty,
-            unit_price: item.price
+            unit_price: item.price,
+            reason: item.reason
           }))
         })
       });
 
       if (res.ok) {
-        onClose();
+        // Removed onClose() to stay on screen as per user request
       } else {
         const data = await res.json();
         setErrorStatus(data.error || "Failed to process return.");
@@ -190,7 +215,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
               <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-rose-100">Inventory Adjust</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
         </div>
@@ -207,11 +232,15 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
           {/* Header Grid */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Select Retailer</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1 uppercase flex justify-between">
+                <span>Select Retailer</span>
+                <span className="text-indigo-400 font-mono">ALT+S</span>
+              </label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                   type="text"
+                  ref={shopSearchRef}
                   placeholder="Select shop..."
                   value={shopSearch}
                   onFocus={() => setShowShopDropdown(true)}
@@ -305,11 +334,9 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Product Details</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Batch Ref</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Delivered</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Returned</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center text-indigo-600">Net Qty</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-rose-500 uppercase text-center">Return Quantity</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Load Quantity</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-rose-500 uppercase text-center">Return Quantity</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">Reason (Max 30)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -317,21 +344,12 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
                   <tr key={`${item.delivery_id}-${item.product_id}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <p className="text-sm font-bold text-slate-900">{item.product_name}</p>
-                      <p className="text-[10px] text-slate-400 font-mono tracking-wider italic">{item.product_id}</p>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded border border-slate-200/50 font-mono italic whitespace-nowrap">#DEL-{item.delivery_id}</span>
+                      <p className="text-[10px] text-slate-400 font-mono tracking-wider italic">{item.product_id} • #DEL-{item.delivery_id}</p>
                     </td>
                     <td className="px-4 py-4 text-center">
                       <span className="text-xs font-bold text-slate-900">{item.quantity}</span>
                     </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="text-xs font-bold text-rose-500">{item.return_qty || 0}</span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="text-xs font-black text-indigo-600">{item.net_qty}</span>
-                    </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <div className="flex justify-center">
                         <input 
                           type="number"
@@ -341,10 +359,25 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({ onClose, shops, return
                           placeholder="0"
                           onChange={(e) => handleReturnQtyChange(idx, e.target.value)}
                           className={cn(
-                            "w-24 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-black outline-none transition-all",
+                            "w-20 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-black outline-none transition-all focus:ring-2 focus:ring-rose-100",
                             item.current_return_qty > 0 ? "border-rose-400 bg-white text-rose-600" : "focus:border-indigo-400 focus:bg-white"
                           )}
                         />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="relative">
+                        <input 
+                          type="text"
+                          value={item.reason || ''}
+                          maxLength={30}
+                          onChange={(e) => handleReasonChange(idx, e.target.value)}
+                          placeholder="Reason for return..."
+                          className="w-full px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none transition-all focus:border-indigo-400 focus:bg-white"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold uppercase">
+                          {item.reason?.length || 0}/30
+                        </span>
                       </div>
                     </td>
                   </tr>

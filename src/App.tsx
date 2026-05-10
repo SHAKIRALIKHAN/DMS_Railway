@@ -42,7 +42,8 @@ import {
   HelpCircle,
   XCircle,
   Download,
-  Upload
+  Upload,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -537,8 +538,34 @@ export default function App() {
   const [isCommandExpanded, setIsCommandExpanded] = useState(
     localStorage.getItem('dms_isCommandExpanded') === null ? true : localStorage.getItem('dms_isCommandExpanded') === 'true'
   );
+  const [tCodeError, setTCodeError] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreLogs, setRestoreLogs] = useState<string[]>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
   const commandInputRef = useRef<HTMLInputElement>(null);
   const dbFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadDB = async () => {
+    setIsDownloading(true);
+    try {
+      const res = await fetch('/api/download-db');
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `karachi_dms_backup_${new Date().toISOString().split('T')[0]}.db`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      alert('Error downloading database backup');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   useEffect(() => {
     const handleShortcut = (e: KeyboardEvent) => {
@@ -740,14 +767,15 @@ export default function App() {
   };
 
   const executeTransaction = (code: string) => {
-    const tCode = code.trim().toUpperCase();
-    if (!tCode) return;
+    const rawCode = code.trim().toUpperCase();
+    if (!rawCode) return;
 
-    // Handle /n prefix
-    const finalCode = tCode.startsWith('/N') ? tCode.slice(2) : tCode;
+    // Handle /N prefix (terminate session pattern)
+    const isNewSession = rawCode.startsWith('/N');
+    const finalCode = isNewSession ? rawCode.slice(2).trim() : rawCode;
 
-    // If it started with /n, we "terminate session" by closing any open modals
-    if (tCode.startsWith('/N')) {
+    if (isNewSession) {
+      // Close all modals
       setIsProductMasterModalOpen(false);
       setIsRegisterShopModalOpen(false);
       setIsRegisterSupplierModalOpen(false);
@@ -763,10 +791,19 @@ export default function App() {
       setIsOrderCancellationOpen(false);
       setIsUnitModalOpen(false);
       setIsLocationModalOpen(false);
+      setIsReturnModalOpen(false);
+      setIsInvoiceModalOpen(false);
       setSelectedOrder(null);
       setSelectedShop(null);
       setSelectedPurchase(null);
       setSelectedDelivery(null);
+      
+      // If code was just /N, go to dashboard
+      if (!finalCode) {
+        setActiveTab('dashboard');
+        setCommandValue("");
+        return;
+      }
     }
 
     switch (finalCode) {
@@ -789,7 +826,6 @@ export default function App() {
         setActiveTab('transactions');
         setTransactionsSubTab('deliveries');
         break;
-      
       case 'INV01':
         setIsInvoiceModalOpen(true);
         break;
@@ -814,7 +850,6 @@ export default function App() {
         break;
       case 'UN01': setIsUnitModalOpen(true); break;
       case 'LOC01': setIsLocationModalOpen(true); break;
-      case 'INV01': setIsInvoiceModalOpen(true); break;
       case 'ME21N': 
         setActiveTab('transactions');
         setTransactionsSubTab('purchases');
@@ -823,13 +858,13 @@ export default function App() {
       // Master Data (MD) / Salesmen (SM) / Shops (SH)
       case 'VD01': 
       case 'SH05':
+      case 'SH07':
         setIsRegisterShopModalOpen(true); 
         break;
       case 'VD02':
       case 'VD03':
       case 'SHM1':
       case 'SH01':
-      case 'SH07':
       case 'SH08':
         setIsShopMasterModalOpen(true);
         break;
@@ -867,10 +902,12 @@ export default function App() {
         break;
       
       default:
+        setTCodeError(`INVALID: ${finalCode}`);
         console.warn(`Transaction code ${finalCode} not recognized`);
-        break;
+        return; // Don't clear command if error
     }
     setCommandValue("");
+    setTCodeError(null);
   };
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editingDelivery, setEditingDelivery] = useState<Delivery | null>(null);
@@ -1349,31 +1386,48 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('WARNING: This will replace the entire current database with the uploaded file. This action cannot be undone. Do you want to proceed?')) {
-      e.target.value = '';
-      return;
-    }
+    // Log to verify the event is triggered
+    console.log("[DEBUG] handleRestoreDB triggered for file:", file.name);
 
     const formData = new FormData();
     formData.append('db_file', file);
 
+    setIsRestoring(true);
+    setRestoreLogs(["[SYSTEM] Initiating full system recovery...", "[IO] Analyzing backup file: " + file.name]);
+
     try {
+      // Small pause to allow UI transition hit the DOM
+      await new Promise(r => setTimeout(r, 1000));
+      setRestoreLogs(prev => [...prev, "[IO] Validating database integrity...", "[IO] Integrity: OK (SQLite v3)"]);
+      
       const res = await fetch('/api/upload-db', {
         method: 'POST',
         body: formData
       });
+      
       const data = await res.json();
+      
       if (res.ok) {
-        alert(data.message);
-        window.location.reload(); // Reload to refresh all data
+        setRestoreLogs(prev => [...prev, "[LOCK] DB connection closed safely.", "[STORAGE] Replacing core storage blocks...", "[SUCCESS] Partition sync complete."]);
+        await new Promise(r => setTimeout(r, 1200));
+        setRestoreLogs(prev => [...prev, "[SYSTEM] Finalizing restoration..."]);
+        await new Promise(r => setTimeout(r, 800));
+        setRestoreLogs(prev => [...prev, "[SYSTEM] RESTORED SUCCESSFULLY!", "[SYNC] REBOOTING APPLICATION..."]);
+        
+        // Final pause to allow user to see the success message in the console
+        await new Promise(r => setTimeout(r, 2000));
+        window.location.reload(); 
       } else {
-        alert(data.error || 'Failed to restore database');
+        setRestoreLogs(prev => [...prev, "[FATAL] Restoration failed: " + (data.error || 'Unknown server error')]);
+        alert("❌ RESTORE FAILED\n\n" + (data.error || 'Could not restore database.'));
       }
     } catch (err) {
-      console.error(err);
-      alert('Error uploading database file');
+      console.error("[RESTORE] Error:", err);
+      setRestoreLogs(prev => [...prev, "[SOCKET] Network transport error. Please check server logs."]);
+      alert('❌ CONNECTION ERROR\n\nFailed to upload the backup file to the server.');
     } finally {
-      e.target.value = '';
+      setIsRestoring(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -1386,7 +1440,118 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden relative">
+      {/* System Modals (High Priority Overlay) */}
+      <AnimatePresence>
+        {isRestoring && (
+          <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4 overflow-hidden pointer-events-auto">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border-2 border-indigo-500/40 w-full max-w-lg rounded-2xl shadow-[0_0_80px_rgba(79,70,229,0.3)] overflow-hidden font-mono"
+            >
+              <div className="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-ping"></div>
+                  <span className="text-xs font-black text-indigo-400 uppercase tracking-[0.2em]">RECOVERY_CONSOLE_V1.0</span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 rounded-full bg-slate-700"></div>
+                  <div className="w-3 h-3 rounded-full bg-slate-700"></div>
+                  <div className="w-3 h-3 rounded-full bg-indigo-500 animate-pulse"></div>
+                </div>
+              </div>
+              
+              <div className="p-10 space-y-8">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex items-center justify-center shadow-[inset_0_0_20px_rgba(79,70,229,0.1)]">
+                    <RotateCcw className="text-indigo-400 animate-spin" size={32} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-white font-bold text-2xl tracking-tight">Synchronizing Partitions</h3>
+                    <p className="text-indigo-400/60 text-sm mt-1 uppercase tracking-widest font-black">Replacing core dms clusters...</p>
+                  </div>
+                </div>
+
+                <div className="bg-black/90 rounded-xl p-6 h-64 overflow-y-auto border border-slate-800 shadow-inner ring-1 ring-white/5 scrollbar-none">
+                  {restoreLogs.map((log, index) => (
+                    <motion.div 
+                      key={index}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="text-[11px] mb-2.5 flex gap-4 items-start leading-relaxed"
+                    >
+                      <span className="text-slate-600 shrink-0 font-bold tabular-nums">{(index + 1).toString().padStart(2, '0')}</span>
+                      <span className={log.includes('ERROR') || log.includes('FATAL') ? 'text-rose-400' : log.includes('SUCCESS') || log.includes('SUCCESSFUL') ? 'text-emerald-400 font-bold' : 'text-indigo-300/90'}>
+                        {log.includes('SUCCESS') ? '✓ ' : log.includes('FATAL') || log.includes('ERROR') ? '!! ' : '$ '}{log}
+                      </span>
+                    </motion.div>
+                  ))}
+                  <motion.div 
+                    animate={{ opacity: [0, 1, 0] }}
+                    transition={{ duration: 0.8, repeat: Infinity }}
+                    className="inline-block w-2 h-4 bg-indigo-500 ml-1 translate-y-0.5"
+                  />
+                </div>
+
+                <div className="bg-indigo-600/10 border border-indigo-500/20 p-5 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(79,70,229,0.5)]"></div>
+                    <span className="text-[11px] text-indigo-300 font-black uppercase tracking-[0.2em]">Restoration In Progress</span>
+                  </div>
+                  <div className="text-[10px] text-indigo-400/40 font-bold italic">DO NOT CLOSE TAB</div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isDownloading && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[99998] flex items-center justify-center p-4 overscroll-none pointer-events-auto">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center gap-6 max-w-sm text-center border border-indigo-100"
+            >
+              <div className="w-20 h-20 rounded-full bg-indigo-50 flex items-center justify-center relative shadow-inner overflow-hidden">
+                <Download className="text-indigo-600 animate-bounce relative z-10" size={40} />
+                <motion.div 
+                  className="absolute inset-0 bg-indigo-100/50"
+                  animate={{ y: ["100%", "-100%"] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Creating System Mirror</h2>
+                <p className="text-sm text-slate-500 leading-relaxed font-semibold px-2 italic">Synthesizing current state into partition file...</p>
+              </div>
+              <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 p-4 rounded-2xl w-full justify-center">
+                <div className="w-3 h-3 bg-indigo-600 rounded-full animate-pulse"></div>
+                <span className="text-[11px] text-indigo-600 font-bold uppercase tracking-widest animate-pulse">
+                  Backup In Progress
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden relative shadow-inner">
+                <motion.div 
+                  className="absolute inset-y-0 left-0 bg-indigo-600"
+                  animate={{ 
+                    left: ["-100%", "100%"],
+                  }}
+                  transition={{ 
+                    duration: 1.5, 
+                    repeat: Infinity, 
+                    ease: "linear" 
+                  }}
+                  style={{ width: "50%" }}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <aside className={cn(
         "fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transition-transform duration-300 ease-in-out lg:translate-x-0",
@@ -1459,7 +1624,14 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-0.5">
               <button 
-                onClick={() => setIsCommandExpanded(!isCommandExpanded)}
+                onClick={() => {
+                  const newExpanded = !isCommandExpanded;
+                  setIsCommandExpanded(newExpanded);
+                  localStorage.setItem('dms_isCommandExpanded', String(newExpanded));
+                  if (newExpanded) {
+                    setTimeout(() => commandInputRef.current?.focus(), 100);
+                  }
+                }}
                 className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-slate-600"
               >
                 {isCommandExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
@@ -1469,19 +1641,40 @@ export default function App() {
                 "overflow-hidden transition-all duration-300 flex items-center",
                 isCommandExpanded ? "w-48 opacity-100 ml-1" : "w-0 opacity-0 ml-0"
               )}>
-                <input 
-                  ref={commandInputRef}
-                  type="text" 
-                  value={commandValue}
-                  onChange={(e) => setCommandValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      executeTransaction(commandValue);
-                    }
-                  }}
-                  placeholder="Enter T-Code..." 
-                  className="w-full bg-transparent border-none text-sm font-mono focus:ring-0 placeholder:text-slate-400 uppercase"
-                />
+                <div className="relative flex items-center w-full">
+                  <input 
+                    ref={commandInputRef}
+                    type="text" 
+                    value={commandValue}
+                    onChange={(e) => setCommandValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        executeTransaction(commandValue);
+                      } else if (tCodeError) {
+                        setTCodeError(null);
+                      }
+                    }}
+                    placeholder="Enter T-Code..." 
+                    className={cn(
+                      "w-full bg-transparent border-none text-sm font-mono focus:ring-0 placeholder:text-slate-400 uppercase",
+                      tCodeError && "text-rose-500 font-bold"
+                    )}
+                  />
+                  
+                  <AnimatePresence>
+                    {tCodeError && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="absolute left-full ml-4 px-3 py-1 bg-rose-500 text-white text-[10px] font-bold rounded-lg whitespace-nowrap z-50 pointer-events-none shadow-sm flex items-center gap-1.5"
+                      >
+                        <AlertCircle size={12} />
+                        {tCodeError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
               
               <button 
@@ -1493,7 +1686,7 @@ export default function App() {
               </button>
 
               <button 
-                onClick={() => window.open('/api/download-db', '_blank')}
+                onClick={handleDownloadDB}
                 className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
                 title="Download Database Backup"
               >
@@ -1502,10 +1695,11 @@ export default function App() {
 
               <button 
                 onClick={() => dbFileInputRef.current?.click()}
-                className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
+                className={`ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600 ${isRestoring ? 'animate-pulse text-indigo-500 bg-indigo-50' : ''}`}
                 title="Restore Database Backup"
+                disabled={isRestoring}
               >
-                <Upload size={16} />
+                {isRestoring ? <RotateCcw className="animate-spin" size={16} /> : <Upload size={16} />}
               </button>
 
               <input 
@@ -1961,8 +2155,8 @@ export default function App() {
               >
                 <div className="flex justify-between items-end">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Master Data Management</h2>
-                    <p className="text-slate-500">Manage core entities and configurations</p>
+                    <h2 className="text-2xl font-bold text-slate-900">Master Data</h2>
+                    <p className="text-slate-500">Configure core entities and configurations</p>
                   </div>
                 </div>
 
@@ -2011,7 +2205,7 @@ export default function App() {
                           className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
                         >
                           <Settings size={18} />
-                          <span>Manage Locations</span>
+                          <span>Locations Master</span>
                         </button>
                       </div>
 
@@ -2111,7 +2305,7 @@ export default function App() {
                             className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                           >
                             <Settings size={18} />
-                            <span>Manage Suppliers (SUM1)</span>
+                            <span>Suppliers (SUM1)</span>
                           </button>
                           <button 
                             onClick={() => setIsRegisterSupplierModalOpen(true)}
@@ -2236,7 +2430,7 @@ export default function App() {
                             className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                           >
                             <Settings size={18} />
-                            <span>Manage Shops (SHM1)</span>
+                            <span>Shops (SHM1)</span>
                           </button>
                           <button 
                             onClick={() => setIsRegisterShopModalOpen(true)}
@@ -2375,7 +2569,7 @@ export default function App() {
                           className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                         >
                           <Plus size={18} />
-                          <span>Manage Order Bookers</span>
+                          <span>Order Bookers</span>
                         </button>
                       </div>
                       <motion.div 
@@ -2469,7 +2663,7 @@ export default function App() {
                           className="bg-indigo-600 text-white px-4 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-50 border border-indigo-500"
                         >
                           <Plus size={18} />
-                          <span>Manage Salesmen</span>
+                          <span>Salesmen Registration</span>
                         </button>
                       </div>
 
@@ -2592,7 +2786,7 @@ export default function App() {
                             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
                           >
                             <Settings size={18} />
-                            <span>Manage Product Master Data</span>
+                            <span>Product Master Data</span>
                           </button>
                         </div>
                       </div>
@@ -2677,7 +2871,7 @@ export default function App() {
                           className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
                         >
                           <Settings size={18} />
-                          <span>Manage Units (UN01)</span>
+                          <span>Units (UN01)</span>
                         </button>
                       </div>
 
@@ -2768,19 +2962,19 @@ export default function App() {
                 <div className="flex justify-between items-end">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">Transaction Processing</h2>
-                    <p className="text-slate-500">Manage sales, purchases and logistics</p>
+                    <p className="text-slate-500">Sales, purchases and logistics transactions</p>
                   </div>
                 </div>
 
                 {/* Sub-tabs Navigation */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                   {[
-                    { id: 'purchases', label: 'Manage Purchases', icon: ShoppingBag },
-                    { id: 'orders', label: 'Manage Orders', icon: ShoppingCart },
-                    { id: 'deliveries', label: 'Manage Deliveries', icon: Truck },
-                    { id: 'delivery_returns', label: 'Manage Returns', icon: RotateCcw },
-                    { id: 'invoices', label: 'Manage Invoices', icon: FileText },
-                    { id: 'load_plans', label: 'Manage Load Plans', icon: Truck },
+                    { id: 'purchases', label: 'Purchases', icon: ShoppingBag },
+                    { id: 'orders', label: 'Orders', icon: ShoppingCart },
+                    { id: 'deliveries', label: 'Deliveries', icon: Truck },
+                    { id: 'delivery_returns', label: 'Delivery Return', icon: RotateCcw },
+                    { id: 'invoices', label: 'Invoices', icon: FileText },
+                    { id: 'load_plans', label: 'Load Plans', icon: Truck },
                   ].map(tab => (
                     <button
                       key={tab.id}

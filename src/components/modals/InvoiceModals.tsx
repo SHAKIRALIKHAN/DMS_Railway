@@ -195,7 +195,7 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
 
       if (res.ok) {
         onSuccess();
-        onClose();
+        // Removed onClose() to stay on screen
       } else {
         const data = await res.json();
         setErrorStatus(data.error || "Failed to create invoice");
@@ -221,6 +221,21 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
     
     setInvoiceItems(updated);
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        handleSubmit();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedShopId, invoiceItems, selectedDeliveryIds, invoiceDate, isSubmitting]);
 
   const totals = invoiceItems.reduce((acc, it) => {
     const gross = it.quantity * it.unit_price;

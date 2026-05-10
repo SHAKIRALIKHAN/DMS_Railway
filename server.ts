@@ -19,8 +19,9 @@ let db: any;
 try {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  console.log(`[Database] Connection established successfully in WAL mode.`);
+  db.pragma('synchronous = FULL');
+  db.pragma('wal_checkpoint(FULL)');
+  console.log(`[Database] Connection established successfully with WAL checkpoint.`);
   
   // Initialize Database Schema
   try {
@@ -45,12 +46,12 @@ try {
 
       CREATE TABLE IF NOT EXISTS material_groups (
         mat_gp TEXT PRIMARY KEY,
-        mat_description TEXT NOT NULL
+        mat_description TEXT NOT NULL UNIQUE
       );
 
       CREATE TABLE IF NOT EXISTS products (
         product_id TEXT PRIMARY KEY,
-        product_name TEXT NOT NULL,
+        product_name TEXT NOT NULL UNIQUE,
         brand TEXT NOT NULL,
         material_group_id TEXT,
         purchase_price REAL NOT NULL,
@@ -89,10 +90,10 @@ try {
 
       CREATE TABLE IF NOT EXISTS shops (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shop_name TEXT NOT NULL,
+        shop_name TEXT NOT NULL UNIQUE,
         owner_name TEXT NOT NULL,
         location TEXT NOT NULL,
-        phone TEXT NOT NULL,
+        phone TEXT NOT NULL UNIQUE,
         credit_limit REAL DEFAULT 0,
         category TEXT DEFAULT 'Retailer'
       );
@@ -101,7 +102,7 @@ try {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         father_name TEXT NOT NULL,
-        cell_no TEXT NOT NULL,
+        cell_no TEXT NOT NULL UNIQUE,
         cnic_no TEXT NOT NULL,
         joining_date DATE NOT NULL
       );
@@ -123,17 +124,17 @@ try {
         product_id TEXT NOT NULL,
         quantity INTEGER NOT NULL,
         unit_price REAL NOT NULL,
+        reason TEXT,
         FOREIGN KEY (return_id) REFERENCES returns(id),
         FOREIGN KEY (product_id) REFERENCES products(product_id),
         FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
         FOREIGN KEY (delivery_item_id) REFERENCES delivery_items(id)
       );
-
       CREATE TABLE IF NOT EXISTS salesmen (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         father_name TEXT NOT NULL,
-        cell_no TEXT NOT NULL,
+        cell_no TEXT NOT NULL UNIQUE,
         cnic_no TEXT NOT NULL,
         joining_date DATE NOT NULL
       );
@@ -189,9 +190,9 @@ try {
 
       CREATE TABLE IF NOT EXISTS suppliers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
+        name TEXT NOT NULL UNIQUE,
         contact_person TEXT NOT NULL,
-        phone TEXT NOT NULL,
+        phone TEXT NOT NULL UNIQUE,
         address TEXT NOT NULL
       );
 
@@ -366,6 +367,7 @@ try {
 
   // Run Migrations (Idempotent)
   try { db.exec("ALTER TABLE orders ADD COLUMN is_cancelled TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE return_items ADD COLUMN reason TEXT;"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_pct REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN sales_tax_amount REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN additional_tax_pct REAL DEFAULT 0"); } catch(e) {}
@@ -438,12 +440,14 @@ try {
   process.exit(1);
 }
 
-// Seed initial data if empty
+// Seed initial data if tables are empty
 try {
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+  const shopCount = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
+  const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() as { count: number };
   
-  if (userCount.count === 0) {
-    console.log("[Database] No users found. Starting baseline seeding...");
+  if (userCount.count === 0 && shopCount.count === 0 && productCount.count === 0) {
+    console.log("[Seeding] Database is empty. Applying baseline seed data...");
     db.transaction(() => {
       // 1. Users
       db.prepare("INSERT OR IGNORE INTO users (name, role, phone, password) VALUES (?, ?, ?, ?)").run("Admin Karachi", "admin", "03001234567", "admin123");
@@ -1170,9 +1174,9 @@ async function startServer() {
 
         // 2. Insert Return Item
         db.prepare(`
-          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(returnId, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price);
+          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(returnId, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
         // 3. Update Stock (using stock_quantity column)
         db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.quantity, item.product_id);
@@ -1266,9 +1270,9 @@ async function startServer() {
       for (const item of items) {
         if (item.quantity <= 0) continue;
         db.prepare(`
-          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(id, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price);
+          INSERT INTO return_items (return_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
         db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
           .run(item.quantity, item.product_id);
@@ -2645,50 +2649,118 @@ async function startServer() {
   });
 
   app.get("/api/download-db", (req, res) => {
-    const filePath = path.join(process.cwd(), "dms_v7.db");
-    res.download(filePath, "karachi_dms_backup.db", (err) => {
-      if (err) {
-        console.error("Error downloading DB:", err);
-        if (!res.headersSent) {
+    const backupTempPath = path.join(process.cwd(), "uploads", `backup_${Date.now()}.db`);
+    
+    try {
+      // VACUUM INTO creates a single-file, fully-checkpointed backup that doesn't need WAL/SHM
+      console.log("[Database] Creating clean backup using VACUUM INTO...");
+      db.prepare(`VACUUM INTO ?`).run(backupTempPath);
+      
+      res.download(backupTempPath, "karachi_dms_backup.db", (err) => {
+        // Cleanup temp backup file after download
+        try {
+          if (fs.existsSync(backupTempPath)) {
+            fs.unlinkSync(backupTempPath);
+          }
+        } catch (cleanupErr) {
+          console.warn("[Database] Cleanup warning:", cleanupErr);
+        }
+        
+        if (err && !res.headersSent) {
+          console.error("Error downloading DB:", err);
           res.status(500).json({ error: "Failed to download database file" });
         }
-      }
-    });
+      });
+    } catch (err: any) {
+      console.error("[Database] Backup failed:", err);
+      res.status(500).json({ error: "Failed to create backup: " + err.message });
+    }
   });
 
+  if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads', { recursive: true });
+  }
   const upload = multer({ dest: 'uploads/' });
 
-  app.post("/api/upload-db", upload.single('db_file'), (req, res) => {
+  app.post("/api/upload-db", upload.single('db_file'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
     const tempPath = req.file.path;
     const targetPath = path.join(process.cwd(), "dms_v7.db");
+    const walPath = targetPath + "-wal";
+    const shmPath = targetPath + "-shm";
 
     try {
-      // 1. Close current connection
-      console.log("[Database] Closing connection for update...");
-      db.close();
+      console.log("[Database] Restore requested. Validating uploaded file...");
+      
+      // 1. Validate the uploaded file is a valid SQLite DB
+      let tempDb;
+      try {
+        tempDb = new Database(tempPath, { readonly: true });
+        tempDb.prepare("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1").get();
+        tempDb.close();
+      } catch (validationErr: any) {
+        if (tempDb) try { tempDb.close(); } catch(e) {}
+        console.error("[Database] File validation failed:", validationErr);
+        return res.status(400).json({ error: "Invalid database file. Please upload a valid .db file." });
+      }
 
-      // 2. Replace the file
+      // 2. Clear state and close connection
+      console.log("[Database] Closing current connection and flushing WAL...");
+      try {
+        db.pragma('wal_checkpoint(FULL)');
+        db.pragma('journal_mode = DELETE'); // Merge WAL into main file
+        db.close();
+      } catch (err) {
+        console.warn("[Database] Error/Warning during close:", err);
+      }
+
+      // 3. Wait a few ms to ensure file handles are released by the OS
+      await new Promise(r => setTimeout(r, 200));
+
+      // 4. WIPE existing DB and sidecars to ensure NO state leak from WAL/SHM
+      const filesToRemove = [targetPath, walPath, shmPath];
+      filesToRemove.forEach(f => {
+        if (fs.existsSync(f)) {
+          try { 
+            fs.unlinkSync(f);
+            console.log(`[Database] Successfully removed: ${f}`);
+          } catch(e) { 
+            console.warn(`[Database] Could not delete ${f}:`, e);
+            // If we can't delete the main file, we can't restore
+            if (f === targetPath) throw new Error("Could not replace main database file - it might be locked by another process.");
+          }
+        }
+      });
+
+      // 5. Deploy new database file
+      console.log("[Database] Deploying new database file from temporary upload...");
       fs.copyFileSync(tempPath, targetPath);
       
-      // 3. Delete temp file
-      fs.unlinkSync(tempPath);
-
-      // 4. Re-open connection
-      console.log("[Database] Re-opening connection...");
+      // 6. Re-open connection
+      console.log("[Database] Re-opening database connection...");
       db = new Database(targetPath);
       db.pragma('journal_mode = WAL');
-      db.pragma('synchronous = NORMAL');
+      db.pragma('synchronous = FULL');
 
-      res.json({ success: true, message: "Database restored successfully. Application might need a refresh." });
+      // Final Check: Count invoices just to be sure we have the new data
+      try {
+        const invCount = db.prepare("SELECT COUNT(*) as count FROM invoices").get() as any;
+        console.log(`[Database] Restore verified. Current invoice count: ${invCount.count}`);
+      } catch (e) {}
+
+      res.json({ success: true, message: "Database restoration successful. The system has been rolled back to your backup state." });
     } catch (err: any) {
-      console.error("Error uploading DB:", err);
-      // Try to re-open if it failed
+      console.error("Error restoring DB:", err);
+      // Attempt recovery
       try { db = new Database(targetPath); } catch(e) {}
-      res.status(500).json({ error: "Failed to restore database: " + err.message });
+      res.status(500).json({ error: "Critical error during restore: " + err.message });
+    } finally {
+      if (fs.existsSync(tempPath)) {
+        try { fs.unlinkSync(tempPath); } catch(e) {}
+      }
     }
   });
 
@@ -2710,6 +2782,22 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  // Graceful shutdown
+  const cleanup = () => {
+    console.log("[Server] Closing database connection...");
+    try {
+      db.pragma('wal_checkpoint(FULL)');
+      db.close();
+      console.log("[Server] Database closed successfully.");
+    } catch (err) {
+      console.error("[Server] Error closing database:", err);
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }
 
 startServer().catch(err => {

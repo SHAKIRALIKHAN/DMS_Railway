@@ -44,7 +44,7 @@ export const RegisterSupplierModal = ({
       });
       if (res.ok) {
         onSuccess();
-        onClose();
+        setFormData({ name: '', address: '', contact_person: '', phone: '', email: '', registration_date: new Date().toISOString().split('T')[0] });
       }
     } catch (err) {
       console.error("Failed to register supplier", err);
@@ -415,7 +415,7 @@ export const RegisterShopModal = ({
       });
       if (res.ok) {
         onSuccess();
-        onClose();
+        setFormData({ shop_name: '', location: '', owner_name: '', phone: '', credit_limit: '0', registration_date: new Date().toISOString().split('T')[0] });
       }
     } catch (err) {
       console.error("Failed to register shop", err);

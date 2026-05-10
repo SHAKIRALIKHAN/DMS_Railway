@@ -99,7 +99,7 @@ export const DriverModal = ({
         className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <h3 className="text-lg font-bold text-slate-900">Manage Drivers Master Data</h3>
+          <h3 className="text-lg font-bold text-slate-900">Drivers Master Data</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
@@ -379,7 +379,7 @@ export const SalesmanModal = ({
         className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <h3 className="text-lg font-bold text-slate-900">Manage Salesmen Master Data</h3>
+          <h3 className="text-lg font-bold text-slate-900">Salesmen Master Data</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
@@ -644,7 +644,7 @@ export const OrderBookerModal = ({
         className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <h3 className="text-lg font-bold text-slate-900">Manage Order Bookers Master Data</h3>
+          <h3 className="text-lg font-bold text-slate-900">Order Bookers Master Data</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0" title="Close (F3)">
             <X size={20} className="text-slate-500" />
           </button>
