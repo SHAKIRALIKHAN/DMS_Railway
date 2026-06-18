@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, FileText, Printer, CheckCircle2, ChevronRight, AlertCircle, ShoppingCart, Search, PlusCircle } from 'lucide-react';
+import { X, Save, FileText, Printer, CheckCircle2, ChevronRight, AlertCircle, ShoppingCart, Search, PlusCircle, Hash, RotateCcw, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shop, Delivery, InvoiceItem, DeliveryItem } from '../../types';
 import { cn } from '../../lib/utils';
@@ -545,6 +545,200 @@ export const InvoiceTransactionModal = ({ onClose, shops, onSuccess, formatPKR }
               </button>
             </div>
           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+interface DisplayInvoiceModalProps {
+  onClose: () => void;
+  formatPKR: (amt: number) => string;
+}
+
+export const DisplayInvoiceModal = ({ onClose, formatPKR }: DisplayInvoiceModalProps) => {
+  const [invoiceIdInput, setInvoiceIdInput] = useState('');
+  const [invoice, setInvoice] = useState<any | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchInvoice = async (id: string) => {
+    if (!id.trim()) return;
+    setLoading(true);
+    setError(null);
+    setInvoice(null);
+    setItems([]);
+
+    const cleanId = id.toUpperCase().replace('#INV-', '').trim();
+    
+    try {
+      const res = await fetch(`/api/invoices/${cleanId}`);
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Invoice not found");
+        throw new Error("Failed to fetch invoice");
+      }
+      const data = await res.json();
+      setInvoice(data);
+      setItems(data.items || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchInvoice(invoiceIdInput);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        {/* Header */}
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <FileText className="text-indigo-600" size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Display Invoice (VF03)</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Document Multi-View</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="p-6 bg-slate-50 border-b border-slate-100">
+          <form onSubmit={handleSearch} className="flex gap-4">
+            <div className="flex-1 relative">
+              <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Enter Invoice Number (e.g. 10)..."
+                value={invoiceIdInput}
+                onChange={e => setInvoiceIdInput(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:border-indigo-600 outline-none shadow-sm transition-all"
+                autoFocus
+              />
+            </div>
+            <button 
+              type="submit"
+              disabled={loading || !invoiceIdInput.trim()}
+              className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2"
+            >
+              {loading ? <RotateCcw className="animate-spin" size={18} /> : <Search size={18} />}
+              Display
+            </button>
+          </form>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8">
+          {error && (
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center">
+                <AlertCircle className="text-rose-500" size={32} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-900">{error}</p>
+                <p className="text-sm text-slate-500">Please check the ID and try again.</p>
+              </div>
+            </div>
+          )}
+
+          {!invoice && !error && !loading && (
+            <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
+              <Search size={64} className="text-slate-300 mb-4" />
+              <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Awaiting Invoice Reference</p>
+            </div>
+          )}
+
+          {invoice && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Customer Info</p>
+                  <p className="text-base font-black text-slate-900">{invoice.shop_name}</p>
+                  <p className="text-xs text-slate-500 font-medium">{invoice.location}</p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Billing Details</p>
+                  <p className="text-base font-black text-slate-900">#INV-{invoice.id.toString().padStart(4, '0')}</p>
+                  <p className="text-xs text-slate-500 font-medium">Date: {new Date(invoice.invoice_date).toLocaleDateString()}</p>
+                </div>
+                <div className="p-6 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Net Invoice Value</p>
+                  <p className="text-2xl font-black">{formatPKR(invoice.net_amount ?? invoice.total_amount ?? 0)}</p>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  <Package size={14} className="text-indigo-600" />
+                  Line Items ({items.length})
+                </h4>
+                <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="px-6 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px]">Product</th>
+                        <th className="px-4 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px] text-center">Qty</th>
+                        <th className="px-4 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px] text-right">Price</th>
+                        <th className="px-4 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px] text-center">Tax</th>
+                        <th className="px-4 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px] text-center">Disc</th>
+                        <th className="px-6 py-3 font-bold text-slate-500 opacity-70 uppercase text-[10px] text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {items.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-slate-900">{item.product_name}</span>
+                            <span className="block text-[10px] text-slate-400 font-mono italic">#{item.product_id}</span>
+                          </td>
+                          <td className="px-4 py-4 text-center font-bold text-slate-600">{item.quantity}</td>
+                          <td className="px-4 py-4 text-right tabular-nums text-slate-600">{formatPKR(item.unit_price)}</td>
+                          <td className="px-4 py-4 text-center">
+                            <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded">
+                              +{(item.tax_pct || 0) + (item.additional_tax_pct || 0)}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[10px] font-bold rounded">
+                              -{(item.trade_discount_pct || 0) + (item.special_discount_pct || 0)}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right font-black text-slate-900">{formatPKR(item.net_amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Action Bar */}
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  onClick={() => window.print()}
+                  className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <Printer size={16} />
+                  Print Document
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
     </div>

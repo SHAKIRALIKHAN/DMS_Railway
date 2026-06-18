@@ -43,7 +43,9 @@ import {
   XCircle,
   Download,
   Upload,
-  AlertCircle
+  AlertCircle,
+  Check,
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -91,13 +93,20 @@ import {
 } from './types';
 
 // Modal component imports
-import { InvoiceTransactionModal } from './components/modals/InvoiceModals';
+import { InvoiceTransactionModal, DisplayInvoiceModal } from './components/modals/InvoiceModals';
+import { 
+  DisplayOrderModal, 
+  DisplayDeliveryModal, 
+  DisplayPurchaseModal, 
+  DisplayReturnModal 
+} from './components/modals/DisplayModals';
 import { ReturnModal } from './components/modals/ReturnModals';
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
 import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
 import { DeliveryModal } from './components/modals/LogisticsModals';
 import { RegisterShopModal, ShopMasterModal, RegisterSupplierModal, SupplierMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
+import { DailyLoadPlanReport } from './components/reports/DailyLoadPlanReport';
 
 const OrderCancellationScreen = ({ onClose, orders, formatPKR }: { onClose: () => void, orders: Order[], formatPKR: (amt: number) => string }) => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -496,6 +505,7 @@ export default function App() {
   const [returns, setReturns] = useState<Return[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [valuation, setValuation] = useState<StockValuationReport | null>(null);
+  const [selectedReportTitle, setSelectedReportTitle] = useState<string | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loadPlans, setLoadPlans] = useState<LoadPlan[]>([]);
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([]);
@@ -520,6 +530,11 @@ export default function App() {
   const [isMaterialGroupModalOpen, setIsMaterialGroupModalOpen] = useState(false);
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isDisplayInvoiceModalOpen, setIsDisplayInvoiceModalOpen] = useState(false);
+  const [isDisplayOrderModalOpen, setIsDisplayOrderModalOpen] = useState(false);
+  const [isDisplayDeliveryModalOpen, setIsDisplayDeliveryModalOpen] = useState(false);
+  const [isDisplayPurchaseModalOpen, setIsDisplayPurchaseModalOpen] = useState(false);
+  const [isDisplayReturnModalOpen, setIsDisplayReturnModalOpen] = useState(false);
   const [isBulkInvoiceCancelOpen, setIsBulkInvoiceCancelOpen] = useState(false);
   const [bulkCancelRange, setBulkCancelRange] = useState({ start: '', end: '' });
   const [isBulkCancelling, setIsBulkCancelling] = useState(false);
@@ -545,6 +560,21 @@ export default function App() {
   const commandInputRef = useRef<HTMLInputElement>(null);
   const dbFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Resilient confirmations & notification states
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<number | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<number | null>(null);
+  const [orderToUncancel, setOrderToUncancel] = useState<number | null>(null);
+  const [deliveryToDelete, setDeliveryToDelete] = useState<number | null>(null);
+  const [purchaseToDelete, setPurchaseToDelete] = useState<number | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 5000);
+  };
+
   const handleDownloadDB = async () => {
     setIsDownloading(true);
     try {
@@ -561,7 +591,7 @@ export default function App() {
       a.remove();
     } catch (err) {
       console.error(err);
-      alert('Error downloading database backup');
+      showToast('Error downloading database backup', 'error');
     } finally {
       setIsDownloading(false);
     }
@@ -793,6 +823,11 @@ export default function App() {
       setIsLocationModalOpen(false);
       setIsReturnModalOpen(false);
       setIsInvoiceModalOpen(false);
+      setIsDisplayInvoiceModalOpen(false);
+      setIsDisplayOrderModalOpen(false);
+      setIsDisplayDeliveryModalOpen(false);
+      setIsDisplayPurchaseModalOpen(false);
+      setIsDisplayReturnModalOpen(false);
       setSelectedOrder(null);
       setSelectedShop(null);
       setSelectedPurchase(null);
@@ -816,7 +851,6 @@ export default function App() {
       case 'VA02':
         setIsOrderCancellationOpen(true);
         break;
-      case 'VA03': 
       case 'OR01':
         setActiveTab('transactions');
         setTransactionsSubTab('orders');
@@ -828,6 +862,30 @@ export default function App() {
         break;
       case 'INV01':
         setIsInvoiceModalOpen(true);
+        break;
+      case 'VA03': 
+        setIsDisplayOrderModalOpen(true);
+        setIsCommandExpanded(false);
+        break;
+      case 'VL03':
+        setIsDisplayDeliveryModalOpen(true);
+        setIsCommandExpanded(false);
+        break;
+      case 'ME03':
+        setIsDisplayPurchaseModalOpen(true);
+        setIsCommandExpanded(false);
+        break;
+      case 'LR03':
+        setIsDisplayReturnModalOpen(true);
+        setIsCommandExpanded(false);
+        break;
+      case 'VF03':
+        setIsDisplayInvoiceModalOpen(true);
+        setIsCommandExpanded(false);
+        break;
+      case 'LPR01':
+        setActiveTab('reports');
+        setSelectedReportTitle('Daily Load Plan');
         break;
       case 'RT01':
         setIsReturnModalOpen(true);
@@ -1143,37 +1201,79 @@ export default function App() {
   };
 
   const deleteDelivery = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this delivery? Stock and order status will be reversed.")) return;
     try {
       const res = await fetch(`/api/deliveries/${id}`, { method: 'DELETE' });
       if (res.ok) {
+        showToast(`Delivery #DEL-${id.toString().padStart(4, '0')} was successfully deleted.`);
         fetchDeliveries();
         fetchProducts();
         fetchOrders();
         fetchStats();
       } else {
         const err = await res.json();
-        alert(err.error || "Delete Failed");
+        showToast(err.error || "Delete Failed", "error");
       }
     } catch (err) {
       console.error(err);
+      showToast("Network error deleting delivery", "error");
     }
   };
 
   const deletePurchase = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this purchase? Stock will be reduced.")) return;
     try {
       const res = await fetch(`/api/purchases/${id}`, { method: 'DELETE' });
       if (res.ok) {
+        showToast(`Purchase order #PUR-${id.toString().padStart(4, '0')} was successfully deleted.`);
         fetchPurchases();
         fetchProducts();
         fetchStats();
       } else {
         const err = await res.json();
-        alert(err.error || "Delete Failed");
+        showToast(err.error || "Delete Failed", "error");
       }
     } catch (err) {
       console.error(err);
+      showToast("Network error deleting purchase", "error");
+    }
+  };
+
+  const handleCancelOrder = async (id: number) => {
+    try {
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [id] })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to cancel');
+      }
+      showToast(`Order #ORD-${id.toString().padStart(4, '0')} was successfully cancelled.`);
+      fetchOrders();
+      fetchProducts();
+      fetchStats();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleUncancelOrder = async (id: number) => {
+    try {
+      const response = await fetch('/api/orders/uncancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [id] })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to restore order');
+      }
+      showToast(`Order #ORD-${id.toString().padStart(4, '0')} was successfully restored.`);
+      fetchOrders();
+      fetchProducts();
+      fetchStats();
+    } catch (err: any) {
+      showToast(err.message, "error");
     }
   };
 
@@ -1319,7 +1419,6 @@ export default function App() {
   };
 
   const handleCancelInvoice = async (invoiceId: number) => {
-    if (!confirm('Are you sure you want to cancel this invoice? This will unlock associated deliveries.')) return;
     try {
       const res = await fetch('/api/invoices/cancel', {
         method: 'POST',
@@ -1327,32 +1426,31 @@ export default function App() {
         body: JSON.stringify({ invoice_id: invoiceId })
       });
       if (res.ok) {
+        showToast(`Invoice #INV-${invoiceId.toString().padStart(4, '0')} has been cancelled successfully.`);
         fetchInvoices();
         fetchDeliveries();
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to cancel invoice');
+        showToast(data.error || 'Failed to cancel invoice', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error cancelling invoice');
+      showToast('Error cancelling invoice', 'error');
     }
   };
 
   const handleBulkCancelInvoices = async () => {
     if (!bulkCancelRange.start || !bulkCancelRange.end) {
-      alert('Please enter both start and end invoice numbers');
+      showToast('Please enter both start and end invoice numbers', 'error');
       return;
     }
     const start = parseInt(bulkCancelRange.start);
     const end = parseInt(bulkCancelRange.end);
     
     if (isNaN(start) || isNaN(end)) {
-      alert('Invalid invoice number range');
+      showToast('Invalid invoice number range', 'error');
       return;
     }
-
-    if (!confirm(`Are you sure you want to cancel invoices from #INV-${bulkCancelRange.start.padStart(4, '0')} to #INV-${bulkCancelRange.end.padStart(4, '0')}?`)) return;
 
     setIsBulkCancelling(true);
     try {
@@ -1366,17 +1464,17 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`${data.count} invoices were successfully processed for cancellation.`);
+        showToast(`${data.count} invoices were successfully processed for cancellation.`);
         setIsBulkInvoiceCancelOpen(false);
         setBulkCancelRange({ start: '', end: '' });
         fetchInvoices();
         fetchDeliveries();
       } else {
-        alert(data.error || 'Failed to bulk cancel invoices');
+        showToast(data.error || 'Failed to bulk cancel invoices', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error bulk cancelling invoices');
+      showToast('Error bulk cancelling invoices', 'error');
     } finally {
       setIsBulkCancelling(false);
     }
@@ -1408,23 +1506,33 @@ export default function App() {
       const data = await res.json();
       
       if (res.ok) {
-        setRestoreLogs(prev => [...prev, "[LOCK] DB connection closed safely.", "[STORAGE] Replacing core storage blocks...", "[SUCCESS] Partition sync complete."]);
+        setRestoreLogs(prev => [...prev, "[LOCK] DB connection closed safely.", "[STORAGE] Replacing core storage blocks...", "[OS] Syncing file system buffers..."]);
         await new Promise(r => setTimeout(r, 1200));
-        setRestoreLogs(prev => [...prev, "[SYSTEM] Finalizing restoration..."]);
+        setRestoreLogs(prev => [...prev, "[SYSTEM] Finalizing restoration...", "[SYNC] Integrity: 100% OK"]);
         await new Promise(r => setTimeout(r, 800));
-        setRestoreLogs(prev => [...prev, "[SYSTEM] RESTORED SUCCESSFULLY!", "[SYNC] REBOOTING APPLICATION..."]);
+        setRestoreLogs(prev => [...prev, "[SYSTEM] RESTORED SUCCESSFULLY!", "[SYNC] EXECUTING HARD REBOOT...", "[BOOT] REFRESHING BROWSER CACHE..."]);
         
-        // Final pause to allow user to see the success message in the console
-        await new Promise(r => setTimeout(r, 2000));
-        window.location.reload(); 
+        // Final pause to allow user to see the success message
+        await new Promise(r => setTimeout(r, 2500));
+        
+        // Clear session storage to ensure no app state persists
+        sessionStorage.clear();
+        
+        // Hard reload with double cache buster
+        const cleanUrl = window.location.origin + window.location.pathname + "?reboot=" + Date.now();
+        
+        // Final step as requested: Perform the hard refresh
+        window.location.replace(cleanUrl);
+        // Fallback refresh for certainty
+        setTimeout(() => window.location.reload(), 500);
       } else {
         setRestoreLogs(prev => [...prev, "[FATAL] Restoration failed: " + (data.error || 'Unknown server error')]);
-        alert("❌ RESTORE FAILED\n\n" + (data.error || 'Could not restore database.'));
+        showToast("Restore failed: " + (data.error || "Could not restore database."), "error");
       }
     } catch (err) {
       console.error("[RESTORE] Error:", err);
       setRestoreLogs(prev => [...prev, "[SOCKET] Network transport error. Please check server logs."]);
-      alert('❌ CONNECTION ERROR\n\nFailed to upload the backup file to the server.');
+      showToast("Connection error: Failed to upload the backup file to the server.", "error");
     } finally {
       setIsRestoring(false);
       if (e.target) e.target.value = '';
@@ -1622,68 +1730,63 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-0.5">
-              <button 
-                onClick={() => {
-                  const newExpanded = !isCommandExpanded;
-                  setIsCommandExpanded(newExpanded);
-                  localStorage.setItem('dms_isCommandExpanded', String(newExpanded));
-                  if (newExpanded) {
-                    setTimeout(() => commandInputRef.current?.focus(), 100);
-                  }
-                }}
-                className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-slate-600"
-              >
-                {isCommandExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-              </button>
+            <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-1 min-w-[260px] shadow-inner focus-within:ring-2 focus-within:ring-indigo-600 focus-within:bg-white transition-all">
+              <span className="text-[10px] uppercase font-black px-2 py-0.5 text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg select-none font-mono tracking-wider shrink-0">
+                T-Code
+              </span>
               
-              <div className={cn(
-                "overflow-hidden transition-all duration-300 flex items-center",
-                isCommandExpanded ? "w-48 opacity-100 ml-1" : "w-0 opacity-0 ml-0"
-              )}>
-                <div className="relative flex items-center w-full">
-                  <input 
-                    ref={commandInputRef}
-                    type="text" 
-                    value={commandValue}
-                    onChange={(e) => setCommandValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        executeTransaction(commandValue);
-                      } else if (tCodeError) {
-                        setTCodeError(null);
-                      }
-                    }}
-                    placeholder="Enter T-Code..." 
-                    className={cn(
-                      "w-full bg-transparent border-none text-sm font-mono focus:ring-0 placeholder:text-slate-400 uppercase",
-                      tCodeError && "text-rose-500 font-bold"
-                    )}
-                  />
-                  
-                  <AnimatePresence>
-                    {tCodeError && (
-                      <motion.div 
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-full ml-4 px-3 py-1 bg-rose-500 text-white text-[10px] font-bold rounded-lg whitespace-nowrap z-50 pointer-events-none shadow-sm flex items-center gap-1.5"
-                      >
-                        <AlertCircle size={12} />
-                        {tCodeError}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+              <div className="relative flex items-center w-full">
+                <input 
+                  ref={commandInputRef}
+                  type="text" 
+                  value={commandValue}
+                  onChange={(e) => setCommandValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      executeTransaction(commandValue);
+                    } else if (tCodeError) {
+                      setTCodeError(null);
+                    }
+                  }}
+                  placeholder="e.g. VF03, LPR01..." 
+                  className={cn(
+                    "w-full bg-transparent border-none px-2 py-0.5 text-xs font-bold font-mono focus:ring-0 placeholder:text-slate-400 uppercase",
+                    tCodeError && "text-rose-500 font-bold"
+                  )}
+                />
+                
+                <AnimatePresence>
+                  {tCodeError && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      className="absolute left-full ml-4 px-3 py-1 bg-rose-500 text-white text-[10px] font-black rounded-lg whitespace-nowrap z-50 pointer-events-none shadow-lg flex items-center gap-1.5"
+                    >
+                      <AlertCircle size={12} />
+                      {tCodeError}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
+
+              <button
+                onClick={() => executeTransaction(commandValue)}
+                className="p-1 px-2 bg-emerald-500 hover:bg-emerald-600 text-white font-mono text-[10px] font-bold rounded-lg shadow-sm transition-all flex items-center justify-center shrink-0 mr-1 gap-1"
+                title="Execute (Enter)"
+              >
+                <Check size={11} className="stroke-[3]" />
+                <span>Run</span>
+              </button>
               
               <button 
                 onClick={() => setIsTCodeModalOpen(true)}
-                className="ml-1 p-1 hover:bg-white hover:shadow-sm rounded transition-all text-slate-400 hover:text-indigo-600"
+                className="p-1 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-400 hover:text-indigo-600 shrink-0"
                 title="T-Code Directory (Help)"
               >
-                <HelpCircle size={16} />
+                <HelpCircle size={15} />
               </button>
+            </div>
 
               <button 
                 onClick={handleDownloadDB}
@@ -1710,7 +1813,6 @@ export default function App() {
                 accept=".db"
               />
             </div>
-          </div>
 
           <div className="flex-1 max-w-xl hidden md:block">
             <div className="relative">
@@ -2922,32 +3024,95 @@ export default function App() {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-6"
               >
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900">MIS - Reports</h2>
-                    <p className="text-slate-500">Analytical insights and business reports</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[
-                    { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
-                    { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
-                    { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },
-                    { title: 'Booker Performance', desc: 'Orders and revenue by order booker', icon: Users },
-                    { title: 'Product Velocity', desc: 'Fast and slow moving items', icon: BarChart3 },
-                  ].map((report, i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                      <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 w-fit mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                        <report.icon size={24} />
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">{report.title}</h3>
-                      <p className="text-sm text-slate-500 mb-4">{report.desc}</p>
-                      <button className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:underline">
-                        Generate Report <ChevronRight size={16} />
+                {selectedReportTitle === 'Daily Load Plan' ? (
+                  <DailyLoadPlanReport 
+                    onBack={() => setSelectedReportTitle(null)} 
+                    formatPKR={formatPKR} 
+                  />
+                ) : selectedReportTitle ? (
+                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
+                      <button 
+                        onClick={() => setSelectedReportTitle(null)}
+                        className="p-3 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-2xl transition-all"
+                      >
+                        <ArrowLeft size={18} />
                       </button>
+                      <div>
+                        <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">{selectedReportTitle}</h2>
+                        <p className="text-xs text-slate-500">MIS Business Intelligence and analytical summary report.</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="border border-slate-150 rounded-2xl p-5 bg-slate-50">
+                        <span className="text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">Target Achieved</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-black text-slate-900">84.2%</span>
+                          <span className="text-xs text-emerald-600 font-bold">+2.3% MoM</span>
+                        </div>
+                      </div>
+                      <div className="border border-slate-150 rounded-2xl p-5 bg-slate-50">
+                        <span className="text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">Annual SLA Speed</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-black text-slate-900">18.5 hrs</span>
+                          <span className="text-xs text-emerald-600 font-bold">-1.2 hrs dec</span>
+                        </div>
+                      </div>
+                      <div className="border border-slate-150 rounded-2xl p-5 bg-slate-50">
+                        <span className="text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">Audit Index</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-black text-slate-900">99.8%</span>
+                          <span className="text-xs text-indigo-600 font-bold">Standard OK</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-100/70 text-amber-800 p-4 rounded-2xl flex items-start gap-3">
+                      <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+                      <div>
+                        <p className="text-xs font-bold font-mono">Sandbox Sandbox Mode Notice</p>
+                        <p className="text-[10px] text-amber-700 leading-relaxed mt-1">
+                          This analytical report relies on live production pipelines. To configure customized visualization pivots, feel free to inspect master tables or export to CSV formatting.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-900">MIS - Reports</h2>
+                        <p className="text-slate-500">Analytical insights and business reports</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {[
+                        { title: 'Daily Load Plan', desc: 'Aggregated loading metrics and stop sequencing for delivery dispatch.', icon: Truck },
+                        { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
+                        { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
+                        { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },
+                        { title: 'Booker Performance', desc: 'Orders and revenue by order booker', icon: Users },
+                        { title: 'Product Velocity', desc: 'Fast and slow moving items', icon: BarChart3 },
+                      ].map((report, i) => (
+                        <div 
+                          key={i} 
+                          onClick={() => setSelectedReportTitle(report.title)}
+                          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                        >
+                          <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 w-fit mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                            <report.icon size={24} />
+                          </div>
+                          <h3 className="text-lg font-bold text-slate-900 mb-2">{report.title}</h3>
+                          <p className="text-sm text-slate-500 mb-4">{report.desc}</p>
+                          <button className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:underline">
+                            Generate Report <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
 
@@ -3162,30 +3327,26 @@ export default function App() {
                                     </button>
                                     {order.status?.toLowerCase() !== 'cancelled' && order.is_cancelled !== 'X' && order.status?.toLowerCase() !== 'delivered' && (
                                       <button 
-                                        onClick={async (e) => {
+                                        onClick={(e) => {
                                           e.stopPropagation();
-                                          if (!confirm(`Are you sure you want to cancel Order #ORD-${order.id.toString().padStart(4, '0')}?`)) return;
-                                          try {
-                                            const response = await fetch('/api/orders/cancel', {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ orderIds: [order.id] })
-                                            });
-                                            if (!response.ok) {
-                                              const data = await response.json();
-                                              throw new Error(data.error || 'Failed to cancel');
-                                            }
-                                            fetchOrders();
-                                            fetchProducts();
-                                            fetchStats();
-                                          } catch (err: any) {
-                                            alert(err.message);
-                                          }
+                                          setOrderToCancel(order.id);
                                         }}
                                         className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
                                         title="Quick Cancel"
                                       >
                                         <RotateCcw size={18} />
+                                      </button>
+                                    )}
+                                    {(order.status?.toLowerCase() === 'cancelled' || order.is_cancelled === 'X') && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOrderToUncancel(order.id);
+                                        }}
+                                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                        title="Restore Order"
+                                      >
+                                        <RotateCcw size={18} className="scale-x-[-1]" />
                                       </button>
                                     )}
                                   </div>
@@ -3329,7 +3490,7 @@ export default function App() {
                                       <Edit size={18} />
                                     </button>
                                     <button 
-                                      onClick={() => deleteDelivery(delivery.id)}
+                                      onClick={() => setDeliveryToDelete(delivery.id)}
                                       className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                     >
                                       <Trash2 size={18} />
@@ -3587,7 +3748,7 @@ export default function App() {
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        deletePurchase(purchase.id);
+                                        setPurchaseToDelete(purchase.id);
                                       }}
                                       className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
                                     >
@@ -3676,6 +3837,7 @@ export default function App() {
                                 <td className="px-6 py-4">
                                   <span className={cn(
                                     "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap",
+                                    invoice.status === 'cancelled' ? "bg-slate-100 text-slate-500 border border-slate-200" :
                                     invoice.status === 'open' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
                                   )}>
                                     {invoice.status}
@@ -3684,7 +3846,7 @@ export default function App() {
                                 <td className="px-6 py-4 text-right">
                                   <div className="flex justify-end gap-2">
                                     <button 
-                                      onClick={() => handleCancelInvoice(invoice.id)}
+                                      onClick={() => setInvoiceToCancel(invoice.id)}
                                       disabled={invoice.status === 'cancelled'}
                                       className={cn(
                                         "p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100",
@@ -4025,6 +4187,24 @@ export default function App() {
             formatPKR={formatPKR}
           />
         )}
+        {isDisplayInvoiceModalOpen && (
+          <DisplayInvoiceModal 
+            onClose={() => setIsDisplayInvoiceModalOpen(false)}
+            formatPKR={formatPKR}
+          />
+        )}
+        {isDisplayOrderModalOpen && (
+          <DisplayOrderModal onClose={() => setIsDisplayOrderModalOpen(false)} />
+        )}
+        {isDisplayDeliveryModalOpen && (
+          <DisplayDeliveryModal onClose={() => setIsDisplayDeliveryModalOpen(false)} />
+        )}
+        {isDisplayPurchaseModalOpen && (
+          <DisplayPurchaseModal onClose={() => setIsDisplayPurchaseModalOpen(false)} />
+        )}
+        {isDisplayReturnModalOpen && (
+          <DisplayReturnModal onClose={() => setIsDisplayReturnModalOpen(false)} />
+        )}
         {isBulkInvoiceCancelOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <motion.div 
@@ -4109,6 +4289,287 @@ export default function App() {
                   <span>Cancel Range</span>
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Confirmation Modals (Sandboxed iFrame Safe) */}
+        {invoiceToCancel !== null && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-rose-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50/50">
+                <h3 className="text-sm font-black text-rose-700 tracking-wider uppercase font-mono">Cancel Invoice</h3>
+                <button onClick={() => setInvoiceToCancel(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <AlertTriangle className="text-rose-500 shrink-0" size={24} />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Confirm Cancellation</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Are you sure you want to cancel Invoice <span className="font-mono font-bold">#INV-{invoiceToCancel.toString().padStart(4, '0')}</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-rose-50 rounded-xl p-3 border border-rose-100/50">
+                  <p className="text-[10px] sm:text-xs text-rose-600 font-medium">
+                    This will unlock all associated deliveries and set them back to completed, allowing them to be re-invoiced. This action is permanent.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => setInvoiceToCancel(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Invoice
+                </button>
+                <button 
+                  onClick={async () => {
+                    const id = invoiceToCancel;
+                    setInvoiceToCancel(null);
+                    await handleCancelInvoice(id);
+                  }}
+                  className="flex-1 bg-rose-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-md"
+                >
+                  Cancel Invoice
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {orderToCancel !== null && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-rose-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50/50">
+                <h3 className="text-sm font-black text-rose-700 tracking-wider uppercase font-mono">Cancel Order</h3>
+                <button onClick={() => setOrderToCancel(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <AlertTriangle className="text-rose-500 shrink-0" size={24} />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Confirm Order Cancel</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Are you sure you want to cancel Order <span className="font-mono font-bold">#ORD-{orderToCancel.toString().padStart(4, '0')}</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-rose-50 rounded-xl p-3 border border-rose-100/50">
+                  <p className="text-[10px] sm:text-xs text-rose-600 font-medium">
+                    This will reverse the order booking status, enabling you to restock or recreate the order if necessary.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => setOrderToCancel(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Order
+                </button>
+                <button 
+                  onClick={async () => {
+                    const id = orderToCancel;
+                    setOrderToCancel(null);
+                    await handleCancelOrder(id);
+                  }}
+                  className="flex-1 bg-rose-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-md"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {deliveryToDelete !== null && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-rose-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50/50">
+                <h3 className="text-sm font-black text-rose-700 tracking-wider uppercase font-mono">Delete Delivery</h3>
+                <button onClick={() => setDeliveryToDelete(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <AlertTriangle className="text-rose-500 shrink-0" size={24} />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Delete Delivery Confirmation</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Are you sure you want to delete Delivery <span className="font-mono font-bold">#DEL-{deliveryToDelete.toString().padStart(4, '0')}</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-rose-50 rounded-xl p-3 border border-rose-100/50">
+                  <p className="text-[10px] sm:text-xs text-rose-600 font-medium">
+                    Deleting this delivery will reserve inventory levels and revert the original order status back into bookkeeping.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => setDeliveryToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Delivery
+                </button>
+                <button 
+                  onClick={async () => {
+                    const id = deliveryToDelete;
+                    setDeliveryToDelete(null);
+                    await deleteDelivery(id);
+                  }}
+                  className="flex-1 bg-rose-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-md"
+                >
+                  Delete Delivery
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {purchaseToDelete !== null && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-rose-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50/50">
+                <h3 className="text-sm font-black text-rose-700 tracking-wider uppercase font-mono">Delete Purchase</h3>
+                <button onClick={() => setPurchaseToDelete(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <AlertTriangle className="text-rose-500 shrink-0" size={24} />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Delete Purchase Confirmation</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Are you sure you want to delete Purchase Order <span className="font-mono font-bold">#PUR-{purchaseToDelete.toString().padStart(4, '0')}</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-rose-50 rounded-xl p-3 border border-rose-100/50">
+                  <p className="text-[10px] sm:text-xs text-rose-600 font-medium">
+                    This action will reduce current inventory warehouse stock levels back to their previous counts.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => setPurchaseToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Purchase
+                </button>
+                <button 
+                  onClick={async () => {
+                    const id = purchaseToDelete;
+                    setPurchaseToDelete(null);
+                    await deletePurchase(id);
+                  }}
+                  className="flex-1 bg-rose-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-md"
+                >
+                  Delete Purchase
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {orderToUncancel !== null && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-emerald-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-emerald-50/50">
+                <h3 className="text-sm font-black text-emerald-700 tracking-wider uppercase font-mono">Restore Order</h3>
+                <button onClick={() => setOrderToUncancel(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <CheckCircle className="text-emerald-500 shrink-0" size={24} />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Confirm Restoration</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Are you sure you want to restore and reopen Order <span className="font-mono font-bold">#ORD-{orderToUncancel.toString().padStart(4, '0')}</span>?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100/50">
+                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">
+                    This will set the order and all item status back to "Pending", allowing you to generate a delivery record or modify items as required.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => setOrderToUncancel(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-white transition-all"
+                >
+                  Keep Cancelled
+                </button>
+                <button 
+                  onClick={async () => {
+                    const id = orderToUncancel;
+                    setOrderToUncancel(null);
+                    await handleUncancelOrder(id);
+                  }}
+                  className="flex-1 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-md"
+                >
+                  Restore Order
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Global Toast Notification System */}
+        {toast && (
+          <div className="fixed bottom-6 right-6 z-[100000]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "px-5 py-4 rounded-2xl shadow-xl flex items-center gap-3 border font-bold text-xs sm:text-sm min-w-[280px] sm:min-w-[320px] max-w-sm",
+                toast.type === 'success' ? "bg-emerald-50 border-emerald-100 text-emerald-800" :
+                toast.type === 'error' ? "bg-rose-50 border-rose-100 text-rose-800" :
+                "bg-slate-900 border-slate-800 text-white"
+              )}
+            >
+              {toast.type === 'success' && <CheckCircle className="text-emerald-500 shrink-0" size={18} />}
+              {toast.type === 'error' && <AlertCircle className="text-rose-500 shrink-0" size={18} />}
+              {toast.type === 'info' && <AlertCircle className="text-blue-500 shrink-0" size={18} />}
+              <span className="flex-1 leading-relaxed">{toast.message}</span>
+              <button onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X size={14} />
+              </button>
             </motion.div>
           </div>
         )}

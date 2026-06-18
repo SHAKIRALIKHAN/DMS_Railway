@@ -199,6 +199,15 @@ export const TCODES: TCodeInfo[] = [
     roleAssociation: 'Z_ORDER_BOOKER',
     description: 'Create individual booking for a shop client.'
   },
+  {
+    module: 'Order Management',
+    parentModule: 'Sales',
+    tCode: 'ORD02',
+    transactionName: 'Order Cancellation',
+    actionType: 'Change',
+    roleAssociation: 'Z_ORDER_ADMIN',
+    description: 'Bulk cancel order documents and release allocated stock count.'
+  },
 
   // Logistics
   {
@@ -312,6 +321,51 @@ export const TCODES: TCodeInfo[] = [
     description: 'Convert deliveries into final bills/invoices for shops.'
   },
   {
+    module: 'Invoice Management',
+    parentModule: 'Sales',
+    tCode: 'VF03',
+    transactionName: 'Display Invoice',
+    actionType: 'Display',
+    roleAssociation: 'Z_INVOICE_VIEWER',
+    description: 'View and print posted invoice documents.'
+  },
+  {
+    module: 'Order Management',
+    parentModule: 'Sales',
+    tCode: 'VA03',
+    transactionName: 'Display Sales Order',
+    actionType: 'Display',
+    roleAssociation: 'Z_ORDER_VIEWER',
+    description: 'Search and display detail of a Sales Order.'
+  },
+  {
+    module: 'Logistics',
+    parentModule: 'Sales',
+    tCode: 'VL03',
+    transactionName: 'Display Delivery',
+    actionType: 'Display',
+    roleAssociation: 'Z_DELIVERY_VIEWER',
+    description: 'Search and display detail of a Delivery document.'
+  },
+  {
+    module: 'Purchasing',
+    parentModule: 'Procurement',
+    tCode: 'ME03',
+    transactionName: 'Display Purchase Order',
+    actionType: 'Display',
+    roleAssociation: 'Z_PURCHASE_VIEWER',
+    description: 'Search and display detail of a Purchase Order.'
+  },
+  {
+    module: 'Return Delivery',
+    parentModule: 'Sales',
+    tCode: 'LR03',
+    transactionName: 'Display Return',
+    actionType: 'Display',
+    roleAssociation: 'Z_RETURN_VIEWER',
+    description: 'Search and display detail of a Return document.'
+  },
+  {
     module: 'Location Management',
     parentModule: 'Master Data',
     tCode: 'LOC01',
@@ -328,5 +382,14 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Create',
     roleAssociation: 'Z_RETURN_CLERK',
     description: 'Process customer returns (Reverse Logistics) and restock inventory.'
+  },
+  {
+    module: 'Daily Load Plan',
+    parentModule: 'Reports',
+    tCode: 'LPR01',
+    transactionName: 'Daily Load Plan Report',
+    actionType: 'Report',
+    roleAssociation: 'Z_REPORT_AUDITOR',
+    description: 'Generate high-efficiency physical load plan and stop sequencing guides.'
   }
 ];

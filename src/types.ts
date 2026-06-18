@@ -291,6 +291,7 @@ export interface Return {
   return_date: string;
   shop_id: number;
   shop_name?: string;
+  location?: string;
   total_amount: number;
   items_summary?: string;
   status: 'completed';

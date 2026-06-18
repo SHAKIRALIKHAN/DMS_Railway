@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { X, Save, Trash2, Edit, Store, Package, Plus, Trash, Factory } from 'lucide-react';
+import { X, Save, Trash2, Edit, Store, Package, Plus, Trash, Factory, MapPin, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Shop, Product, Unit, MaterialGroup, Supplier } from '../../types';
 
@@ -385,6 +385,28 @@ export const RegisterShopModal = ({
     credit_limit: '0'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [subareas, setSubareas] = useState<{ id: number; name: string }[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Fetch Subareas for Google-Search-Style Autocomplete
+  useEffect(() => {
+    const fetchSubareas = async () => {
+      try {
+        const res = await fetch('/api/locations/subareas');
+        if (res.ok) {
+          const data = await res.json();
+          setSubareas(data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subareas", err);
+      }
+    };
+    fetchSubareas();
+  }, []);
+
+  const filteredSubareas = subareas.filter(sa =>
+    (sa.name || '').toLowerCase().includes((formData.location || '').toLowerCase())
+  ).slice(0, 10);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -462,16 +484,57 @@ export const RegisterShopModal = ({
               placeholder="e.g. Ahmed Ali"
             />
           </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Location</label>
-            <input 
-              required
-              type="text" 
-              value={formData.location}
-              onChange={e => setFormData({...formData, location: e.target.value})}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
-              placeholder="e.g. Saddar, Karachi"
-            />
+          <div className="relative">
+            <label className="block text-sm font-bold text-slate-700 mb-1">Sub-area (Location)</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <MapPin size={18} />
+              </div>
+              <input 
+                required
+                type="text" 
+                value={formData.location}
+                onChange={e => {
+                  setFormData({...formData, location: e.target.value});
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 250)}
+                className="w-full pl-10 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all focus:bg-white shadow-sm"
+                placeholder="Search sub-areas e.g. UC-7 Gulistan-e-Jauhar..."
+              />
+              {formData.location && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({...formData, location: ''})}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {showDropdown && filteredSubareas.length > 0 && (
+              <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl z-50 divide-y divide-slate-50">
+                {filteredSubareas.map(sa => (
+                  <button
+                    key={sa.id}
+                    type="button"
+                    onClick={() => {
+                      setFormData({...formData, location: sa.name});
+                      setShowDropdown(false);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left transition-all group"
+                  >
+                    <MapPin size={16} className="text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                    <div>
+                      <span className="text-sm font-medium text-slate-800 group-hover:text-indigo-600 transition-colors block leading-tight">{sa.name}</span>
+                      <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase block mt-0.5">Sub-area Master Data</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
@@ -538,6 +601,28 @@ export const ShopMasterModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [subareas, setSubareas] = useState<{ id: number; name: string }[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Fetch Subareas for Google-Search-Style Autocomplete
+  useEffect(() => {
+    const fetchSubareas = async () => {
+      try {
+        const res = await fetch('/api/locations/subareas');
+        if (res.ok) {
+          const data = await res.json();
+          setSubareas(data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subareas", err);
+      }
+    };
+    fetchSubareas();
+  }, []);
+
+  const filteredSubareas = subareas.filter(sa =>
+    (sa.name || '').toLowerCase().includes((formData.location || '').toLowerCase())
+  ).slice(0, 10);
 
   const filteredShops = shops.filter(s => 
     s.shop_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -652,16 +737,57 @@ export const ShopMasterModal = ({
                   placeholder="e.g. Ahmed"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Location</label>
-                <input 
-                  required
-                  type="text" 
-                  value={formData.location}
-                  onChange={e => setFormData({...formData, location: e.target.value})}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all"
-                  placeholder="e.g. Saddar, Karachi"
-                />
+              <div className="relative">
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Sub-area (Location)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <MapPin size={16} />
+                  </div>
+                  <input 
+                    required
+                    type="text" 
+                    value={formData.location}
+                    onChange={e => {
+                      setFormData({...formData, location: e.target.value});
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 250)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none transition-all focus:bg-white shadow-sm"
+                    placeholder="Search sub-areas e.g. UC-7..."
+                  />
+                  {formData.location && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, location: ''})}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {showDropdown && filteredSubareas.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl z-50 divide-y divide-slate-50">
+                    {filteredSubareas.map(sa => (
+                      <button
+                        key={sa.id}
+                        type="button"
+                        onClick={() => {
+                          setFormData({...formData, location: sa.name});
+                          setShowDropdown(false);
+                        }}
+                        className="w-full px-3 py-2.5 flex items-center gap-2.5 hover:bg-slate-50 text-left transition-all group"
+                      >
+                        <MapPin size={14} className="text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                        <div>
+                          <span className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors block leading-snug">{sa.name}</span>
+                          <span className="text-[9px] text-slate-400 font-mono tracking-wider uppercase block mt-0.5">Sub-area Master Data</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 uppercase">Phone</label>

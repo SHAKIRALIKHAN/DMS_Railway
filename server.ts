@@ -1246,6 +1246,18 @@ async function startServer() {
     res.json(formatted);
   });
 
+  app.get("/api/returns/:id", (req, res) => {
+    const { id } = req.params;
+    const ret = db.prepare(`
+      SELECT r.*, s.shop_name, s.location
+      FROM returns r
+      JOIN shops s ON r.shop_id = s.id
+      WHERE r.id = ?
+    `).get(id);
+    if (!ret) return res.status(404).json({ error: "Return not found" });
+    res.json(ret);
+  });
+
   app.put("/api/returns/:id", (req, res) => {
     const { id } = req.params;
     const { shop_id, items } = req.body;
@@ -1650,6 +1662,39 @@ async function startServer() {
     }
   });
 
+  app.post("/api/orders/uncancel", (req, res) => {
+    const { orderIds } = req.body;
+    if (!orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ error: "Order IDs array is required" });
+    }
+
+    try {
+      console.log(`[Order Uncancel] Attempting to restore/reopen orders: ${JSON.stringify(orderIds)}`);
+      
+      const transaction = db.transaction(() => {
+        for (const id of orderIds) {
+          // 1. Check if order exists
+          const order = db.prepare("SELECT status, is_cancelled FROM orders WHERE id = ?").get(id) as any;
+          if (!order) {
+            throw new Error(`Order #ORD-${id.toString().padStart(4, '0')} not found.`);
+          }
+          
+          if (order.is_cancelled !== 'X') continue;
+
+          // 2. Update status back to 'pending' and clear flag
+          db.prepare("UPDATE orders SET status = 'pending', is_cancelled = '' WHERE id = ?").run(id);
+          db.prepare("UPDATE order_items SET status = 'Pending' WHERE order_id = ?").run(id);
+        }
+      });
+
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Order restoration failed", err);
+      res.status(400).json({ error: err.message || "Failed to restore orders" });
+    }
+  });
+
   app.get("/api/deliveries", (req, res) => {
     const deliveries = db.prepare(`
       SELECT 
@@ -1756,6 +1801,7 @@ async function startServer() {
       JOIN salesmen s ON d.salesman_id = s.id
       WHERE d.id = ?
     `).get(id);
+    if (!delivery) return res.status(404).json({ error: "Delivery not found" });
     res.json(delivery);
   });
 
@@ -2163,22 +2209,31 @@ async function startServer() {
   });
 
   app.get("/api/invoices/:id", (req, res) => {
-    const { id } = req.params;
-    const invoice = db.prepare(`
-      SELECT i.*, s.shop_name, s.owner_name, s.location, s.phone
-      FROM invoices i
-      JOIN shops s ON i.shop_id = s.id
-      WHERE i.id = ?
-    `).get(id);
+    try {
+      const { id } = req.params;
+      const invoice = db.prepare(`
+        SELECT i.*, s.shop_name, s.owner_name, s.location, s.phone
+        FROM invoices i
+        JOIN shops s ON i.shop_id = s.id
+        WHERE i.id = ?
+      `).get(id) as any;
 
-    const items = db.prepare(`
-      SELECT ii.*, p.product_name, p.unit as uom
-      FROM invoice_items ii
-      JOIN products p ON ii.product_id = p.product_id
-      WHERE ii.invoice_id = ?
-    `).all(id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
 
-    res.json({ ...invoice, items });
+      const items = db.prepare(`
+        SELECT ii.*, p.product_name, p.unit as uom
+        FROM invoice_items ii
+        JOIN products p ON ii.product_id = p.product_id
+        WHERE ii.invoice_id = ?
+      `).all(id);
+
+      res.json({ ...invoice, items });
+    } catch (err: any) {
+      console.error("Failed to fetch invoice:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/invoices/cancel", (req, res) => {
@@ -2273,6 +2328,18 @@ async function startServer() {
       WHERE pi.purchase_id = ?
     `).all(id);
     res.json(items);
+  });
+
+  app.get("/api/purchases/:id", (req, res) => {
+    const { id } = req.params;
+    const purchase = db.prepare(`
+      SELECT p.*, s.name as supplier_name
+      FROM purchases p
+      JOIN suppliers s ON p.supplier_id = s.id
+      WHERE p.id = ?
+    `).get(id);
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+    res.json(purchase);
   });
 
   app.post("/api/purchases", (req, res) => {
@@ -2427,6 +2494,120 @@ async function startServer() {
       totalPotentialProfit,
       averageMarginPercent
     });
+  });
+
+  app.get("/api/reports/daily-load-plan", (req, res) => {
+    try {
+      const rows = db.prepare(`
+        SELECT 
+          i.id as invoice_id,
+          i.invoice_date,
+          i.net_amount as invoice_net_amount,
+          s.id as shop_id,
+          s.shop_name,
+          s.location as sub_area,
+          s.owner_name,
+          s.phone,
+          ii.product_id,
+          p.product_name,
+          p.unit,
+          ii.quantity,
+          ii.unit_price,
+          ii.net_amount as item_net_amount
+        FROM invoices i
+        JOIN shops s ON i.shop_id = s.id
+        JOIN invoice_items ii ON ii.invoice_id = i.id
+        JOIN products p ON ii.product_id = p.product_id
+        ORDER BY s.location, s.shop_name, ii.product_id
+      `).all() as any[];
+
+      const subAreasMap = new Map<string, any>();
+
+      for (const r of rows) {
+        const areaName = r.sub_area || "Unspecified Sub-Area";
+        if (!subAreasMap.has(areaName)) {
+          subAreasMap.set(areaName, {
+            subArea: areaName,
+            shops: new Map<number, any>()
+          });
+        }
+
+        const area = subAreasMap.get(areaName);
+        if (!area.shops.has(r.shop_id)) {
+          area.shops.set(r.shop_id, {
+            shopId: r.shop_id,
+            shopName: r.shop_name,
+            ownerName: r.owner_name,
+            phone: r.phone,
+            invoices: new Set<number>(),
+            productsMap: new Map<string, any>()
+          });
+        }
+
+        const shop = area.shops.get(r.shop_id);
+        shop.invoices.add(r.invoice_id);
+
+        if (!shop.productsMap.has(r.product_id)) {
+          shop.productsMap.set(r.product_id, {
+            productId: r.product_id,
+            productName: r.product_name,
+            unit: r.unit || 'Pcs',
+            quantity: 0,
+            unitPrice: r.unit_price,
+            totalAmount: 0
+          });
+        }
+
+        const prod = shop.productsMap.get(r.product_id);
+        prod.quantity += r.quantity;
+        prod.totalAmount += r.item_net_amount;
+      }
+
+      const result = Array.from(subAreasMap.values()).map(area => {
+        let deliverySequence = 1;
+        const shopsArray = Array.from(area.shops.values()).map((shop: any) => {
+          const productsArray = Array.from(shop.productsMap.values());
+          const invoicesArray = Array.from(shop.invoices);
+          return {
+            shopId: shop.shopId,
+            shopName: shop.shopName,
+            ownerName: shop.ownerName,
+            phone: shop.phone,
+            deliverySequence: deliverySequence++,
+            invoices: invoicesArray,
+            products: productsArray
+          };
+        });
+
+        const consolidatedMap = new Map<string, any>();
+        for (const sh of shopsArray) {
+          for (const p of sh.products as any[]) {
+            if (!consolidatedMap.has(p.productId)) {
+              consolidatedMap.set(p.productId, {
+                productId: p.productId,
+                productName: p.productName,
+                totalQuantity: 0,
+                unit: p.unit
+              });
+            }
+            consolidatedMap.get(p.productId).totalQuantity += p.quantity;
+          }
+        }
+
+        return {
+          subArea: area.subArea,
+          totalShopsCount: shopsArray.length,
+          totalOutstandingInvoices: shopsArray.reduce((acc: number, current: any) => acc + current.invoices.length, 0),
+          shops: shopsArray,
+          consolidatedLoadSummary: Array.from(consolidatedMap.values())
+        };
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      console.error("Failed to generate daily load plan", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/payments", (req, res) => {
@@ -2739,19 +2920,44 @@ async function startServer() {
       console.log("[Database] Deploying new database file from temporary upload...");
       fs.copyFileSync(tempPath, targetPath);
       
+      // Force disk synchronization
+      try {
+        const fd = fs.openSync(targetPath, 'r+');
+        fs.fsyncSync(fd);
+        fs.closeSync(fd);
+      } catch (e) {
+        console.warn("[Database] fsync failed, continuing anyway...", e);
+      }
+      
+      // Wait another small window to ensure FS buffers are settled
+      await new Promise(r => setTimeout(r, 600));
+      
       // 6. Re-open connection
       console.log("[Database] Re-opening database connection...");
       db = new Database(targetPath);
       db.pragma('journal_mode = WAL');
       db.pragma('synchronous = FULL');
-
-      // Final Check: Count invoices just to be sure we have the new data
+      db.pragma('wal_checkpoint(FULL)');
+      
+      // Ensure the database is actually responsive before sending success
       try {
-        const invCount = db.prepare("SELECT COUNT(*) as count FROM invoices").get() as any;
-        console.log(`[Database] Restore verified. Current invoice count: ${invCount.count}`);
+        db.prepare("SELECT 1").get();
+      } catch (e) {
+        console.error("[Database] Sanity check failed after restore:", e);
+        throw new Error("Database re-open sanity check failed.");
+      }
+
+      // Final Check: Log some counts to verify data presence in server logs
+      try {
+        const orderCount = db.prepare("SELECT COUNT(*) as count FROM orders").get() as any;
+        console.log(`[Database] Restore verified. Current order count: ${orderCount.count}`);
       } catch (e) {}
 
-      res.json({ success: true, message: "Database restoration successful. The system has been rolled back to your backup state." });
+      // Add a final buffer to allow OS to settle the new WAL files
+      await new Promise(r => setTimeout(r, 500));
+
+      res.set('Cache-Control', 'no-store');
+      res.json({ success: true, message: "Database restoration successful. The system has been rolled back." });
     } catch (err: any) {
       console.error("Error restoring DB:", err);
       // Attempt recovery
