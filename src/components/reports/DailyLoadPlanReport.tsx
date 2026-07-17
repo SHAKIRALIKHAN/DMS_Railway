@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Truck, Store, Package, Phone, User, CheckCircle, Code, Database, Printer, ChevronDown, ChevronUp, RefreshCw, Layers, X, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Truck, Store, Package, Phone, User, CheckCircle, Code, Database, Printer, ChevronDown, ChevronUp, RefreshCw, Layers, X, ExternalLink, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ProductItem {
@@ -256,6 +256,93 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
         </div>
       </div>
 
+      {/* Filter Section (Hidden during Print) */}
+      {!showSchema && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4 print:hidden">
+          <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
+            <Calendar size={16} className="text-indigo-600" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Report Filter Settings</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            {/* From Date */}
+            <div className="space-y-1" id="filter-start-date-container">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">From Date</label>
+              <input 
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
+                id="filter-start-date"
+              />
+            </div>
+
+            {/* To Date */}
+            <div className="space-y-1" id="filter-end-date-container">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">To Date</label>
+              <input 
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
+                id="filter-end-date"
+              />
+            </div>
+
+            {/* Route / Sub-Area */}
+            <div className="space-y-1" id="filter-route-container">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Route / Sub-Area</label>
+              <div className="relative">
+                <select 
+                  value={selectedAreaName}
+                  onChange={(e) => {
+                    setSelectedAreaName(e.target.value);
+                    setExpandedShopId(null);
+                  }}
+                  disabled={loadPlans.length === 0}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  id="filter-sub-area"
+                >
+                  {loadPlans.length > 0 ? (
+                    loadPlans.map((plan, i) => (
+                      <option key={i} value={plan.subArea}>
+                        {plan.subArea} ({plan.totalShopsCount} Stops)
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No Zones / Routes Available</option>
+                  )}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Summary / Statistics (Only if selectedPlan exists) */}
+            <div id="filter-stats-container">
+              {selectedPlan ? (
+                <div className="flex gap-4 justify-around items-center bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Stops</p>
+                    <p className="text-xs font-black text-slate-700">{selectedPlan.totalShopsCount}</p>
+                  </div>
+                  <div className="h-6 w-px bg-slate-200"></div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Invoices</p>
+                    <p className="text-xs font-black text-slate-700">{selectedPlan.totalOutstandingInvoices}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-center text-xs font-bold text-slate-400">
+                  No Route Selected
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="bg-white p-12 text-center rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-4">
           <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -325,81 +412,6 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
           {/* Left Panel: Route & Drop-off list (Level 1: Sub-Area selection, Level 2: Shop sequencing) */}
           <div className="lg:col-span-7 space-y-6">
             
-            {/* Level 1: Sub-Area Filter Select */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600">
-                  <Truck size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Select Macro Route (Sub-Area)</h3>
-                  <p className="text-[10px] text-slate-500">Delivery sequences are automatically computed for selected urban zones.</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                {/* Select Area */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Route / Sub-Area</label>
-                  <div className="relative">
-                    <select 
-                      value={selectedAreaName}
-                      onChange={(e) => {
-                        setSelectedAreaName(e.target.value);
-                        setExpandedShopId(null);
-                      }}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all appearance-none cursor-pointer"
-                    >
-                      {loadPlans.map((plan, i) => (
-                        <option key={i} value={plan.subArea}>
-                          {plan.subArea} ({plan.totalShopsCount} Stops)
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                      <ChevronDown size={14} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* From Date */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">From Date</label>
-                  <input 
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
-                  />
-                </div>
-
-                {/* To Date */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">To Date</label>
-                  <input 
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
-                  />
-                </div>
-
-                {selectedPlan && (
-                  <div className="flex gap-4 justify-around items-center bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100">
-                    <div className="text-center">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Stops</p>
-                      <p className="text-xs font-black text-slate-700">{selectedPlan.totalShopsCount}</p>
-                    </div>
-                    <div className="h-6 w-px bg-slate-200"></div>
-                    <div className="text-center">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Invoices</p>
-                      <p className="text-xs font-black text-slate-700">{selectedPlan.totalOutstandingInvoices}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Level 2: Shop Sequence Timeline */}
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-6">
