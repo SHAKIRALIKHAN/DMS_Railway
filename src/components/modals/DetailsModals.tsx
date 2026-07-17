@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Printer, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Shop, Order, Purchase, LedgerEntry, OrderItem, Delivery, DeliveryItem } from '../../types';
 
@@ -126,6 +126,23 @@ export const OrderDetailsModal = ({
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showPrintWarning, setShowPrintWarning] = useState(false);
+
+  const handlePrint = () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      setShowPrintWarning(true);
+      try {
+        window.focus();
+        window.print();
+      } catch (e) {
+        console.warn("Iframe blocked window.print()", e);
+      }
+    } else {
+      window.focus();
+      window.print();
+    }
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -185,7 +202,7 @@ export const OrderDetailsModal = ({
         exit={{ opacity: 0, scale: 0.98 }}
         className="bg-white w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center no-print">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Order Details</h3>
             <p className="text-sm text-slate-500">#ORD-{order.id.toString().padStart(4, '0')} • {order.shop_name}</p>
@@ -195,7 +212,17 @@ export const OrderDetailsModal = ({
           </button>
         </div>
 
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-6 overflow-y-auto print-receipt-only">
+          {/* Receipt Print Header (Only visible on print) */}
+          <div className="hidden print:block text-center border-b-2 border-dashed border-slate-900 pb-4 mb-6">
+            <h2 className="text-2xl font-black text-slate-950 tracking-tight">KARACHI DMS</h2>
+            <p className="text-xs uppercase tracking-widest font-bold text-slate-700">Distribution Management System</p>
+            <p className="text-[10px] text-slate-500 mt-1">Karachi, Sindh, Pakistan • Support: +92 21 111-K-DMS</p>
+            <div className="flex justify-between items-center text-[10px] text-slate-600 mt-4 px-2">
+              <span>PRINTED: {new Date().toLocaleString()}</span>
+              <span className="font-bold">SALES ORDER RECEIPT</span>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Shop</p>
@@ -300,9 +327,16 @@ export const OrderDetailsModal = ({
               </tfoot>
             </table>
           </div>
+
+          {/* Receipt Print Footer (Only visible on print) */}
+          <div className="hidden print:block text-center border-t border-dashed border-slate-900 pt-6 mt-8">
+            <p className="text-xs font-black text-slate-950 uppercase tracking-wider">Thank you for your business!</p>
+            <p className="text-[10px] text-slate-500 mt-1">This is an electronically generated sales order under Karachi distribution records.</p>
+            <p className="text-[9px] text-slate-400 font-mono mt-2">Powered by Karachi DMS Distribution Suite v7.0</p>
+          </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center no-print">
           <div>
             {order.status?.toLowerCase() !== 'cancelled' && (
               <button 
@@ -315,9 +349,48 @@ export const OrderDetailsModal = ({
               </button>
             )}
           </div>
-          <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
-            Close (F3)
-          </button>
+          <div className="flex flex-col items-end gap-3">
+            <div className="flex gap-2">
+              <button 
+                onClick={handlePrint}
+                className="px-6 py-2 bg-slate-900 text-white font-bold rounded-xl text-sm hover:bg-slate-800 transition-colors flex items-center gap-2"
+              >
+                <Printer size={16} />
+                Print Order
+              </button>
+              <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
+                Close (F3)
+              </button>
+            </div>
+
+            {showPrintWarning && (
+              <div className="w-full max-w-md p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 animate-in fade-in slide-in-from-top-2 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Preview Frame Print Restriction</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-700">
+                  Browser printing is blocked inside embedded iframe previews. Click below to open Karachi DMS in a new tab where you can print directly.
+                </p>
+                <div className="flex gap-2 mt-1">
+                  <a 
+                    href={window.location.href} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors"
+                  >
+                    Open in New Tab
+                  </a>
+                  <button 
+                    onClick={() => setShowPrintWarning(false)}
+                    className="text-[10px] font-bold text-amber-900 hover:underline px-2 py-1.5"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>

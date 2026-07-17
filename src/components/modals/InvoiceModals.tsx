@@ -562,6 +562,23 @@ export const DisplayInvoiceModal = ({ onClose, formatPKR }: DisplayInvoiceModalP
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPrintWarning, setShowPrintWarning] = useState(false);
+
+  const handlePrint = () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      setShowPrintWarning(true);
+      try {
+        window.focus();
+        window.print();
+      } catch (e) {
+        console.warn("Iframe blocked window.print()", e);
+      }
+    } else {
+      window.focus();
+      window.print();
+    }
+  };
 
   const fetchInvoice = async (id: string) => {
     if (!id.trim()) return;
@@ -663,7 +680,18 @@ export const DisplayInvoiceModal = ({ onClose, formatPKR }: DisplayInvoiceModalP
           )}
 
           {invoice && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 print-receipt-only">
+              {/* Receipt Print Header (Only visible on print) */}
+              <div className="hidden print:block text-center border-b-2 border-dashed border-slate-900 pb-4 mb-6">
+                <h2 className="text-2xl font-black text-slate-950 tracking-tight">KARACHI DMS</h2>
+                <p className="text-xs uppercase tracking-widest font-bold text-slate-700">Distribution Management System</p>
+                <p className="text-[10px] text-slate-500 mt-1">Karachi, Sindh, Pakistan • Support: +92 21 111-K-DMS</p>
+                <div className="flex justify-between items-center text-[10px] text-slate-600 mt-4 px-2">
+                  <span>PRINTED: {new Date().toLocaleString()}</span>
+                  <span className="font-bold">OFFICIAL INVOICE</span>
+                </div>
+              </div>
+
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
@@ -727,15 +755,52 @@ export const DisplayInvoiceModal = ({ onClose, formatPKR }: DisplayInvoiceModalP
                 </div>
               </div>
 
+              {/* Receipt Print Footer (Only visible on print) */}
+              <div className="hidden print:block text-center border-t border-dashed border-slate-900 pt-6 mt-8">
+                <p className="text-xs font-black text-slate-950 uppercase tracking-wider">Thank you for your business!</p>
+                <p className="text-[10px] text-slate-500 mt-1">This is an electronically generated invoice under Karachi distribution records.</p>
+                <p className="text-[9px] text-slate-400 font-mono mt-2">Powered by Karachi DMS Distribution Suite v7.0</p>
+              </div>
+
               {/* Action Bar */}
-              <div className="flex justify-end gap-3 pt-4">
-                <button 
-                  onClick={() => window.print()}
-                  className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                >
-                  <Printer size={16} />
-                  Print Document
-                </button>
+              <div className="flex flex-col items-end gap-3 pt-4 no-print">
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={handlePrint}
+                    className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    <Printer size={16} />
+                    Print Document
+                  </button>
+                </div>
+
+                {showPrintWarning && (
+                  <div className="w-full max-w-md p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 animate-in fade-in slide-in-from-top-2 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Preview Frame Print Restriction</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber-700">
+                      Browser printing is blocked inside embedded iframe previews. Click below to open Karachi DMS in a new tab where you can print directly.
+                    </p>
+                    <div className="flex gap-2 mt-1">
+                      <a 
+                        href={window.location.href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors"
+                      >
+                        Open in New Tab
+                      </a>
+                      <button 
+                        onClick={() => setShowPrintWarning(false)}
+                        className="text-[10px] font-bold text-amber-900 hover:underline px-2 py-1.5"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

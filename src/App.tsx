@@ -107,6 +107,7 @@ import { PurchaseModal, NewOrderModal } from './components/modals/TransactionMod
 import { DeliveryModal } from './components/modals/LogisticsModals';
 import { RegisterShopModal, ShopMasterModal, RegisterSupplierModal, SupplierMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
 import { DailyLoadPlanReport } from './components/reports/DailyLoadPlanReport';
+import { AreaWiseItemPartySummaryReport } from './components/reports/AreaWiseItemPartySummaryReport';
 
 const OrderCancellationScreen = ({ onClose, orders, formatPKR }: { onClose: () => void, orders: Order[], formatPKR: (amt: number) => string }) => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -886,6 +887,10 @@ export default function App() {
       case 'LPR01':
         setActiveTab('reports');
         setSelectedReportTitle('Daily Load Plan');
+        break;
+      case 'APS01':
+        setActiveTab('reports');
+        setSelectedReportTitle('Area Wise Item Party Summary');
         break;
       case 'RT01':
         setIsReturnModalOpen(true);
@@ -3029,6 +3034,11 @@ export default function App() {
                     onBack={() => setSelectedReportTitle(null)} 
                     formatPKR={formatPKR} 
                   />
+                ) : selectedReportTitle === 'Area Wise Item Party Summary' ? (
+                  <AreaWiseItemPartySummaryReport 
+                    onBack={() => setSelectedReportTitle(null)} 
+                    formatPKR={formatPKR} 
+                  />
                 ) : selectedReportTitle ? (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
@@ -3089,6 +3099,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {[
                         { title: 'Daily Load Plan', desc: 'Aggregated loading metrics and stop sequencing for delivery dispatch.', icon: Truck },
+                        { title: 'Area Wise Item Party Summary', desc: 'Consolidated sales, products, and booker performance per urban sub-area.', icon: MapPin },
                         { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
                         { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
                         { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },

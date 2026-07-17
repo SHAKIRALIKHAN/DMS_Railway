@@ -727,6 +727,183 @@ try {
   console.warn("Location seeding skipped or failed:", err);
 }
 
+// Seed Area Wise Report Data
+function seedAreaWiseReportData() {
+  try {
+    // 1. Ensure material group '00001' exists
+    db.prepare("INSERT OR IGNORE INTO material_groups (id, name, description) VALUES (?, ?, ?)").run("00001", "Sugar & Sweeteners", "Sweetening agents");
+
+    // 2. Ensure products exist
+    const productsToSeed = [
+      { id: "PR-SUGAR-W", name: "WHITE SUGAR", brand: "Zensoft", mg: "00001", pp: 90, tp: 100, rp: 100, stock: 5000, unit: "1kgs" },
+      { id: "PR-SUGAR-B", name: "BROWN SUGAR", brand: "Zensoft", mg: "00001", pp: 85, tp: 94, rp: 94, stock: 5000, unit: "500grm" },
+      { id: "PR-SUGAR-C", name: "CASTER SUGAR", brand: "Zensoft", mg: "00001", pp: 120, tp: 130, rp: 130, stock: 5000, unit: "500grm" }
+    ];
+
+    const productStmt = db.prepare(`
+      INSERT OR IGNORE INTO products (
+        product_id, product_name, brand, material_group_id, purchase_price, 
+        trade_price, retail_price, stock_quantity, unit, conversion_value, 
+        conversion_unit, min_stock_level, reorder_level
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'EA', 10, 20)
+    `);
+    const batchStmt = db.prepare("INSERT OR IGNORE INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)");
+
+    for (const p of productsToSeed) {
+      productStmt.run(p.id, p.name, p.brand, p.mg, p.pp, p.tp, p.rp, p.stock, p.unit);
+      batchStmt.run(p.id, null, p.stock, p.stock, p.pp);
+    }
+
+    // 3. Ensure order bookers exist
+    const bookersToSeed = ["MUHAMMAD ADNAN", "NADEEM HAIDER", "TAUQEER"];
+    const bookerStmt = db.prepare("INSERT OR IGNORE INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, 'Father', ?, '42101-0000000-1', '2021-01-01')");
+    for (const b of bookersToSeed) {
+      const phone = b === "MUHAMMAD ADNAN" ? "03009990001" : b === "NADEEM HAIDER" ? "03009990002" : "03009990003";
+      bookerStmt.run(b, phone);
+    }
+
+    // 4. Ensure shops exist
+    const shopsToSeed = [
+      { name: "HYPER LINK SUPER MARKET & PHARMACY", location: "BLOCK 10", phone: "03008880001" },
+      { name: "ZAIQA MASALA", location: "BLOCK 3", phone: "03008880002" },
+      { name: "B S MART", location: "BLOCK I", phone: "03008880003" },
+      { name: "LBM MART", location: "QUETTA TOWN", phone: "03008880004" },
+      { name: "OCTOBER NOW", location: "SADDAR", phone: "03008880005" },
+      { name: "FUTURE MART", location: "SECTOR 11-A", phone: "03008880006" },
+      { name: "M.D MART", location: "SECTOR 11-A", phone: "03008880007" },
+      { name: "MD MART", location: "SECTOR 11-A", phone: "03008880008" },
+      { name: "USMAN GENERAL STORE", location: "SECTOR 15 A", phone: "03008880009" },
+      { name: "BIN MUMTAZ CASH AND CARRY", location: "SURJANI TOWN", phone: "03008880010" },
+      { name: "FJ FOODS STORE", location: "SURJANI TOWN", phone: "03008880011" }
+    ];
+
+    const shopStmt = db.prepare("INSERT OR IGNORE INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, 'Owner', ?, ?, 500000)");
+    for (const s of shopsToSeed) {
+      shopStmt.run(s.name, s.location, s.phone);
+    }
+
+    // 5. Check if we already have transactions for June 16, 2021
+    const invoiceCheck = db.prepare("SELECT COUNT(*) as count FROM invoices WHERE invoice_date LIKE '2021-06-16%'").get() as { count: number };
+    if (invoiceCheck.count > 0) {
+      console.log("[Database] Area Wise Item Party Summary report data already exists.");
+      return;
+    }
+
+    console.log("[Database] Seeding Area Wise Item Party Summary report data...");
+
+    const getShopId = (name: string) => {
+      const res = db.prepare("SELECT id FROM shops WHERE shop_name = ?").get(name) as any;
+      if (!res) throw new Error(`Shop ${name} not found`);
+      return res.id;
+    };
+    const getBookerId = (name: string) => {
+      const res = db.prepare("SELECT id FROM order_bookers WHERE name = ?").get(name) as any;
+      if (!res) throw new Error(`Booker ${name} not found`);
+      return res.id;
+    };
+    const salesmanId = (db.prepare("SELECT id FROM salesmen LIMIT 1").get() as any)?.id || 1;
+
+    const reportData = [
+      { shop: "HYPER LINK SUPER MARKET & PHARMACY", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-W", qty: 800, rate: 100, amount: 40000 },
+      { shop: "ZAIQA MASALA", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-W", qty: 120, rate: 100, amount: 6000 },
+      { shop: "ZAIQA MASALA", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-B", qty: 16, rate: 94, amount: 752 },
+      { shop: "B S MART", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-W", qty: 0, rate: 100, amount: 0 },
+      { shop: "B S MART", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-B", qty: 16, rate: 94, amount: 752 },
+      { shop: "LBM MART", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-W", qty: 400, rate: 100, amount: 20000 },
+      { shop: "OCTOBER NOW", booker: "NADEEM HAIDER", pid: "PR-SUGAR-W", qty: 520, rate: 100, amount: 26000 },
+      { shop: "FUTURE MART", booker: "TAUQEER", pid: "PR-SUGAR-W", qty: 0, rate: 100, amount: 0 },
+      { shop: "FUTURE MART", booker: "TAUQEER", pid: "PR-SUGAR-B", qty: 0, rate: 94, amount: 0 },
+      { shop: "FUTURE MART", booker: "TAUQEER", pid: "PR-SUGAR-C", qty: 0, rate: 130, amount: 0 },
+      { shop: "M.D MART", booker: "TAUQEER", pid: "PR-SUGAR-W", qty: 40, rate: 100, amount: 2000 },
+      { shop: "M.D MART", booker: "TAUQEER", pid: "PR-SUGAR-B", qty: 12, rate: 94, amount: 564 },
+      { shop: "MD MART", booker: "TAUQEER", pid: "PR-SUGAR-W", qty: 0, rate: 100, amount: 0 },
+      { shop: "MD MART", booker: "TAUQEER", pid: "PR-SUGAR-B", qty: 0, rate: 94, amount: 0 },
+      { shop: "USMAN GENERAL STORE", booker: "MUHAMMAD ADNAN", pid: "PR-SUGAR-W", qty: 40, rate: 100, amount: 2000 },
+      { shop: "BIN MUMTAZ CASH AND CARRY", booker: "TAUQEER", pid: "PR-SUGAR-W", qty: 200, rate: 100, amount: 10000 },
+      { shop: "BIN MUMTAZ CASH AND CARRY", booker: "TAUQEER", pid: "PR-SUGAR-B", qty: 32, rate: 94, amount: 1504 },
+      { shop: "BIN MUMTAZ CASH AND CARRY", booker: "TAUQEER", pid: "PR-SUGAR-C", qty: 20, rate: 130, amount: 1300 },
+      { shop: "FJ FOODS STORE", booker: "TAUQEER", pid: "PR-SUGAR-W", qty: 120, rate: 100, amount: 6000 },
+      { shop: "FJ FOODS STORE", booker: "TAUQEER", pid: "PR-SUGAR-B", qty: 10, rate: 94, amount: 470 },
+      { shop: "FJ FOODS STORE", booker: "TAUQEER", pid: "PR-SUGAR-C", qty: 10, rate: 130, amount: 650 }
+    ];
+
+    const shopItemsMap = new Map<string, any[]>();
+    for (const r of reportData) {
+      if (!shopItemsMap.has(r.shop)) {
+        shopItemsMap.set(r.shop, []);
+      }
+      shopItemsMap.get(r.shop)!.push(r);
+    }
+
+    db.transaction(() => {
+      for (const [shopName, items] of shopItemsMap.entries()) {
+        const sId = getShopId(shopName);
+        const bId = getBookerId(items[0].booker);
+
+        for (let invIdx = 1; invIdx <= 2; invIdx++) {
+          let orderTotal = 0;
+          for (const item of items) {
+            orderTotal += item.amount / 2;
+          }
+
+          const oId = db.prepare(`
+            INSERT INTO orders (shop_id, order_booker_id, order_date, estimated_delivery_date, total_amount, status)
+            VALUES (?, ?, '2021-06-16T10:00:00.000Z', '2021-06-16T18:00:00.000Z', ?, 'delivered')
+          `).run(sId, bId, orderTotal).lastInsertRowid;
+
+          const delId = db.prepare(`
+            INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, status, total_amount)
+            VALUES (?, ?, ?, '2021-06-16T14:00:00.000Z', 'completed', ?)
+          `).run(oId, sId, salesmanId, orderTotal).lastInsertRowid;
+
+          const invId = db.prepare(`
+            INSERT INTO invoices (shop_id, invoice_date, gross_amount, total_discount, total_tax, net_amount, status)
+            VALUES (?, '2021-06-16T15:00:00.000Z', ?, 0, 0, ?, 'paid')
+          `).run(sId, orderTotal, orderTotal).lastInsertRowid;
+
+          db.prepare("UPDATE deliveries SET invoice_id = ?, status = 'billed' WHERE id = ?").run(invId, delId);
+
+          for (const item of items) {
+            const halfQty = Math.floor(item.qty / 2);
+            const finalQty = invIdx === 1 ? halfQty : (item.qty - halfQty);
+            
+            const halfAmt = item.amount / 2;
+            const finalAmt = invIdx === 1 ? halfAmt : (item.amount - halfAmt);
+
+            const oiId = db.prepare(`
+              INSERT INTO order_items (order_id, product_id, quantity, price, status)
+              VALUES (?, ?, ?, ?, 'delivered')
+            `).run(oId, item.pid, finalQty, item.rate).lastInsertRowid;
+
+            db.prepare(`
+              INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price)
+              VALUES (?, ?, ?, ?, ?)
+            `).run(delId, oiId, item.pid, finalQty, item.rate);
+
+            db.prepare(`
+              INSERT INTO invoice_items (
+                invoice_id, delivery_id, delivery_item_id, product_id, 
+                quantity, unit_price, trade_discount_pct, tax_pct, additional_tax_pct, special_discount_pct, net_amount
+              )
+              VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
+            `).run(invId, delId, oiId, item.pid, finalQty, item.rate, finalAmt);
+          }
+        }
+      }
+    })();
+
+    console.log("[Database] Area Wise Item Party Summary report data successfully seeded!");
+  } catch (err) {
+    console.error("[Database Error] Seeding Area Wise Item Party Summary failed:", err);
+  }
+}
+
+try {
+  seedAreaWiseReportData();
+} catch (e) {
+  console.error("Area Wise Report Seeding execution failed:", e);
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -2606,6 +2783,59 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       console.error("Failed to generate daily load plan", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/reports/area-wise-item-party-summary", (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      let queryStr = `
+        SELECT 
+          s.location as sub_area,
+          s.shop_name as account_title,
+          coalesce(ob.name, 'N/A') as booker,
+          p.product_name as product,
+          p.unit as pack_size,
+          SUM(ii.quantity) as qty,
+          ii.unit_price as rate,
+          SUM(ii.net_amount) as amount,
+          COUNT(DISTINCT i.id) as t_invoice
+        FROM invoices i
+        JOIN shops s ON i.shop_id = s.id
+        JOIN invoice_items ii ON ii.invoice_id = i.id
+        JOIN products p ON ii.product_id = p.product_id
+        LEFT JOIN deliveries d ON ii.delivery_id = d.id
+        LEFT JOIN orders o ON d.order_id = o.id
+        LEFT JOIN order_bookers ob ON o.order_booker_id = ob.id
+      `;
+
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (startDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) <= ?");
+        params.push(endDate);
+      }
+
+      if (conditions.length > 0) {
+        queryStr += " WHERE " + conditions.join(" AND ");
+      }
+
+      queryStr += `
+        GROUP BY s.location, s.shop_name, ob.name, p.product_name, p.unit, ii.unit_price
+        ORDER BY s.location, s.shop_name, p.product_name
+      `;
+
+      const rows = db.prepare(queryStr).all(...params) as any[];
+      res.json(rows);
+    } catch (err: any) {
+      console.error("Failed to generate Area Wise Item Party Summary report", err);
       res.status(500).json({ error: err.message });
     }
   });
