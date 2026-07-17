@@ -1033,7 +1033,13 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const reportCode = params.get('report');
-    if (reportCode === 'APS01' || params.get('print') === 'true') {
+    if (reportCode === 'APS01') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Area Wise Item Party Summary');
+    } else if (reportCode === 'LPR01') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Daily Load Plan');
+    } else if (params.get('print') === 'true') {
       setActiveTab('reports');
       setSelectedReportTitle('Area Wise Item Party Summary');
     }

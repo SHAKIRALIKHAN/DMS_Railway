@@ -2675,7 +2675,8 @@ async function startServer() {
 
   app.get("/api/reports/daily-load-plan", (req, res) => {
     try {
-      const rows = db.prepare(`
+      const { startDate, endDate } = req.query;
+      let queryStr = `
         SELECT 
           i.id as invoice_id,
           i.invoice_date,
@@ -2695,8 +2696,26 @@ async function startServer() {
         JOIN shops s ON i.shop_id = s.id
         JOIN invoice_items ii ON ii.invoice_id = i.id
         JOIN products p ON ii.product_id = p.product_id
-        ORDER BY s.location, s.shop_name, ii.product_id
-      `).all() as any[];
+      `;
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (startDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) <= ?");
+        params.push(endDate);
+      }
+
+      if (conditions.length > 0) {
+        queryStr += " WHERE " + conditions.join(" AND ");
+      }
+
+      queryStr += " ORDER BY s.location, s.shop_name, ii.product_id";
+
+      const rows = db.prepare(queryStr).all(...params) as any[];
 
       const subAreasMap = new Map<string, any>();
 

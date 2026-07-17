@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Truck, Store, Package, Phone, User, CheckCircle, Code, Database, Printer, ChevronDown, ChevronUp, RefreshCw, Layers } from 'lucide-react';
+import { ArrowLeft, Truck, Store, Package, Phone, User, CheckCircle, Code, Database, Printer, ChevronDown, ChevronUp, RefreshCw, Layers, X, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ProductItem {
@@ -42,33 +42,63 @@ interface DailyLoadPlanReportProps {
 }
 
 export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack, formatPKR }) => {
+  // Read initial query params for printing state persistence
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialStartDate = urlParams.get('startDate') || '2021-06-16';
+  const initialEndDate = urlParams.get('endDate') || '2021-06-16';
+
   const [loadPlans, setLoadPlans] = useState<SubAreaLoadPlan[]>([]);
   const [selectedAreaName, setSelectedAreaName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Filters state
+  const [startDate, setStartDate] = useState<string>(initialStartDate);
+  const [endDate, setEndDate] = useState<string>(initialEndDate);
+
   // UI states
   const [expandedShopId, setExpandedShopId] = useState<number | null>(null);
   const [showSchema, setShowSchema] = useState<boolean>(false);
   const [completedStops, setCompletedStops] = useState<Record<number, boolean>>({});
   const [checkedConsolidatedItems, setCheckedConsolidatedItems] = useState<Record<string, boolean>>({});
+  const [showIframePrintModal, setShowIframePrintModal] = useState<boolean>(false);
 
   useEffect(() => {
     fetchLoadPlanData();
-  }, []);
+  }, [startDate, endDate]);
+
+  // Auto-print effect when launched with ?print=true (bypasses iframe block in standalone tab)
+  useEffect(() => {
+    if (!loading && loadPlans.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('print') === 'true') {
+        const timer = setTimeout(() => {
+          window.print();
+        }, 1500); // 1.5s delay to ensure complete paint and styling renders
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, loadPlans]);
 
   const fetchLoadPlanData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/reports/daily-load-plan');
+      const queryParams = new URLSearchParams();
+      queryParams.set('startDate', startDate);
+      queryParams.set('endDate', endDate);
+      const res = await fetch(`/api/reports/daily-load-plan?${queryParams.toString()}`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       const data: SubAreaLoadPlan[] = await res.json();
       setLoadPlans(data);
       if (data.length > 0) {
-        setSelectedAreaName(data[0].subArea);
+        // Support initial sub-area from query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialSelectedArea = urlParams.get('subArea');
+        const hasMatchedArea = initialSelectedArea && data.some(p => p.subArea === initialSelectedArea);
+        setSelectedAreaName(hasMatchedArea ? initialSelectedArea! : data[0].subArea);
       } else {
         setError("No sales invoices found to construct a Daily Load Plan.");
       }
@@ -77,6 +107,26 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
       setError("Failed to load invoice load plan report dataset. Please check if invoices have been created.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Construct URL for printing with currently active subArea and dates
+  const getPrintUrl = () => {
+    const params = new URLSearchParams();
+    params.set('report', 'LPR01');
+    params.set('print', 'true');
+    params.set('subArea', selectedAreaName);
+    params.set('startDate', startDate);
+    params.set('endDate', endDate);
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  };
+
+  const handlePrint = () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      setShowIframePrintModal(true);
+    } else {
+      window.print();
     }
   };
 
@@ -189,11 +239,11 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
           </button>
           
           <button 
-            onClick={() => window.print()}
-            className="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-50 transition-colors"
+            onClick={handlePrint}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Printer size={16} />
-            <span>Print Report</span>
+            <span>Print PDF Report</span>
           </button>
 
           <button 
@@ -287,29 +337,55 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative">
-                  <select 
-                    value={selectedAreaName}
-                    onChange={(e) => {
-                      setSelectedAreaName(e.target.value);
-                      setExpandedShopId(null);
-                    }}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all appearance-none cursor-pointer"
-                  >
-                    {loadPlans.map((plan, i) => (
-                      <option key={i} value={plan.subArea}>
-                        {plan.subArea} ({plan.totalShopsCount} Stops)
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <ChevronDown size={14} />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                {/* Select Area */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Route / Sub-Area</label>
+                  <div className="relative">
+                    <select 
+                      value={selectedAreaName}
+                      onChange={(e) => {
+                        setSelectedAreaName(e.target.value);
+                        setExpandedShopId(null);
+                      }}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all appearance-none cursor-pointer"
+                    >
+                      {loadPlans.map((plan, i) => (
+                        <option key={i} value={plan.subArea}>
+                          {plan.subArea} ({plan.totalShopsCount} Stops)
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                      <ChevronDown size={14} />
+                    </div>
                   </div>
                 </div>
 
+                {/* From Date */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">From Date</label>
+                  <input 
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
+                  />
+                </div>
+
+                {/* To Date */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">To Date</label>
+                  <input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all"
+                  />
+                </div>
+
                 {selectedPlan && (
-                  <div className="flex gap-4 justify-around items-center bg-slate-50 rounded-xl px-4 py-2 border border-slate-100">
+                  <div className="flex gap-4 justify-around items-center bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100">
                     <div className="text-center">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Stops</p>
                       <p className="text-xs font-black text-slate-700">{selectedPlan.totalShopsCount}</p>
@@ -554,6 +630,216 @@ export const DailyLoadPlanReport: React.FC<DailyLoadPlanReportProps> = ({ onBack
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Dynamic PDF/Print Report Representation */}
+      {!loading && !error && !showSchema && selectedPlan && (
+        <div className="print-only print-receipt-only print:mt-0 print:p-0" id="load-plan-printable-area">
+          {/* Corporate Header */}
+          <div className="flex flex-col items-center justify-center text-center pb-3 mb-4 border-b-2 border-slate-800 print:pb-2 print:mb-3">
+            <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase print:text-lg">Karachi DMS</h1>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-600 mt-0.5 print:text-[10px]">Distribution Management System</p>
+            <div className="text-base font-black text-slate-800 tracking-tight mt-2 uppercase print:text-sm print:mt-1">
+              Daily Vehicle Load Plan & Routing Sheet
+            </div>
+            <div className="text-xs font-bold text-slate-600 mt-0.5 uppercase font-mono print:text-[10px]">
+              T-Code: LPR01
+            </div>
+            <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mt-2 print:text-[10px] print:mt-1">
+              <span>Dated From: <strong className="text-slate-900">{startDate}</strong></span>
+              <span>To: <strong className="text-slate-900">{endDate}</strong></span>
+            </div>
+            <div className="text-[10px] font-mono text-slate-500 mt-1 print:text-[9px]">
+              Generated On: {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date().toLocaleTimeString()}
+            </div>
+          </div>
+
+          {/* Load Plan Information Card */}
+          <div className="border border-slate-300 rounded-xl p-3 mb-4 bg-slate-50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs print:p-2 print:mb-3 print:gap-2">
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase print:text-[9px]">Macro Route / Zone</p>
+              <p className="text-sm font-black text-slate-900 uppercase print:text-xs">{selectedPlan.subArea}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase print:text-[9px]">Total Stop Sequence</p>
+              <p className="text-sm font-black text-slate-900 print:text-xs">{selectedPlan.totalShopsCount} Stops</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase print:text-[9px]">Consolidated Invoices</p>
+              <p className="text-sm font-black text-slate-900 print:text-xs">{selectedPlan.totalOutstandingInvoices} Invoices</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase print:text-[9px]">Dispatch Status</p>
+              <p className="text-sm font-black text-slate-900 uppercase font-mono text-emerald-700 font-bold print:text-xs">APPROVED</p>
+            </div>
+          </div>
+
+          {/* Section 1: Consolidated Loading Vehicle Summary */}
+          <div className="mb-4 print:break-inside-avoid">
+            <div className="border-b-2 border-slate-800 pb-1 mb-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 print:text-[11px]">
+                SECTION 1: Consolidated Warehouse Loading List (SKU Totals)
+              </h3>
+              <p className="text-[10px] text-slate-500 print:text-[9px]">Warehouse dispatcher must load exactly the following SKU volumes into the delivery vehicle.</p>
+            </div>
+
+            <table className="w-full text-left text-xs border border-slate-300 print:text-[10px]">
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 border-b border-slate-300 font-mono">
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase text-center w-12 border-r border-slate-300 print:py-1">S.#</th>
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase border-r border-slate-300 print:py-1">SKU ID</th>
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase border-r border-slate-300 print:py-1">Product / Material Name</th>
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase text-right w-32 border-r border-slate-300 print:py-1">Quantity to Load</th>
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase text-center w-28 border-r border-slate-300 print:py-1">Unit Type</th>
+                  <th className="px-2 py-1 font-black text-[10px] tracking-wider uppercase text-center w-28 print:py-1">Check [✓]</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {selectedPlan.consolidatedLoadSummary.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-700 border-r border-slate-300 print:py-1">{idx + 1}</td>
+                    <td className="px-2 py-1.5 font-mono text-slate-700 font-semibold border-r border-slate-300 print:py-1">{item.productId}</td>
+                    <td className="px-2 py-1.5 font-black text-slate-950 border-r border-slate-300 print:py-1">{item.productName}</td>
+                    <td className="px-2 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-300 print:py-1">{item.totalQuantity}</td>
+                    <td className="px-2 py-1.5 text-center font-bold text-slate-600 border-r border-slate-300 uppercase print:py-1">{item.unit}</td>
+                    <td className="px-2 py-1.5 text-center font-mono text-slate-400 font-bold border-slate-300 print:py-1">[ &nbsp; &nbsp; ]</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Section 2: Sequenced Drop-off Stops Routing */}
+          <div className="mt-4 print:mt-3">
+            <div className="border-b-2 border-slate-800 pb-1 mb-3 print:break-inside-avoid">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 print:text-[11px]">
+                SECTION 2: Optimal routed stop sequencing (Delivery Drop-offs)
+              </h3>
+              <p className="text-[10px] text-slate-500 print:text-[9px]">Deliver items to customer shops strictly following the sequential stop order below.</p>
+            </div>
+
+            <div className="space-y-4 print:space-y-2.5">
+              {selectedPlan.shops.map((shop, idx) => (
+                <div key={shop.shopId} className="border border-slate-300 rounded-xl p-3 bg-white shadow-sm print:p-2 print:shadow-none print:break-inside-avoid">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-300 pb-1.5 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-slate-900 text-white font-mono font-black text-xs px-1.5 py-0.5 rounded print:text-[10px]">
+                        STOP #{shop.deliverySequence}
+                      </span>
+                      <h4 className="text-sm font-black text-slate-900 uppercase print:text-xs">
+                        {shop.shopName}
+                      </h4>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-600 flex gap-3 font-bold print:text-[9px]">
+                      <span>Owner: <strong className="text-slate-900">{shop.ownerName}</strong></span>
+                      <span>Phone: <strong className="text-slate-900">{shop.phone}</strong></span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] font-mono font-bold text-slate-500 mb-1.5 print:text-[9px]">
+                    Open Invoices for Dropoff: {shop.invoices.map(id => `#${id}`).join(', ')}
+                  </p>
+
+                  <table className="w-full text-left text-[11px] border border-slate-200 print:text-[9px]">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-mono">
+                        <th className="px-1.5 py-1 font-bold uppercase w-12 border-r border-slate-200 text-center">S.#</th>
+                        <th className="px-1.5 py-1 font-bold uppercase w-28 border-r border-slate-200">SKU ID</th>
+                        <th className="px-1.5 py-1 font-bold uppercase border-r border-slate-200">Product Name</th>
+                        <th className="px-1.5 py-1 font-bold uppercase w-24 text-right border-r border-slate-200">Dropoff Qty</th>
+                        <th className="px-1.5 py-1 font-bold uppercase w-24 text-center border-r border-slate-200">Unit</th>
+                        <th className="px-1.5 py-1 font-bold uppercase w-32 text-center">Shop Signature</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {shop.products.map((p, pIdx) => (
+                        <tr key={pIdx}>
+                          <td className="px-1.5 py-1 text-center font-mono border-r border-slate-200">{pIdx + 1}</td>
+                          <td className="px-1.5 py-1 font-mono border-r border-slate-200">{p.productId}</td>
+                          <td className="px-1.5 py-1 font-black border-r border-slate-200">{p.productName}</td>
+                          <td className="px-1.5 py-1 text-right font-mono font-black border-r border-slate-200">{p.quantity}</td>
+                          <td className="px-1.5 py-1 text-center border-r border-slate-200 font-semibold">{p.unit}</td>
+                          <td className="px-1.5 py-1 text-center text-[10px] text-slate-400 font-mono print:text-[9px]">[ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ]</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Delivery Handover Signature Blocks */}
+          <div className="mt-8 pt-6 border-t-2 border-slate-800 grid grid-cols-3 gap-6 text-center text-xs print:mt-6 print:pt-4 print:break-inside-avoid">
+            <div className="space-y-3">
+              <div className="h-8 border-b border-slate-400 print:h-6"></div>
+              <p className="font-bold text-slate-900 print:text-[10px]">Warehouse Dispatcher Signature</p>
+              <p className="text-[10px] text-slate-500 font-mono print:text-[9px]">Date: &nbsp; &nbsp; &nbsp; &nbsp; / &nbsp; &nbsp; &nbsp; &nbsp; / 2026</p>
+            </div>
+            <div className="space-y-3">
+              <div className="h-8 border-b border-slate-400 print:h-6"></div>
+              <p className="font-bold text-slate-900 print:text-[10px]">Delivery Driver / Booker Signature</p>
+              <p className="text-[10px] text-slate-500 font-mono print:text-[9px]">CNIC: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</p>
+            </div>
+            <div className="space-y-3">
+              <div className="h-8 border-b border-slate-400 print:h-6"></div>
+              <p className="font-bold text-slate-900 print:text-[10px]">Finance Manager Verification</p>
+              <p className="text-[10px] text-slate-500 font-mono print:text-[9px]">Verified: [ &nbsp; &nbsp; ] &nbsp; Ledger updated</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Iframe Print Redirect Modal */}
+      {showIframePrintModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col items-center text-center relative font-sans"
+          >
+            <button 
+              onClick={() => setShowIframePrintModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+              id="btn-close-print-modal-dlp"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl w-fit mb-4">
+              <Printer size={28} />
+            </div>
+
+            <h3 className="text-slate-900 font-black text-lg tracking-tight mb-2">Save Report as PDF</h3>
+            
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              Because this application is currently running inside an editor preview iframe, direct PDF printing is restricted by your browser. 
+              <br /><br />
+              Click the button below to open the report in a dedicated tab. Your browser will immediately launch the print interface where you can choose <strong>"Save as PDF"</strong> to select a storage directory.
+            </p>
+
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setShowIframePrintModal(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                id="btn-cancel-print-dlp"
+              >
+                Cancel
+              </button>
+              <a 
+                href={getPrintUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowIframePrintModal(false)}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                id="btn-confirm-print-tab-dlp"
+              >
+                <span>Open & Save PDF</span>
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>
