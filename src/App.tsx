@@ -1029,6 +1029,16 @@ export default function App() {
     fetchBatchInit();
   }, []);
 
+  // Intercept query params to auto-display report on external tab load (useful for PDF printing bypass)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reportCode = params.get('report');
+    if (reportCode === 'APS01' || params.get('print') === 'true') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Area Wise Item Party Summary');
+    }
+  }, []);
+
   // Filtered Data Computation
   const filteredShops = shops.filter(shop => {
     const f = filters.shops;

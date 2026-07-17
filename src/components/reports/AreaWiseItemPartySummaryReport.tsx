@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, MapPin, Package, User, Printer, RefreshCw, Code, Layers, Search, Calendar, FileText } from 'lucide-react';
+import { ArrowLeft, MapPin, Package, User, Printer, RefreshCw, Code, Layers, Search, Calendar, FileText, ExternalLink, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ReportRow {
@@ -24,19 +24,43 @@ export const AreaWiseItemPartySummaryReport: React.FC<AreaWiseReportProps> = ({ 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Read initial query params for printing state persistence
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialStartDate = urlParams.get('startDate') || '2021-06-16';
+  const initialEndDate = urlParams.get('endDate') || '2021-06-16';
+  const initialSearchQuery = urlParams.get('searchQuery') || '';
+  const initialBooker = urlParams.get('selectedBooker') || 'ALL';
+  const initialProduct = urlParams.get('selectedProduct') || 'ALL';
+
   // Filters state
-  const [startDate, setStartDate] = useState<string>('2021-06-16');
-  const [endDate, setEndDate] = useState<string>('2021-06-16');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedBooker, setSelectedBooker] = useState<string>('ALL');
-  const [selectedProduct, setSelectedProduct] = useState<string>('ALL');
+  const [startDate, setStartDate] = useState<string>(initialStartDate);
+  const [endDate, setEndDate] = useState<string>(initialEndDate);
+  const [searchQuery, setSearchQuery] = useState<string>(initialSearchQuery);
+  const [selectedBooker, setSelectedBooker] = useState<string>(initialBooker);
+  const [selectedProduct, setSelectedProduct] = useState<string>(initialProduct);
 
   // Schema view state
   const [showSchema, setShowSchema] = useState<boolean>(false);
+  
+  // Iframe print helper modal state
+  const [showIframePrintModal, setShowIframePrintModal] = useState<boolean>(false);
 
   useEffect(() => {
     fetchReportData();
   }, [startDate, endDate]);
+
+  // Auto-print effect when launched with ?print=true (bypasses iframe block in standalone tab)
+  useEffect(() => {
+    if (!loading && data.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('print') === 'true') {
+        const timer = setTimeout(() => {
+          window.print();
+        }, 1500); // 1.5s delay to ensure complete paint and styling renders
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, data]);
 
   const fetchReportData = async () => {
     setLoading(true);
@@ -57,6 +81,28 @@ export const AreaWiseItemPartySummaryReport: React.FC<AreaWiseReportProps> = ({ 
       setError("Failed to load Area Wise Item Party Summary report dataset. Please check if invoices exist on these dates.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Construct URL for printing with all currently active filters
+  const getPrintUrl = () => {
+    const params = new URLSearchParams();
+    params.set('report', 'APS01');
+    params.set('print', 'true');
+    params.set('startDate', startDate);
+    params.set('endDate', endDate);
+    params.set('selectedBooker', selectedBooker);
+    params.set('selectedProduct', selectedProduct);
+    params.set('searchQuery', searchQuery);
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  };
+
+  const handlePrint = () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      setShowIframePrintModal(true);
+    } else {
+      window.print();
     }
   };
 
@@ -154,7 +200,7 @@ export const AreaWiseItemPartySummaryReport: React.FC<AreaWiseReportProps> = ({ 
           </button>
           
           <button 
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
             id="btn-print-report"
           >
@@ -324,7 +370,7 @@ export const AreaWiseItemPartySummaryReport: React.FC<AreaWiseReportProps> = ({ 
 
       {/* Dynamic PDF/Print Report Representation */}
       {!loading && !error && !showSchema && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm print:border-none print:shadow-none print:p-0" id="report-printable-area">
+        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm print:border-none print:shadow-none print:p-0 print-receipt-only" id="report-printable-area">
           
           {/* Print Only Corporate Header Branding */}
           <div className="hidden print:flex flex-col items-center justify-center text-center pb-6 mb-4 border-b-2 border-slate-800">
@@ -505,6 +551,58 @@ export const AreaWiseItemPartySummaryReport: React.FC<AreaWiseReportProps> = ({ 
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* Iframe Print Redirect Modal */}
+      {showIframePrintModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col items-center text-center relative font-sans"
+          >
+            <button 
+              onClick={() => setShowIframePrintModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+              id="btn-close-print-modal"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl w-fit mb-4">
+              <Printer size={28} />
+            </div>
+
+            <h3 className="text-slate-900 font-black text-lg tracking-tight mb-2">Save Report as PDF</h3>
+            
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              Because this application is currently running inside an editor preview iframe, direct PDF printing is restricted by your browser. 
+              <br /><br />
+              Click the button below to open the report in a dedicated tab. Your browser will immediately launch the print interface where you can choose <strong>"Save as PDF"</strong> to select a storage directory.
+            </p>
+
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setShowIframePrintModal(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                id="btn-cancel-print"
+              >
+                Cancel
+              </button>
+              <a 
+                href={getPrintUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowIframePrintModal(false)}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                id="btn-confirm-print-tab"
+              >
+                <span>Open & Save PDF</span>
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>
