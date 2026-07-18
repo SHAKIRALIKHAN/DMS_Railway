@@ -108,6 +108,8 @@ import { DeliveryModal } from './components/modals/LogisticsModals';
 import { RegisterShopModal, ShopMasterModal, RegisterSupplierModal, SupplierMasterModal, ProductMasterDataModal, UnitModal } from './components/modals/DataManagementModals';
 import { DailyLoadPlanReport } from './components/reports/DailyLoadPlanReport';
 import { AreaWiseItemPartySummaryReport } from './components/reports/AreaWiseItemPartySummaryReport';
+import { InvoiceReport } from './components/reports/InvoiceReport';
+import { SalesTaxInvoiceReport } from './components/reports/SalesTaxInvoiceReport';
 
 const OrderCancellationScreen = ({ onClose, orders, formatPKR }: { onClose: () => void, orders: Order[], formatPKR: (amt: number) => string }) => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -892,6 +894,14 @@ export default function App() {
         setActiveTab('reports');
         setSelectedReportTitle('Area Wise Item Party Summary');
         break;
+      case 'INV01':
+        setActiveTab('reports');
+        setSelectedReportTitle('Invoice');
+        break;
+      case 'STI01':
+        setActiveTab('reports');
+        setSelectedReportTitle('Sales Tax Invoice');
+        break;
       case 'RT01':
         setIsReturnModalOpen(true);
         break;
@@ -1039,6 +1049,12 @@ export default function App() {
     } else if (reportCode === 'LPR01') {
       setActiveTab('reports');
       setSelectedReportTitle('Daily Load Plan');
+    } else if (reportCode === 'INV01') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Invoice');
+    } else if (reportCode === 'STI01') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Sales Tax Invoice');
     } else if (params.get('print') === 'true') {
       setActiveTab('reports');
       setSelectedReportTitle('Area Wise Item Party Summary');
@@ -3055,6 +3071,16 @@ export default function App() {
                     onBack={() => setSelectedReportTitle(null)} 
                     formatPKR={formatPKR} 
                   />
+                ) : selectedReportTitle === 'Invoice' ? (
+                  <InvoiceReport 
+                    onBack={() => setSelectedReportTitle(null)} 
+                    formatPKR={formatPKR} 
+                  />
+                ) : selectedReportTitle === 'Sales Tax Invoice' ? (
+                  <SalesTaxInvoiceReport 
+                    onBack={() => setSelectedReportTitle(null)} 
+                    formatPKR={formatPKR} 
+                  />
                 ) : selectedReportTitle ? (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
@@ -3116,6 +3142,8 @@ export default function App() {
                       {[
                         { title: 'Daily Load Plan', desc: 'Aggregated loading metrics and stop sequencing for delivery dispatch.', icon: Truck },
                         { title: 'Area Wise Item Party Summary', desc: 'Consolidated sales, products, and booker performance per urban sub-area.', icon: MapPin },
+                        { title: 'Invoice', desc: 'Detailed billing statement matching official print-out specifications.', icon: FileText },
+                        { title: 'Sales Tax Invoice', desc: 'Detailed billing statement matching official print-out specifications under Section 23 of the Drugs Act 1976.', icon: FileText },
                         { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
                         { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
                         { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },

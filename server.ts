@@ -2806,6 +2806,74 @@ async function startServer() {
     }
   });
 
+  app.get("/api/reports/invoices-range", (req, res) => {
+    try {
+      const { startDate, endDate, invoiceNoFrom, invoiceNoTo } = req.query;
+
+      let queryStr = `
+        SELECT i.*, s.shop_name, s.owner_name, s.location, s.phone
+        FROM invoices i
+        JOIN shops s ON i.shop_id = s.id
+      `;
+
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (startDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push("strftime('%Y-%m-%d', i.invoice_date) <= ?");
+        params.push(endDate);
+      }
+      
+      if (invoiceNoFrom) {
+        let numFrom = Number(invoiceNoFrom);
+        if (numFrom >= 300919) {
+          numFrom = numFrom - 300918;
+        }
+        conditions.push("i.id >= ?");
+        params.push(numFrom);
+      }
+      if (invoiceNoTo) {
+        let numTo = Number(invoiceNoTo);
+        if (numTo >= 300919) {
+          numTo = numTo - 300918;
+        }
+        conditions.push("i.id <= ?");
+        params.push(numTo);
+      }
+
+      if (conditions.length > 0) {
+        queryStr += " WHERE " + conditions.join(" AND ");
+      }
+
+      queryStr += " ORDER BY i.id ASC";
+
+      const invoices = db.prepare(queryStr).all(params) as any[];
+
+      // Fetch items for each invoice
+      const result = invoices.map(invoice => {
+        const items = db.prepare(`
+          SELECT ii.*, p.product_name, p.unit as uom
+          FROM invoice_items ii
+          JOIN products p ON ii.product_id = p.product_id
+          WHERE ii.invoice_id = ?
+        `).all(invoice.id);
+        return {
+          ...invoice,
+          items
+        };
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      console.error("Failed to fetch invoices range report", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/reports/area-wise-item-party-summary", (req, res) => {
     try {
       const { startDate, endDate } = req.query;
