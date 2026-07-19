@@ -308,3 +308,29 @@ export interface ReturnItem {
   original_delivered_qty?: number;
   uom?: string;
 }
+
+export interface SalesReturn {
+  id: number;
+  return_date: string;
+  shop_id: number;
+  shop_name?: string;
+  location?: string;
+  invoice_id: number;
+  invoice_ref_id?: number;
+  total_amount: number;
+  items_summary?: string;
+  status: 'completed';
+}
+
+export interface SalesReturnItem {
+  id: number;
+  sales_return_id: number;
+  invoice_item_id: number;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  unit_price: number;
+  original_invoice_qty?: number;
+  uom?: string;
+}
+

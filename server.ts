@@ -435,6 +435,37 @@ try {
       // ignore
     }
   }
+
+  // Sales Return tables
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sales_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        shop_id INTEGER NOT NULL,
+        invoice_id INTEGER NOT NULL,
+        total_amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'completed',
+        FOREIGN KEY (shop_id) REFERENCES shops(id),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS sales_return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sales_return_id INTEGER NOT NULL,
+        invoice_item_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price REAL NOT NULL,
+        reason TEXT,
+        FOREIGN KEY (sales_return_id) REFERENCES sales_returns(id),
+        FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
+    `);
+  } catch (e) {
+    console.error("Sales return table creation error:", e);
+  }
 } catch (err) {
   console.error("CRITICAL: Database initialization failed:", err);
   process.exit(1);
@@ -1517,6 +1548,268 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       console.error("Return update error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sales Return APIs
+  app.get("/api/shops/:id/invoices", (req, res) => {
+    const { id } = req.params;
+    try {
+      const invoices = db.prepare(`
+        SELECT i.* 
+        FROM invoices i
+        WHERE CAST(i.shop_id AS INTEGER) = CAST(? AS INTEGER) 
+        AND i.status != 'cancelled'
+        ORDER BY i.invoice_date DESC, i.id DESC
+      `).all(id);
+      res.json(invoices);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sales-returns/invoice/:id/items", (req, res) => {
+    const { id } = req.params;
+    try {
+      const items = db.prepare(`
+        SELECT 
+          ii.id as invoice_item_id,
+          ii.invoice_id,
+          ii.product_id,
+          ii.quantity,
+          ii.unit_price as price,
+          p.product_name,
+          p.brand,
+          p.unit as uom,
+          COALESCE((
+            SELECT SUM(sri.quantity) 
+            FROM sales_return_items sri 
+            JOIN sales_returns sr ON sri.sales_return_id = sr.id 
+            WHERE sri.invoice_item_id = ii.id AND sr.status != 'cancelled'
+          ), 0) as already_returned_qty
+        FROM invoice_items ii
+        JOIN products p ON ii.product_id = p.product_id
+        WHERE ii.invoice_id = ?
+      `).all(id) as any[];
+
+      // Calculate net_qty available for return
+      const formatted = items.map(item => ({
+        ...item,
+        already_returned_qty: item.already_returned_qty,
+        net_qty: Math.max(0, item.quantity - item.already_returned_qty),
+        current_return_qty: 0,
+        reason: ""
+      }));
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/sales-returns", (req, res) => {
+    const { shop_id, invoice_id, items } = req.body; // items: Array<{invoice_item_id, product_id, quantity, unit_price, reason}>
+    
+    if (!shop_id || !invoice_id || !items || items.length === 0) {
+      return res.status(400).json({ error: "Missing required fields or return items." });
+    }
+
+    const transaction = db.transaction(() => {
+      // 1. Create Sales Return Header
+      const header = db.prepare("INSERT INTO sales_returns (shop_id, invoice_id, status) VALUES (?, ?, ?)").run(shop_id, invoice_id, 'completed');
+      const salesReturnId = header.lastInsertRowid;
+
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+
+        // Double check already returned to enforce limit
+        const existing = db.prepare(`
+          SELECT 
+            ii.quantity,
+            COALESCE((
+              SELECT SUM(sri.quantity) 
+              FROM sales_return_items sri 
+              JOIN sales_returns sr ON sri.sales_return_id = sr.id 
+              WHERE sri.invoice_item_id = ii.id AND sr.status != 'cancelled'
+            ), 0) as already_returned_qty
+          FROM invoice_items ii
+          WHERE ii.id = ?
+        `).get(item.invoice_item_id) as any;
+
+        if (!existing) {
+          throw new Error(`Invoice item not found for ID ${item.invoice_item_id}`);
+        }
+
+        const maxReturnable = existing.quantity - existing.already_returned_qty;
+        if (item.quantity > maxReturnable) {
+          throw new Error(`Return quantity of ${item.quantity} exceeds remaining returnable quantity (${maxReturnable})`);
+        }
+
+        // 2. Insert Sales Return Item
+        db.prepare(`
+          INSERT INTO sales_return_items (sales_return_id, invoice_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(salesReturnId, item.invoice_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
+
+        // 3. Update Stock (using stock_quantity column to increase the stock)
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.quantity, item.product_id);
+        
+        total += item.quantity * item.unit_price;
+      }
+
+      // 4. Update Header total
+      db.prepare("UPDATE sales_returns SET total_amount = ? WHERE id = ?").run(total, salesReturnId);
+
+      // 5. Update Client Ledger (Credit the shop for the sales return)
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
+      const currentBalance = (lastLedger?.balance || 0) - total;
+      
+      const invoiceNo = (300918 + Number(invoice_id)).toString();
+      db.prepare(`
+        INSERT INTO client_ledger (shop_id, description, credit, balance)
+        VALUES (?, ?, ?, ?)
+      `).run(shop_id, `Sales Return #SRT-${salesReturnId} (Ref Inv: ${invoiceNo})`, total, currentBalance);
+
+      return salesReturnId;
+    });
+
+    try {
+      const result = transaction();
+      res.json({ success: true, salesReturnId: result });
+    } catch (err: any) {
+      console.error("Sales Return processing error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sales-returns", (req, res) => {
+    try {
+      const returns = db.prepare(`
+        SELECT sr.*, s.shop_name, i.id as invoice_ref_id
+        FROM sales_returns sr 
+        JOIN shops s ON sr.shop_id = s.id 
+        JOIN invoices i ON sr.invoice_id = i.id
+        ORDER BY sr.return_date DESC
+      `).all();
+      res.json(returns);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/sales-returns/:id/items", (req, res) => {
+    const { id } = req.params;
+    try {
+      const items = db.prepare(`
+        SELECT 
+          sri.*, 
+          p.product_name, 
+          p.brand,
+          p.purchase_price,
+          p.trade_price as price,
+          (SELECT quantity FROM invoice_items ii WHERE ii.id = sri.invoice_item_id) as original_invoice_qty,
+          (SELECT SUM(quantity) FROM sales_return_items osri JOIN sales_returns osr ON osri.sales_return_id = osr.id WHERE osri.invoice_item_id = sri.invoice_item_id AND osr.id != sri.sales_return_id AND osr.status != 'cancelled') as other_returns_qty
+        FROM sales_return_items sri
+        JOIN products p ON sri.product_id = p.product_id
+        WHERE sri.sales_return_id = ?
+      `).all(id) as any[];
+
+      // Calculate net_qty for each item
+      const formatted = items.map(item => ({
+        ...item,
+        quantity: item.original_invoice_qty, // Total invoiced initially
+        return_qty: item.other_returns_qty || 0, // Other returns
+        net_qty: item.original_invoice_qty - (item.other_returns_qty || 0), // available to return (including THIS return's current qty)
+        current_return_qty: item.quantity // The qty saved in THIS return
+      }));
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/sales-returns/:id", (req, res) => {
+    const { id } = req.params;
+    const { shop_id, invoice_id, items } = req.body;
+
+    const transaction = db.transaction(() => {
+      // 0. Get old return record
+      const oldReturn = db.prepare("SELECT * FROM sales_returns WHERE id = ?").get(id) as any;
+      if (!oldReturn) throw new Error("Sales Return not found");
+
+      // 1. Get old items to reverse stock
+      const oldItems = db.prepare("SELECT * FROM sales_return_items WHERE sales_return_id = ?").all(id) as any[];
+      for (const item of oldItems) {
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+      }
+
+      // 2. Delete old items
+      db.prepare("DELETE FROM sales_return_items WHERE sales_return_id = ?").run(id);
+
+      // 3. Process New Items
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+
+        // Double check already returned to enforce limit
+        const existing = db.prepare(`
+          SELECT 
+            ii.quantity,
+            COALESCE((
+              SELECT SUM(sri.quantity) 
+              FROM sales_return_items sri 
+              JOIN sales_returns sr ON sri.sales_return_id = sr.id 
+              WHERE sri.invoice_item_id = ii.id AND sr.id != ? AND sr.status != 'cancelled'
+            ), 0) as already_returned_qty
+          FROM invoice_items ii
+          WHERE ii.id = ?
+        `).get(id, item.invoice_item_id) as any;
+
+        if (!existing) {
+          throw new Error(`Invoice item not found for ID ${item.invoice_item_id}`);
+        }
+
+        const maxReturnable = existing.quantity - existing.already_returned_qty;
+        if (item.quantity > maxReturnable) {
+          throw new Error(`Return quantity of ${item.quantity} exceeds remaining returnable quantity (${maxReturnable})`);
+        }
+
+        db.prepare(`
+          INSERT INTO sales_return_items (sales_return_id, invoice_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, item.invoice_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
+
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+
+        total += item.quantity * item.unit_price;
+      }
+
+      // 4. Update Header total
+      db.prepare("UPDATE sales_returns SET total_amount = ? WHERE id = ?").run(total, id);
+
+      // 5. Update client ledger balance (first reverse previous total, then apply new total)
+      const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
+      const currentBalance = (lastLedger?.balance || 0) + oldReturn.total_amount - total;
+      
+      const invoiceNo = (300918 + Number(invoice_id)).toString();
+      db.prepare(`
+        INSERT INTO client_ledger (shop_id, description, credit, balance)
+        VALUES (?, ?, ?, ?)
+      `).run(shop_id, `Sales Return Update #SRT-${id} (Ref Inv: ${invoiceNo})`, total - oldReturn.total_amount, currentBalance);
+
+      return id;
+    });
+
+    try {
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Sales Return edit failure:", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -2870,6 +3163,183 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       console.error("Failed to fetch invoices range report", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/reports/stock-detail", (req, res) => {
+    try {
+      const { productId, startDate, endDate } = req.query;
+      if (!productId) {
+        return res.status(400).json({ error: "productId is required" });
+      }
+
+      // Get product info
+      const product = db.prepare("SELECT * FROM products WHERE product_id = ?").get(productId) as any;
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      // 1. Get constant system opening stock baseline
+      const systemOpeningResult = db.prepare(`
+        SELECT COALESCE(SUM(quantity), 0) AS total
+        FROM product_batches
+        WHERE product_id = ? AND purchase_id IS NULL
+      `).get(productId) as { total: number };
+      const systemOpening = systemOpeningResult ? systemOpeningResult.total : 0;
+
+      // 2. Query all transaction stock movements (excluding initial/opening stock as transactions)
+      const purchases = db.prepare(`
+        SELECT 
+          p.purchase_date AS doc_date,
+          p.id AS doc_id,
+          'Purchase' AS type,
+          s.name AS description,
+          pi.price AS rate,
+          pi.quantity AS qty,
+          0 AS return_qty,
+          pi.price * pi.quantity AS net_amount
+        FROM purchase_items pi
+        JOIN purchases p ON pi.purchase_id = p.id
+        JOIN suppliers s ON p.supplier_id = s.id
+        WHERE pi.product_id = ? AND p.status != 'cancelled'
+      `).all(productId) as any[];
+
+      const sales = db.prepare(`
+        SELECT 
+          i.invoice_date AS doc_date,
+          i.id AS doc_id,
+          'Sale' AS type,
+          sh.shop_name AS description,
+          ii.unit_price AS rate,
+          ii.quantity AS qty,
+          0 AS return_qty,
+          ii.net_amount AS net_amount
+        FROM invoice_items ii
+        JOIN invoices i ON ii.invoice_id = i.id
+        JOIN shops sh ON i.shop_id = sh.id
+        WHERE ii.product_id = ? AND i.status != 'cancelled'
+      `).all(productId) as any[];
+
+      const salesReturns = db.prepare(`
+        SELECT 
+          sr.return_date AS doc_date,
+          sr.id AS doc_id,
+          'Sale Return' AS type,
+          sh.shop_name AS description,
+          sri.unit_price AS rate,
+          0 AS qty,
+          sri.quantity AS return_qty,
+          sri.unit_price * sri.quantity AS net_amount
+        FROM sales_return_items sri
+        JOIN sales_returns sr ON sri.sales_return_id = sr.id
+        JOIN shops sh ON sr.shop_id = sh.id
+        WHERE sri.product_id = ? AND sr.status != 'cancelled'
+      `).all(productId) as any[];
+
+      // Combine non-baseline movements
+      let allMovements = [
+        ...purchases,
+        ...sales,
+        ...salesReturns
+      ];
+
+      // Helper to parse date to YYYY-MM-DD
+      const toDateStr = (dateStr: string) => {
+        if (!dateStr) return '';
+        return dateStr.split(' ')[0]; // Split '2026-06-17 11:29:39' -> '2026-06-17'
+      };
+
+      // Helper to parse exact Date + Time consistently using local time parameters
+      const parseDateTime = (str: string) => {
+        if (!str) return 0;
+        const parts = str.split(' ');
+        const dateParts = parts[0].split('-');
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1;
+        const day = parseInt(dateParts[2], 10);
+        
+        if (parts.length > 1) {
+          const timeParts = parts[1].split(':');
+          const hours = parseInt(timeParts[0], 10);
+          const minutes = parseInt(timeParts[1], 10);
+          const seconds = parseInt(timeParts[2], 10);
+          return new Date(year, month, day, hours, minutes, seconds).getTime();
+        }
+        return new Date(year, month, day, 0, 0, 0).getTime();
+      };
+
+      // Type priority for stable sorting on the exact same date and time
+      const typePriority: Record<string, number> = {
+        'Purchase': 1,
+        'Sale Return': 2,
+        'Sale': 3
+      };
+
+      // Sort chronologically datewise
+      allMovements.sort((a, b) => {
+        const timeA = parseDateTime(a.doc_date);
+        const timeB = parseDateTime(b.doc_date);
+        if (timeA !== timeB) return timeA - timeB;
+        
+        // If same time, sort by priority
+        const pA = typePriority[a.type] || 9;
+        const pB = typePriority[b.type] || 9;
+        if (pA !== pB) return pA - pB;
+
+        return a.doc_id - b.doc_id;
+      });
+
+      // Split into before and within date range
+      const sDate = startDate ? (startDate as string) : '2026-06-17';
+      const eDate = endDate ? (endDate as string) : '2026-06-17';
+
+      let openingBalance = systemOpening;
+      const ledgerItems: any[] = [];
+
+      for (const m of allMovements) {
+        const mDateStr = toDateStr(m.doc_date);
+        
+        // Calculate effect of movement on stock balance
+        const qtyDiff = (m.type === 'Purchase')
+          ? m.qty
+          : (m.type === 'Sale Return')
+            ? m.return_qty
+            : -m.qty; // Sale decreases stock
+
+        if (mDateStr < sDate) {
+          openingBalance += qtyDiff;
+        } else if (mDateStr >= sDate && mDateStr <= eDate) {
+          ledgerItems.push(m);
+        }
+      }
+
+      // Compute running balance for ledger items
+      let runningBalance = openingBalance;
+      const finalLedgerItems = ledgerItems.map(item => {
+        const qtyDiff = (item.type === 'Purchase')
+          ? item.qty
+          : (item.type === 'Sale Return')
+            ? item.return_qty
+            : -item.qty;
+
+        runningBalance += qtyDiff;
+        return {
+          ...item,
+          balance: runningBalance
+        };
+      });
+
+      res.json({
+        product,
+        startDate: sDate,
+        endDate: eDate,
+        openingBalance,
+        ledger: finalLedgerItems
+      });
+
+    } catch (err: any) {
+      console.error("Failed to fetch stock detail report", err);
       res.status(500).json({ error: err.message });
     }
   });

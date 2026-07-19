@@ -384,6 +384,15 @@ export const TCODES: TCodeInfo[] = [
     description: 'Process customer returns (Reverse Logistics) and restock inventory.'
   },
   {
+    module: 'Return Management',
+    parentModule: 'Sales',
+    tCode: 'SRT01',
+    transactionName: 'Sales Return Transaction',
+    actionType: 'Create',
+    roleAssociation: 'Z_RETURN_CLERK',
+    description: 'Process shop sales returns referencing invoice number and increase stock.'
+  },
+  {
     module: 'Daily Load Plan',
     parentModule: 'Reports',
     tCode: 'LPR01',

@@ -89,7 +89,9 @@ import {
   ReturnItem,
   Unit,
   Invoice,
-  InvoiceItem
+  InvoiceItem,
+  SalesReturn,
+  SalesReturnItem
 } from './types';
 
 // Modal component imports
@@ -101,6 +103,7 @@ import {
   DisplayReturnModal 
 } from './components/modals/DisplayModals';
 import { ReturnModal } from './components/modals/ReturnModals';
+import { SalesReturnModal } from './components/modals/SalesReturnModal';
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
 import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
@@ -110,6 +113,7 @@ import { DailyLoadPlanReport } from './components/reports/DailyLoadPlanReport';
 import { AreaWiseItemPartySummaryReport } from './components/reports/AreaWiseItemPartySummaryReport';
 import { InvoiceReport } from './components/reports/InvoiceReport';
 import { SalesTaxInvoiceReport } from './components/reports/SalesTaxInvoiceReport';
+import { StockDetailReport } from './components/reports/StockDetailReport';
 
 const OrderCancellationScreen = ({ onClose, orders, formatPKR }: { onClose: () => void, orders: Order[], formatPKR: (amt: number) => string }) => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -496,7 +500,7 @@ export default function App() {
   const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>(
     (localStorage.getItem('dms_masterDataSubTab') as any) || 'products'
   );
-  const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'delivery_returns' | 'load_plans' | 'invoices'>(
+  const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'delivery_returns' | 'load_plans' | 'invoices' | 'sales_returns'>(
     (localStorage.getItem('dms_transactionsSubTab') as any) || 'purchases'
   );
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -506,6 +510,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [returns, setReturns] = useState<Return[]>([]);
+  const [salesReturns, setSalesReturns] = useState<SalesReturn[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [valuation, setValuation] = useState<StockValuationReport | null>(null);
   const [selectedReportTitle, setSelectedReportTitle] = useState<string | null>(null);
@@ -548,6 +553,10 @@ export default function App() {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [editingReturn, setEditingReturn] = useState<Return | null>(null);
+  const [isSalesReturnModalOpen, setIsSalesReturnModalOpen] = useState(false);
+  const [editingSalesReturn, setEditingSalesReturn] = useState<SalesReturn | null>(null);
+  const [salesReturnSearchInput, setSalesReturnSearchInput] = useState("");
+  const [showSalesReturnSuggestions, setShowSalesReturnSuggestions] = useState(false);
   const [isOrderCancellationOpen, setIsOrderCancellationOpen] = useState(false);
   const [isTCodeModalOpen, setIsTCodeModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
@@ -625,6 +634,7 @@ export default function App() {
     purchases: JSON.parse(localStorage.getItem('dms_filters_purchases') || '{"search": "", "status": "any"}'),
     deliveries: JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{"search": "", "status": "any"}'),
     returns: JSON.parse(localStorage.getItem('dms_filters_returns') || '{"search": "", "status": "any"}'),
+    salesReturns: JSON.parse(localStorage.getItem('dms_filters_salesReturns') || '{"search": "", "status": "any"}'),
   });
 
   const [shopSearchInput, setShopSearchInput] = useState(
@@ -677,6 +687,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('dms_filters_purchases', JSON.stringify(filters.purchases)); }, [filters.purchases]);
   useEffect(() => { localStorage.setItem('dms_filters_deliveries', JSON.stringify(filters.deliveries)); }, [filters.deliveries]);
   useEffect(() => { localStorage.setItem('dms_filters_returns', JSON.stringify(filters.returns)); }, [filters.returns]);
+  useEffect(() => { localStorage.setItem('dms_filters_salesReturns', JSON.stringify(filters.salesReturns)); }, [filters.salesReturns]);
 
   const [deliverySearchInput, setDeliverySearchInput] = useState(
     JSON.parse(localStorage.getItem('dms_filters_deliveries') || '{}').search || ""
@@ -740,6 +751,14 @@ export default function App() {
     ? returns.filter(r => 
         r.id.toString().includes(returnSearchInput) || 
         r.shop_name?.toLowerCase().includes(returnSearchInput.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const salesReturnSuggestions = salesReturnSearchInput.length > 0
+    ? salesReturns.filter(sr => 
+        sr.id.toString().includes(salesReturnSearchInput) || 
+        sr.shop_name?.toLowerCase().includes(salesReturnSearchInput.toLowerCase()) ||
+        (300918 + Number(sr.invoice_id)).toString().includes(salesReturnSearchInput)
       ).slice(0, 5)
     : [];
 
@@ -902,8 +921,15 @@ export default function App() {
         setActiveTab('reports');
         setSelectedReportTitle('Sales Tax Invoice');
         break;
+      case 'SDR01':
+        setActiveTab('reports');
+        setSelectedReportTitle('Stock Detail');
+        break;
       case 'RT01':
         setIsReturnModalOpen(true);
+        break;
+      case 'SRT01':
+        setIsSalesReturnModalOpen(true);
         break;
       
       // Material Management (MM) / Product (PR)
@@ -1037,6 +1063,7 @@ export default function App() {
     };
 
     fetchBatchInit();
+    fetchSalesReturns();
   }, []);
 
   // Intercept query params to auto-display report on external tab load (useful for PDF printing bypass)
@@ -1055,6 +1082,9 @@ export default function App() {
     } else if (reportCode === 'STI01') {
       setActiveTab('reports');
       setSelectedReportTitle('Sales Tax Invoice');
+    } else if (reportCode === 'SDR01') {
+      setActiveTab('reports');
+      setSelectedReportTitle('Stock Detail');
     } else if (params.get('print') === 'true') {
       setActiveTab('reports');
       setSelectedReportTitle('Area Wise Item Party Summary');
@@ -1175,6 +1205,19 @@ export default function App() {
     return true;
   });
 
+  const filteredSalesReturns = salesReturns.filter(sr => {
+    const f = filters.salesReturns || { search: '', status: 'any' };
+    const searchLower = f.search.toLowerCase();
+    if (f.search && !(
+      sr.id.toString().includes(f.search) || 
+      sr.shop_name?.toLowerCase().includes(searchLower) ||
+      sr.items_summary?.toLowerCase().includes(searchLower) ||
+      (300918 + Number(sr.invoice_id)).toString().includes(f.search) ||
+      new Date(sr.return_date).toLocaleDateString().includes(f.search)
+    )) return false;
+    return true;
+  });
+
   const filteredInvoices = invoices.filter(i => {
     const searchLower = invoiceSearchInput.toLowerCase();
     if (invoiceSearchInput && !(
@@ -1234,6 +1277,25 @@ export default function App() {
       setReturns(data);
     } catch (err) {
       console.error("Failed to fetch returns", err);
+    }
+  };
+
+  const fetchSalesReturns = async () => {
+    try {
+      const res = await fetch('/api/sales-returns');
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSalesReturns(data);
+      } else {
+        console.error("Expected array for sales returns, got:", data);
+        setSalesReturns([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch sales returns", err);
+      setSalesReturns([]);
     }
   };
 
@@ -3081,6 +3143,11 @@ export default function App() {
                     onBack={() => setSelectedReportTitle(null)} 
                     formatPKR={formatPKR} 
                   />
+                ) : selectedReportTitle === 'Stock Detail' ? (
+                  <StockDetailReport 
+                    onBack={() => setSelectedReportTitle(null)} 
+                    formatPKR={formatPKR} 
+                  />
                 ) : selectedReportTitle ? (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
@@ -3144,6 +3211,7 @@ export default function App() {
                         { title: 'Area Wise Item Party Summary', desc: 'Consolidated sales, products, and booker performance per urban sub-area.', icon: MapPin },
                         { title: 'Invoice', desc: 'Detailed billing statement matching official print-out specifications.', icon: FileText },
                         { title: 'Sales Tax Invoice', desc: 'Detailed billing statement matching official print-out specifications under Section 23 of the Drugs Act 1976.', icon: FileText },
+                        { title: 'Stock Detail', desc: 'Detailed itemized transaction log showing opening balance, purchases, sales, and running ledger.', icon: Package },
                         { title: 'Sales Summary', desc: 'Daily, weekly and monthly sales analysis', icon: TrendingUp },
                         { title: 'Inventory Valuation', desc: 'Current stock value at PP and TP', icon: Package },
                         { title: 'Shop Aging', desc: 'Outstanding payments and credit analysis', icon: Clock },
@@ -3194,6 +3262,7 @@ export default function App() {
                     { id: 'deliveries', label: 'Deliveries', icon: Truck },
                     { id: 'delivery_returns', label: 'Delivery Return', icon: RotateCcw },
                     { id: 'invoices', label: 'Invoices', icon: FileText },
+                    { id: 'sales_returns', label: 'Sales Return', icon: RotateCcw },
                     { id: 'load_plans', label: 'Load Plans', icon: Truck },
                   ].map(tab => (
                     <button
@@ -3688,6 +3757,139 @@ export default function App() {
                                 <td colSpan={5} className="px-6 py-12 text-center">
                                   <RotateCcw size={48} className="mx-auto text-slate-200 mb-4" />
                                   <p className="text-slate-500 font-medium">No returns found</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {transactionsSubTab === 'sales_returns' && (
+                    <div className="space-y-6">
+                      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
+                        <div className="relative flex-1 max-w-lg">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input 
+                              type="text" 
+                              value={salesReturnSearchInput}
+                              onFocus={() => setShowSalesReturnSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowSalesReturnSuggestions(false), 200)}
+                              onChange={(e) => {
+                                setSalesReturnSearchInput(e.target.value);
+                                const newFilters = { ...filters };
+                                newFilters.salesReturns = { ...newFilters.salesReturns, search: e.target.value };
+                                setFilters(newFilters);
+                              }}
+                              placeholder="Search by Invoice, Shop, Date..." 
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 focus:border-indigo-600 rounded-2xl text-sm font-medium shadow-sm transition-all outline-none"
+                            />
+                          </div>
+
+                          <AnimatePresence>
+                            {showSalesReturnSuggestions && salesReturnSuggestions.length > 0 && (
+                              <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-slate-50 bg-slate-50">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Sales Return Suggestions</span>
+                                </div>
+                                {salesReturnSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    onClick={() => {
+                                      setSalesReturnSearchInput(suggestion.id.toString());
+                                      const newFilters = { ...filters };
+                                      newFilters.salesReturns = { ...newFilters.salesReturns, search: suggestion.id.toString() };
+                                      setFilters(newFilters);
+                                      setShowSalesReturnSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+                                  >
+                                    <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                      <RotateCcw size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
+                                      <p className="text-[10px] text-slate-400">#SRT-{suggestion.id.toString().padStart(4, '0')} (Inv: #{300918 + Number(suggestion.invoice_id)})</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingSalesReturn(null);
+                              setIsSalesReturnModalOpen(true);
+                            }}
+                            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-100 flex items-center gap-2"
+                          >
+                            <Plus size={18} />
+                            <span>New Sales Return</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Return ID</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Ref Invoice</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shop</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredSalesReturns.map(ret => (
+                              <tr key={ret.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="px-6 py-4">
+                                  <span className="font-mono font-bold text-emerald-600">#SRT-{ret.id.toString().padStart(4, '0')}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="font-mono text-xs text-slate-500">#INV-{300918 + Number(ret.invoice_id)}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm font-bold text-slate-900">{ret.shop_name}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <p className="text-sm text-slate-600">{new Date(ret.return_date).toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <p className="text-sm font-bold text-slate-900">{formatPKR(ret.total_amount)}</p>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="flex justify-center gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        setEditingSalesReturn(ret);
+                                        setIsSalesReturnModalOpen(true);
+                                      }}
+                                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                      title="Edit Sales Return"
+                                    >
+                                      <Edit size={18} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {salesReturns.length === 0 && (
+                              <tr>
+                                <td colSpan={6} className="px-6 py-12 text-center">
+                                  <RotateCcw size={48} className="mx-auto text-slate-200 mb-4" />
+                                  <p className="text-slate-500 font-medium">No sales returns found</p>
                                 </td>
                               </tr>
                             )}
@@ -4192,6 +4394,21 @@ export default function App() {
             }}
             shops={shops}
             returnRecord={editingReturn}
+          />
+        )}
+
+        {isSalesReturnModalOpen && (
+          <SalesReturnModal 
+            onClose={() => {
+              setIsSalesReturnModalOpen(false);
+              setEditingSalesReturn(null);
+              fetchSalesReturns();
+              fetchProducts();
+              fetchStats();
+              fetchInvoices();
+            }}
+            shops={shops}
+            salesReturnRecord={editingSalesReturn}
           />
         )}
 
