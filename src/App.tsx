@@ -758,6 +758,8 @@ export default function App() {
     ? salesReturns.filter(sr => 
         sr.id.toString().includes(salesReturnSearchInput) || 
         sr.shop_name?.toLowerCase().includes(salesReturnSearchInput.toLowerCase()) ||
+        sr.invoice_id.toString().includes(salesReturnSearchInput) ||
+        `INV # ${sr.invoice_id.toString().padStart(4, '0')}`.toLowerCase().includes(salesReturnSearchInput.toLowerCase()) ||
         (300918 + Number(sr.invoice_id)).toString().includes(salesReturnSearchInput)
       ).slice(0, 5)
     : [];
@@ -1212,6 +1214,8 @@ export default function App() {
       sr.id.toString().includes(f.search) || 
       sr.shop_name?.toLowerCase().includes(searchLower) ||
       sr.items_summary?.toLowerCase().includes(searchLower) ||
+      sr.invoice_id.toString().includes(f.search) ||
+      `INV # ${sr.invoice_id.toString().padStart(4, '0')}`.toLowerCase().includes(searchLower) ||
       (300918 + Number(sr.invoice_id)).toString().includes(f.search) ||
       new Date(sr.return_date).toLocaleDateString().includes(f.search)
     )) return false;
@@ -3816,7 +3820,7 @@ export default function App() {
                                     </div>
                                     <div>
                                       <p className="text-sm font-bold text-slate-700">{suggestion.shop_name}</p>
-                                      <p className="text-[10px] text-slate-400">#SRT-{suggestion.id.toString().padStart(4, '0')} (Inv: #{300918 + Number(suggestion.invoice_id)})</p>
+                                      <p className="text-[10px] text-slate-400">#SRT-{suggestion.id.toString().padStart(4, '0')} (Inv: INV # {suggestion.invoice_id.toString().padStart(4, '0')})</p>
                                     </div>
                                   </button>
                                 ))}
@@ -3858,7 +3862,7 @@ export default function App() {
                                   <span className="font-mono font-bold text-emerald-600">#SRT-{ret.id.toString().padStart(4, '0')}</span>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <span className="font-mono text-xs text-slate-500">#INV-{300918 + Number(ret.invoice_id)}</span>
+                                  <span className="font-mono text-xs text-slate-500">INV # {ret.invoice_id.toString().padStart(4, '0')}</span>
                                 </td>
                                 <td className="px-6 py-4">
                                   <p className="text-sm font-bold text-slate-900">{ret.shop_name}</p>

@@ -1666,7 +1666,7 @@ async function startServer() {
       const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
       const currentBalance = (lastLedger?.balance || 0) - total;
       
-      const invoiceNo = (300918 + Number(invoice_id)).toString();
+      const invoiceNo = `INV # ${Number(invoice_id).toString().padStart(4, '0')}`;
       db.prepare(`
         INSERT INTO client_ledger (shop_id, description, credit, balance)
         VALUES (?, ?, ?, ?)
@@ -1796,7 +1796,7 @@ async function startServer() {
       const lastLedger = db.prepare("SELECT balance FROM client_ledger WHERE shop_id = ? ORDER BY id DESC LIMIT 1").get(shop_id) as any;
       const currentBalance = (lastLedger?.balance || 0) + oldReturn.total_amount - total;
       
-      const invoiceNo = (300918 + Number(invoice_id)).toString();
+      const invoiceNo = `INV # ${Number(invoice_id).toString().padStart(4, '0')}`;
       db.prepare(`
         INSERT INTO client_ledger (shop_id, description, credit, balance)
         VALUES (?, ?, ?, ?)
@@ -3122,7 +3122,8 @@ async function startServer() {
       }
       
       if (invoiceNoFrom) {
-        let numFrom = Number(invoiceNoFrom);
+        const match = invoiceNoFrom.toString().match(/\d+/);
+        let numFrom = match ? Number(match[0]) : Number(invoiceNoFrom);
         if (numFrom >= 300919) {
           numFrom = numFrom - 300918;
         }
@@ -3130,7 +3131,8 @@ async function startServer() {
         params.push(numFrom);
       }
       if (invoiceNoTo) {
-        let numTo = Number(invoiceNoTo);
+        const match = invoiceNoTo.toString().match(/\d+/);
+        let numTo = match ? Number(match[0]) : Number(invoiceNoTo);
         if (numTo >= 300919) {
           numTo = numTo - 300918;
         }
@@ -3247,13 +3249,15 @@ async function startServer() {
       // Helper to parse date to YYYY-MM-DD
       const toDateStr = (dateStr: string) => {
         if (!dateStr) return '';
-        return dateStr.split(' ')[0]; // Split '2026-06-17 11:29:39' -> '2026-06-17'
+        return dateStr.replace('T', ' ').split(' ')[0]; // Split '2026-06-17 11:29:39' -> '2026-06-17'
       };
 
       // Helper to parse exact Date + Time consistently using local time parameters
       const parseDateTime = (str: string) => {
         if (!str) return 0;
-        const parts = str.split(' ');
+        // Normalize ISO string "YYYY-MM-DDTHH:MM:SS..." to "YYYY-MM-DD HH:MM:SS"
+        const normalized = str.replace('T', ' ').replace(/\..+$/, '').replace('Z', '');
+        const parts = normalized.split(' ');
         const dateParts = parts[0].split('-');
         const year = parseInt(dateParts[0], 10);
         const month = parseInt(dateParts[1], 10) - 1;

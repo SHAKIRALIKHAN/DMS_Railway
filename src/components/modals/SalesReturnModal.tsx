@@ -56,10 +56,21 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
           const res = await fetch(`/api/sales-returns/${salesReturnRecord.id}/items`);
           if (res.ok) {
             const items = await res.json();
-            setReturnItems(items);
+            if (Array.isArray(items)) {
+              setReturnItems(items);
+            } else {
+              setReturnItems([]);
+              setErrorStatus("Invalid return items data received.");
+            }
+          } else {
+            const err = await res.json().catch(() => ({}));
+            setErrorStatus(err.error || "Failed to load sales return items.");
+            setReturnItems([]);
           }
         } catch (err) {
           console.error("Failed to load sales return items", err);
+          setErrorStatus("Failed to load sales return items.");
+          setReturnItems([]);
         }
       };
       fetchReturnContext();
@@ -70,15 +81,25 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
   useEffect(() => {
     if (selectedShopId) {
       fetch(`/api/shops/${selectedShopId}/invoices`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error("HTTP error " + res.status);
+          return res.json();
+        })
         .then(data => {
-          setShopInvoices(data);
+          if (Array.isArray(data)) {
+            setShopInvoices(data);
+          } else {
+            setShopInvoices([]);
+          }
           if (!salesReturnRecord) {
             setSelectedInvoiceId(null);
             setReturnItems([]);
           }
         })
-        .catch(err => console.error("Failed to load shop invoices", err));
+        .catch(err => {
+          console.error("Failed to load shop invoices", err);
+          setShopInvoices([]);
+        });
     } else if (!salesReturnRecord) {
       setShopInvoices([]);
       setSelectedInvoiceId(null);
@@ -91,9 +112,9 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
     if (selectedInvoiceId) {
       const inv = shopInvoices.find(i => i.id === selectedInvoiceId);
       if (inv) {
-        setInvoiceSearch(`Invoice #${300918 + Number(inv.id)} (Amt: ${formatPKR(inv.net_amount)})`);
+        setInvoiceSearch(`INV # ${inv.id.toString().padStart(4, '0')} (Amt: ${formatPKR(inv.net_amount)})`);
       } else if (salesReturnRecord && salesReturnRecord.invoice_id === selectedInvoiceId) {
-        setInvoiceSearch(`Invoice #${300918 + Number(selectedInvoiceId)}`);
+        setInvoiceSearch(`INV # ${selectedInvoiceId.toString().padStart(4, '0')}`);
       }
     } else {
       setInvoiceSearch('');
@@ -104,11 +125,23 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
   useEffect(() => {
     if (selectedInvoiceId && !salesReturnRecord) {
       fetch(`/api/sales-returns/invoice/${selectedInvoiceId}/items`)
-        .then(res => res.json())
-        .then(data => {
-          setReturnItems(data);
+        .then(res => {
+          if (!res.ok) throw new Error("HTTP error " + res.status);
+          return res.json();
         })
-        .catch(err => console.error("Failed to load invoice items", err));
+        .then(data => {
+          if (Array.isArray(data)) {
+            setReturnItems(data);
+          } else {
+            setReturnItems([]);
+            setErrorStatus("Invalid invoice items received.");
+          }
+        })
+        .catch(err => {
+          console.error("Failed to load invoice items", err);
+          setErrorStatus("Failed to load invoice items.");
+          setReturnItems([]);
+        });
     } else if (!selectedInvoiceId && !salesReturnRecord) {
       setReturnItems([]);
     }
@@ -147,9 +180,9 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
       if (selectedInvoiceId) {
         const inv = shopInvoices.find(i => i.id === selectedInvoiceId);
         if (inv) {
-          setInvoiceSearch(`Invoice #${300918 + Number(inv.id)} (Amt: ${formatPKR(inv.net_amount)})`);
+          setInvoiceSearch(`INV # ${inv.id.toString().padStart(4, '0')} (Amt: ${formatPKR(inv.net_amount)})`);
         } else {
-          setInvoiceSearch(`Invoice #${300918 + Number(selectedInvoiceId)}`);
+          setInvoiceSearch(`INV # ${selectedInvoiceId.toString().padStart(4, '0')}`);
         }
       } else {
         setInvoiceSearch('');
@@ -244,6 +277,23 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
   };
 
   const activeInvoice = shopInvoices.find(inv => inv.id === selectedInvoiceId);
+
+  const filteredShopInvoices = shopInvoices.filter(inv => {
+    if (!inv) return false;
+    const customId = `INV # ${(inv.id || 0).toString().padStart(4, '0')}`;
+    const query = (invoiceSearch || '').toLowerCase();
+    const dateStr = inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString().toLowerCase() : '';
+    const amountStr = inv.net_amount !== undefined && inv.net_amount !== null ? inv.net_amount.toString() : '0';
+    const amountFormatted = inv.net_amount !== undefined && inv.net_amount !== null ? formatPKR(inv.net_amount).toLowerCase() : '';
+
+    return (
+      customId.toLowerCase().includes(query) ||
+      (inv.id || '').toString().includes(query) ||
+      dateStr.includes(query) ||
+      amountStr.includes(query) ||
+      amountFormatted.includes(query)
+    );
+  });
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
@@ -360,22 +410,8 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
                       exit={{ opacity: 0, y: 10 }}
                       className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-50 overflow-hidden p-2"
                     >
-                      <div className="max-h-60 overflow-y-auto space-y-1">
-                        {shopInvoices.filter(inv => {
-                          const customId = (300918 + Number(inv.id)).toString();
-                          const query = invoiceSearch.toLowerCase();
-                          const dateStr = new Date(inv.invoice_date).toLocaleDateString().toLowerCase();
-                          const amountStr = inv.net_amount.toString();
-                          const amountFormatted = formatPKR(inv.net_amount).toLowerCase();
-
-                          return (
-                            customId.includes(query) ||
-                            inv.id.toString().includes(query) ||
-                            dateStr.includes(query) ||
-                            amountStr.includes(query) ||
-                            amountFormatted.includes(query)
-                          );
-                        }).map(inv => (
+                       <div className="max-h-60 overflow-y-auto space-y-1">
+                        {filteredShopInvoices.map(inv => (
                           <button
                             key={inv.id}
                             onMouseDown={() => {
@@ -388,27 +424,13 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({ onClose, sho
                             )}
                           >
                             <div>
-                              <p className="text-xs font-bold font-mono italic">#{300918 + Number(inv.id)}</p>
+                              <p className="text-xs font-bold font-mono italic">INV # {inv.id.toString().padStart(4, '0')}</p>
                               <p className="text-[10px] opacity-60 font-medium">{new Date(inv.invoice_date).toLocaleDateString()} • Net: {formatPKR(inv.net_amount)}</p>
                             </div>
                             {selectedInvoiceId === inv.id && <div className="w-2 h-2 bg-emerald-600 rounded-full" />}
                           </button>
                         ))}
-                        {shopInvoices.filter(inv => {
-                          const customId = (300918 + Number(inv.id)).toString();
-                          const query = invoiceSearch.toLowerCase();
-                          const dateStr = new Date(inv.invoice_date).toLocaleDateString().toLowerCase();
-                          const amountStr = inv.net_amount.toString();
-                          const amountFormatted = formatPKR(inv.net_amount).toLowerCase();
-
-                          return (
-                            customId.includes(query) ||
-                            inv.id.toString().includes(query) ||
-                            dateStr.includes(query) ||
-                            amountStr.includes(query) ||
-                            amountFormatted.includes(query)
-                          );
-                        }).length === 0 && (
+                        {filteredShopInvoices.length === 0 && (
                           <p className="p-4 text-center text-xs text-slate-400">
                             {shopInvoices.length === 0 ? "No active invoices found for this shop." : "No invoices match your search."}
                           </p>

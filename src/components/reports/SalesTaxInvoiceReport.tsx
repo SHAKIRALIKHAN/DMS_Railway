@@ -64,7 +64,7 @@ const getAmountInWords = (amount: number): string => {
 
 // Formatting helpers
 const formatInvoiceNo = (id: number): string => {
-  return (300918 + id).toString();
+  return `INV # ${id.toString().padStart(4, '0')}`;
 };
 
 const formatInvoiceDate = (dateStr: string): string => {

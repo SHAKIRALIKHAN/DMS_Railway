@@ -153,13 +153,13 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
       return 'SYSTEM';
     }
     if (item.type === 'Purchase') {
-      return `PUR # ${item.doc_id}`;
+      return `PUR # ${item.doc_id.toString().padStart(4, '0')}`;
     }
     if (item.type === 'Sale') {
-      return `Invoice no ${300918 + Number(item.doc_id)}`;
+      return `INV # ${item.doc_id.toString().padStart(4, '0')}`;
     }
     if (item.type === 'Sale Return') {
-      return `STRET# ${item.doc_id}`;
+      return `STRET# ${item.doc_id.toString().padStart(4, '0')}`;
     }
     return item.doc_id.toString();
   };
@@ -171,6 +171,13 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
   const totalSaleReturn = reportData?.ledger.reduce((sum, item) => sum + (item.type === 'Sale Return' ? item.return_qty : 0), 0) || 0;
 
   const currentProduct = products.find(p => p.product_id === selectedProductId) || reportData?.product;
+  const isExactSelectedProduct = currentProduct && productSearch === currentProduct.product_name;
+  const filteredProductsList = isExactSelectedProduct
+    ? products
+    : products.filter(p => 
+        p.product_name.toLowerCase().includes(productSearch.toLowerCase()) || 
+        p.brand.toLowerCase().includes(productSearch.toLowerCase())
+      );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" id="stock-detail-report-view">
@@ -232,7 +239,10 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                 ref={productSearchRef}
                 placeholder="Search product formulation (Google Searchable)..."
                 value={productSearch}
-                onFocus={() => setShowProductDropdown(true)}
+                onFocus={(e) => {
+                  setShowProductDropdown(true);
+                  e.target.select();
+                }}
                 onBlur={handleProductBlur}
                 onChange={(e) => {
                   setProductSearch(e.target.value);
@@ -253,7 +263,7 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                   className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-50 overflow-hidden p-2"
                 >
                   <div className="max-h-60 overflow-y-auto space-y-0.5">
-                    {products.filter(p => p.product_name.toLowerCase().includes(productSearch.toLowerCase()) || p.brand.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
+                    {filteredProductsList.map(p => (
                       <button
                         key={p.product_id}
                         onMouseDown={() => handleProductSelect(p)}
@@ -269,7 +279,7 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                         {selectedProductId === p.product_id && <Check size={14} className="text-indigo-600" />}
                       </button>
                     ))}
-                    {products.filter(p => p.product_name.toLowerCase().includes(productSearch.toLowerCase()) || p.brand.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                    {filteredProductsList.length === 0 && (
                       <p className="p-4 text-center text-xs text-slate-400">No products match your search.</p>
                     )}
                   </div>
