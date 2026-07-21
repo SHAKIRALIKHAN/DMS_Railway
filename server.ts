@@ -1223,7 +1223,8 @@ async function startServer() {
 
   app.get("/api/products", (req, res) => {
     const products = db.prepare(`
-      SELECT p.*, mg.mat_description as material_group_name 
+      SELECT p.*, mg.mat_description as material_group_name,
+             (SELECT COALESCE(SUM(quantity), 0) FROM product_batches WHERE product_batches.product_id = p.product_id AND purchase_id IS NULL) AS opening_stock
       FROM products p 
       LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp
     `).all();
@@ -1238,17 +1239,18 @@ async function startServer() {
   }
 
   app.post("/api/products", (req, res) => {
-    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
+    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
+    const opening_stock = req.body.opening_stock !== undefined ? Number(req.body.opening_stock) : Number(req.body.stock_quantity || 0);
     const product_id = generateProductId();
     
     const transaction = db.transaction(() => {
       db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20
+        product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, opening_stock, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20
       );
 
-      if (stock_quantity > 0) {
+      if (opening_stock > 0) {
         db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(
-          product_id, null, stock_quantity, stock_quantity, purchase_price
+          product_id, null, opening_stock, opening_stock, purchase_price
         );
       }
     });
@@ -1264,23 +1266,51 @@ async function startServer() {
 
   app.put("/api/products/:id", (req, res) => {
     const { id } = req.params;
-    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
+    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
+    
+    const newOpeningStock = req.body.opening_stock !== undefined ? Number(req.body.opening_stock) : null;
     
     const transaction = db.transaction(() => {
-      // Get current stock to see if we need to adjust batches
-      const currentProduct = db.prepare("SELECT stock_quantity, purchase_price FROM products WHERE product_id = ?").get(id) as any;
-      
-      db.prepare("UPDATE products SET product_name = ?, brand = ?, material_group_id = ?, purchase_price = ?, trade_price = ?, retail_price = ?, stock_quantity = ?, unit = ?, conversion_value = ?, conversion_unit = ?, min_stock_level = ?, reorder_level = ? WHERE product_id = ?").run(
-        product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level, id
-      );
-
-      // If stock was manually adjusted upwards, add a batch
-      if (stock_quantity > currentProduct.stock_quantity) {
-        const diff = stock_quantity - currentProduct.stock_quantity;
-        db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(
-          id, null, diff, diff, purchase_price
-        );
+      // Get current product details
+      const currentProduct = db.prepare("SELECT * FROM products WHERE product_id = ?").get(id) as any;
+      if (!currentProduct) {
+        throw new Error("Product not found");
       }
+
+      let updatedStockQuantity = currentProduct.stock_quantity;
+
+      if (newOpeningStock !== null) {
+        // Query current sum of opening stock (where purchase_id IS NULL)
+        const systemOpeningResult = db.prepare(`
+          SELECT COALESCE(SUM(quantity), 0) AS total
+          FROM product_batches
+          WHERE product_id = ? AND purchase_id IS NULL
+        `).get(id) as { total: number };
+        const oldOpeningStock = systemOpeningResult ? systemOpeningResult.total : 0;
+        const diff = newOpeningStock - oldOpeningStock;
+
+        if (diff !== 0) {
+          // Update product's stock_quantity
+          updatedStockQuantity = currentProduct.stock_quantity + diff;
+
+          // Find the first opening stock batch
+          const firstBatch = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND purchase_id IS NULL ORDER BY id ASC LIMIT 1").get(id) as any;
+          if (firstBatch) {
+            const newQty = firstBatch.quantity + diff;
+            const newRemaining = Math.max(0, firstBatch.remaining_quantity + diff);
+            db.prepare("UPDATE product_batches SET quantity = ?, remaining_quantity = ? WHERE id = ?").run(newQty, newRemaining, firstBatch.id);
+          } else if (newOpeningStock > 0) {
+            // If no opening batch existed, insert a new one
+            db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(
+              id, null, newOpeningStock, newOpeningStock, purchase_price
+            );
+          }
+        }
+      }
+
+      db.prepare("UPDATE products SET product_name = ?, brand = ?, material_group_id = ?, purchase_price = ?, trade_price = ?, retail_price = ?, stock_quantity = ?, unit = ?, conversion_value = ?, conversion_unit = ?, min_stock_level = ?, reorder_level = ? WHERE product_id = ?").run(
+        product_name, brand, material_group_id, purchase_price, trade_price, retail_price, updatedStockQuantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level, id
+      );
     });
 
     try {

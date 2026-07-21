@@ -21,6 +21,7 @@ export interface Product {
   trade_price: number;    // TP
   retail_price: number;   // RP
   stock_quantity: number;
+  opening_stock?: number;
   unit: string;
   conversion_value: number;
   conversion_unit: string;

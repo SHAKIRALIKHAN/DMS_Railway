@@ -1270,6 +1270,7 @@ export const ProductMasterDataModal = ({
         retail_price: 0,
         purchase_price: 0,
         stock_quantity: 0,
+        opening_stock: 0,
         min_stock_level: 0,
         reorder_level: 0
     });
@@ -1322,6 +1323,7 @@ export const ProductMasterDataModal = ({
                     retail_price: 0,
                     purchase_price: 0,
                     stock_quantity: 0,
+                    opening_stock: 0,
                     min_stock_level: 0,
                     reorder_level: 0
                 });
@@ -1450,16 +1452,43 @@ export const ProductMasterDataModal = ({
                                         onChange={e => setFormData({...formData, retail_price: parseFloat(e.target.value)})}
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Stock Qty</label>
-                                    <input 
-                                        required
-                                        type="number" 
-                                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
-                                        value={formData.stock_quantity}
-                                        onChange={e => setFormData({...formData, stock_quantity: parseInt(e.target.value)})}
-                                    />
-                                </div>
+                                {editingId ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Opening Stock</label>
+                                            <input 
+                                                required
+                                                type="number" 
+                                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                                                value={formData.opening_stock}
+                                                onChange={e => setFormData({...formData, opening_stock: parseInt(e.target.value) || 0})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Current Stock (Read Only)</label>
+                                            <input 
+                                                disabled
+                                                type="number" 
+                                                className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none opacity-70"
+                                                value={formData.stock_quantity}
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Opening Stock</label>
+                                        <input 
+                                            required
+                                            type="number" 
+                                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                                            value={formData.opening_stock}
+                                            onChange={e => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setFormData({...formData, opening_stock: val, stock_quantity: val});
+                                            }}
+                                        />
+                                    </div>
+                                )}
                             </div>
                             
                             <div className="flex gap-2 pt-4">
@@ -1484,8 +1513,19 @@ export const ProductMasterDataModal = ({
                                         onClick={() => {
                                             setEditingId(null);
                                             setFormData({
-                                                product_id: '', product_name: '', mat_gp: '', brand: '', unit_id: '',
-                                                conversion_factor: 1, trade_price: 0, retail_price: 0, gst_percent: 18, cost_price: 0, stock_qty: 0
+                                                product_id: '',
+                                                product_name: '',
+                                                material_group_id: '',
+                                                brand: '',
+                                                unit: '',
+                                                conversion_value: 1,
+                                                trade_price: 0,
+                                                retail_price: 0,
+                                                purchase_price: 0,
+                                                stock_quantity: 0,
+                                                opening_stock: 0,
+                                                min_stock_level: 0,
+                                                reorder_level: 0
                                             });
                                         }}
                                         className="p-3 text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-rose-100 flex items-center justify-center"
@@ -1556,7 +1596,10 @@ export const ProductMasterDataModal = ({
                                                     <button 
                                                         onClick={() => {
                                                             setEditingId(p.product_id);
-                                                            setFormData({...p});
+                                                            setFormData({
+                                                                ...p,
+                                                                opening_stock: p.opening_stock || 0
+                                                            });
                                                         }}
                                                         className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                                     >
