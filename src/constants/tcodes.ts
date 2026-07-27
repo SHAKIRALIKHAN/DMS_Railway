@@ -393,6 +393,15 @@ export const TCODES: TCodeInfo[] = [
     description: 'Process shop sales returns referencing invoice number and increase stock.'
   },
   {
+    module: 'Return Management',
+    parentModule: 'Procurement',
+    tCode: 'PRT01',
+    transactionName: 'Purchase Return Transaction',
+    actionType: 'Create',
+    roleAssociation: 'Z_PURCHASE_CLERK',
+    description: 'Process vendor purchase returns referencing purchase order number and decrease stock.'
+  },
+  {
     module: 'Daily Load Plan',
     parentModule: 'Reports',
     tCode: 'LPR01',

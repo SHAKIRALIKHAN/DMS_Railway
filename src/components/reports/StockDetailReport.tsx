@@ -15,7 +15,7 @@ interface Product {
 interface LedgerItem {
   doc_date: string;
   doc_id: number;
-  type: 'Opening' | 'Purchase' | 'Sale' | 'Sale Return';
+  type: 'Opening' | 'Purchase' | 'Purchase Return' | 'Sale' | 'Sale Return';
   description: string;
   rate: number;
   qty: number;
@@ -155,6 +155,9 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
     if (item.type === 'Purchase') {
       return `PUR # ${item.doc_id.toString().padStart(4, '0')}`;
     }
+    if (item.type === 'Purchase Return') {
+      return `PRRET# ${item.doc_id.toString().padStart(4, '0')}`;
+    }
     if (item.type === 'Sale') {
       return `INV # ${item.doc_id.toString().padStart(4, '0')}`;
     }
@@ -166,17 +169,18 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
 
   // Totals computation
   const totalPurchase = reportData?.ledger.reduce((sum, item) => sum + (item.type === 'Purchase' ? item.qty : 0), 0) || 0;
-  const totalPurchaseReturn = 0; // Defaulting to 0 as columns/actions are not needed
+  const totalPurchaseReturn = reportData?.ledger.reduce((sum, item) => sum + (item.type === 'Purchase Return' ? item.return_qty : 0), 0) || 0;
   const totalSale = reportData?.ledger.reduce((sum, item) => sum + (item.type === 'Sale' ? item.qty : 0), 0) || 0;
   const totalSaleReturn = reportData?.ledger.reduce((sum, item) => sum + (item.type === 'Sale Return' ? item.return_qty : 0), 0) || 0;
 
   const currentProduct = products.find(p => p.product_id === selectedProductId) || reportData?.product;
-  const isExactSelectedProduct = currentProduct && productSearch === currentProduct.product_name;
-  const filteredProductsList = isExactSelectedProduct
+  const isExactSelectedProduct = currentProduct && productSearch.trim().toLowerCase() === currentProduct.product_name.trim().toLowerCase();
+  const filteredProductsList = (!productSearch.trim() || isExactSelectedProduct)
     ? products
     : products.filter(p => 
         p.product_name.toLowerCase().includes(productSearch.toLowerCase()) || 
-        p.brand.toLowerCase().includes(productSearch.toLowerCase())
+        p.brand.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.product_id.toLowerCase().includes(productSearch.toLowerCase())
       );
 
   return (
@@ -251,7 +255,19 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                 className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-indigo-600 outline-none font-medium transition-all"
                 id="report-product-autocomplete"
               />
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowProductDropdown(!showProductDropdown);
+                  if (productSearchRef.current) {
+                    productSearchRef.current.focus();
+                    productSearchRef.current.select();
+                  }
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+              >
+                <ChevronDown size={16} />
+              </button>
             </div>
 
             <AnimatePresence>
@@ -403,6 +419,7 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
 
                 {reportData.ledger.map((item, index) => {
                   const isPurchase = item.type === 'Purchase';
+                  const isPurchaseReturn = item.type === 'Purchase Return';
                   const isSale = item.type === 'Sale';
                   const isSaleReturn = item.type === 'Sale Return';
                   
@@ -412,6 +429,7 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                       className={cn(
                         "hover:bg-slate-50 transition-colors font-medium border-b border-slate-900",
                         isPurchase && "bg-emerald-50/20",
+                        isPurchaseReturn && "bg-amber-50/20",
                         isSaleReturn && "bg-indigo-50/20"
                       )}
                     >
@@ -431,9 +449,9 @@ export const StockDetailReport: React.FC<StockDetailReportProps> = ({ onBack, fo
                       <td className="border border-slate-900 p-2.5 text-center font-mono font-bold text-emerald-700">
                         {isPurchase ? item.qty.toLocaleString() : '0'}
                       </td>
-                      {/* Purchase Return Column (Defaulted to 0) */}
-                      <td className="border border-slate-900 p-2.5 text-center font-mono text-slate-400">
-                        0
+                      {/* Purchase Return Column */}
+                      <td className="border border-slate-900 p-2.5 text-center font-mono font-bold text-amber-700">
+                        {isPurchaseReturn ? item.return_qty.toLocaleString() : '0'}
                       </td>
                       {/* Sale Column */}
                       <td className="border border-slate-900 p-2.5 text-center font-mono font-bold text-rose-700">

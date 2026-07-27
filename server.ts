@@ -462,9 +462,33 @@ try {
         FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(id),
         FOREIGN KEY (product_id) REFERENCES products(product_id)
       );
+
+      CREATE TABLE IF NOT EXISTS purchase_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        supplier_id INTEGER NOT NULL,
+        purchase_id INTEGER NOT NULL,
+        total_amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'completed',
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS purchase_return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_return_id INTEGER NOT NULL,
+        purchase_item_id INTEGER NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price REAL NOT NULL,
+        reason TEXT,
+        FOREIGN KEY (purchase_return_id) REFERENCES purchase_returns(id),
+        FOREIGN KEY (purchase_item_id) REFERENCES purchase_items(id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
     `);
   } catch (e) {
-    console.error("Sales return table creation error:", e);
+    console.error("Sales and Purchase return table creation error:", e);
   }
 } catch (err) {
   console.error("CRITICAL: Database initialization failed:", err);
@@ -1840,6 +1864,286 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       console.error("Sales Return edit failure:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Purchase Return Endpoints
+  app.get("/api/suppliers/:id/purchases", (req, res) => {
+    const { id } = req.params;
+    try {
+      const purchases = db.prepare(`
+        SELECT p.*, s.name as supplier_name
+        FROM purchases p
+        JOIN suppliers s ON p.supplier_id = s.id
+        WHERE p.supplier_id = ? AND p.status != 'cancelled'
+        ORDER BY p.purchase_date DESC
+      `).all(id);
+      res.json(purchases);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/purchase-returns/purchase/:id/items", (req, res) => {
+    const { id } = req.params;
+    try {
+      const items = db.prepare(`
+        SELECT 
+          pi.id as purchase_item_id,
+          pi.purchase_id,
+          pi.product_id,
+          pi.quantity,
+          pi.price as unit_price,
+          p.product_name,
+          p.brand,
+          COALESCE((
+            SELECT SUM(pri.quantity) 
+            FROM purchase_return_items pri 
+            JOIN purchase_returns pr ON pri.purchase_return_id = pr.id 
+            WHERE pri.purchase_item_id = pi.id AND pr.status != 'cancelled'
+          ), 0) as already_returned_qty
+        FROM purchase_items pi
+        JOIN products p ON pi.product_id = p.product_id
+        WHERE pi.purchase_id = ?
+      `).all(id) as any[];
+
+      const formatted = items.map(item => ({
+        ...item,
+        already_returned_qty: item.already_returned_qty,
+        net_qty: Math.max(0, item.quantity - item.already_returned_qty),
+        current_return_qty: 0,
+        reason: ""
+      }));
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/purchase-returns", (req, res) => {
+    const { supplier_id, purchase_id, items } = req.body;
+    
+    if (!supplier_id || !purchase_id || !items || items.length === 0) {
+      return res.status(400).json({ error: "Missing required fields or return items." });
+    }
+
+    const transaction = db.transaction(() => {
+      // 1. Create Purchase Return Header
+      const header = db.prepare("INSERT INTO purchase_returns (supplier_id, purchase_id, status) VALUES (?, ?, ?)").run(supplier_id, purchase_id, 'completed');
+      const purchaseReturnId = header.lastInsertRowid;
+
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+
+        // Double check already returned to enforce limit
+        const existing = db.prepare(`
+          SELECT 
+            pi.quantity,
+            COALESCE((
+              SELECT SUM(pri.quantity) 
+              FROM purchase_return_items pri 
+              JOIN purchase_returns pr ON pri.purchase_return_id = pr.id 
+              WHERE pri.purchase_item_id = pi.id AND pr.status != 'cancelled'
+            ), 0) as already_returned_qty
+          FROM purchase_items pi
+          WHERE pi.id = ?
+        `).get(item.purchase_item_id) as any;
+
+        if (!existing) {
+          throw new Error(`Purchase item not found for ID ${item.purchase_item_id}`);
+        }
+
+        const maxReturnable = existing.quantity - existing.already_returned_qty;
+        if (item.quantity > maxReturnable) {
+          throw new Error(`Return quantity of ${item.quantity} exceeds remaining returnable quantity (${maxReturnable})`);
+        }
+
+        // 2. Insert Purchase Return Item
+        db.prepare(`
+          INSERT INTO purchase_return_items (purchase_return_id, purchase_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(purchaseReturnId, item.purchase_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
+
+        // 3. Deduct stock quantity from product
+        db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE product_id = ?").run(item.quantity, item.product_id);
+
+        // 4. Deduct remaining_quantity from product batch corresponding to purchase
+        const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(purchase_id, item.product_id) as any;
+        if (batch) {
+          db.prepare("UPDATE product_batches SET remaining_quantity = MAX(0, remaining_quantity - ?) WHERE id = ?").run(item.quantity, batch.id);
+        }
+
+        total += item.quantity * item.unit_price;
+      }
+
+      // 5. Update Header total
+      db.prepare("UPDATE purchase_returns SET total_amount = ? WHERE id = ?").run(total, purchaseReturnId);
+
+      return purchaseReturnId;
+    });
+
+    try {
+      const result = transaction();
+      res.json({ success: true, purchaseReturnId: result });
+    } catch (err: any) {
+      console.error("Purchase Return processing error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/purchase-returns", (req, res) => {
+    try {
+      const returns = db.prepare(`
+        SELECT pr.*, s.name as supplier_name, p.id as purchase_ref_id
+        FROM purchase_returns pr 
+        JOIN suppliers s ON pr.supplier_id = s.id 
+        JOIN purchases p ON pr.purchase_id = p.id
+        ORDER BY pr.return_date DESC
+      `).all();
+      res.json(returns);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/purchase-returns/:id/items", (req, res) => {
+    const { id } = req.params;
+    try {
+      const items = db.prepare(`
+        SELECT 
+          pri.*, 
+          p.product_name, 
+          p.brand,
+          (SELECT quantity FROM purchase_items pi WHERE pi.id = pri.purchase_item_id) as original_purchase_qty,
+          (SELECT SUM(quantity) FROM purchase_return_items opri JOIN purchase_returns opr ON opri.purchase_return_id = opr.id WHERE opri.purchase_item_id = pri.purchase_item_id AND opr.id != pri.purchase_return_id AND opr.status != 'cancelled') as other_returns_qty
+        FROM purchase_return_items pri
+        JOIN products p ON pri.product_id = p.product_id
+        WHERE pri.purchase_return_id = ?
+      `).all(id) as any[];
+
+      const formatted = items.map(item => ({
+        ...item,
+        quantity: item.original_purchase_qty,
+        already_returned_qty: item.other_returns_qty || 0,
+        net_qty: item.original_purchase_qty - (item.other_returns_qty || 0),
+        current_return_qty: item.quantity
+      }));
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/purchase-returns/:id", (req, res) => {
+    const { id } = req.params;
+    const { supplier_id, purchase_id, items } = req.body;
+
+    const transaction = db.transaction(() => {
+      const oldReturn = db.prepare("SELECT * FROM purchase_returns WHERE id = ?").get(id) as any;
+      if (!oldReturn) throw new Error("Purchase Return not found");
+
+      // 1. Get old items to restore stock and batch remaining_quantity
+      const oldItems = db.prepare("SELECT * FROM purchase_return_items WHERE purchase_return_id = ?").all(id) as any[];
+      for (const item of oldItems) {
+        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+
+        const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(oldReturn.purchase_id, item.product_id) as any;
+        if (batch) {
+          db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity + ? WHERE id = ?").run(item.quantity, batch.id);
+        }
+      }
+
+      // 2. Delete old return items
+      db.prepare("DELETE FROM purchase_return_items WHERE purchase_return_id = ?").run(id);
+
+      // 3. Insert new items and deduct stock
+      let total = 0;
+      for (const item of items) {
+        if (item.quantity <= 0) continue;
+
+        const existing = db.prepare(`
+          SELECT 
+            pi.quantity,
+            COALESCE((
+              SELECT SUM(pri.quantity) 
+              FROM purchase_return_items pri 
+              JOIN purchase_returns pr ON pri.purchase_return_id = pr.id 
+              WHERE pri.purchase_item_id = pi.id AND pr.id != ? AND pr.status != 'cancelled'
+            ), 0) as already_returned_qty
+          FROM purchase_items pi
+          WHERE pi.id = ?
+        `).get(id, item.purchase_item_id) as any;
+
+        if (!existing) {
+          throw new Error(`Purchase item not found for ID ${item.purchase_item_id}`);
+        }
+
+        const maxReturnable = existing.quantity - existing.already_returned_qty;
+        if (item.quantity > maxReturnable) {
+          throw new Error(`Return quantity of ${item.quantity} exceeds remaining returnable quantity (${maxReturnable})`);
+        }
+
+        db.prepare(`
+          INSERT INTO purchase_return_items (purchase_return_id, purchase_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, item.purchase_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
+
+        db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE product_id = ?")
+          .run(item.quantity, item.product_id);
+
+        const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(purchase_id, item.product_id) as any;
+        if (batch) {
+          db.prepare("UPDATE product_batches SET remaining_quantity = MAX(0, remaining_quantity - ?) WHERE id = ?").run(item.quantity, batch.id);
+        }
+
+        total += item.quantity * item.unit_price;
+      }
+
+      // 4. Update Header total
+      db.prepare("UPDATE purchase_returns SET total_amount = ? WHERE id = ?").run(total, id);
+
+      return id;
+    });
+
+    try {
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Purchase Return edit failure:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/purchase-returns/:id", (req, res) => {
+    const { id } = req.params;
+    const transaction = db.transaction(() => {
+      const oldReturn = db.prepare("SELECT * FROM purchase_returns WHERE id = ?").get(id) as any;
+      if (!oldReturn) throw new Error("Purchase Return not found");
+
+      if (oldReturn.status !== 'cancelled') {
+        const oldItems = db.prepare("SELECT * FROM purchase_return_items WHERE purchase_return_id = ?").all(id) as any[];
+        for (const item of oldItems) {
+          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
+            .run(item.quantity, item.product_id);
+
+          const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(oldReturn.purchase_id, item.product_id) as any;
+          if (batch) {
+            db.prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity + ? WHERE id = ?").run(item.quantity, batch.id);
+          }
+        }
+        db.prepare("UPDATE purchase_returns SET status = 'cancelled' WHERE id = ?").run(id);
+      }
+    });
+
+    try {
+      transaction();
+      res.json({ success: true });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -3269,11 +3573,28 @@ async function startServer() {
         WHERE sri.product_id = ? AND sr.status != 'cancelled'
       `).all(productId) as any[];
 
+      const purchaseReturns = db.prepare(`
+        SELECT 
+          pr.return_date AS doc_date,
+          pr.id AS doc_id,
+          'Purchase Return' AS type,
+          s.name AS description,
+          pri.unit_price AS rate,
+          0 AS qty,
+          pri.quantity AS return_qty,
+          pri.unit_price * pri.quantity AS net_amount
+        FROM purchase_return_items pri
+        JOIN purchase_returns pr ON pri.purchase_return_id = pr.id
+        JOIN suppliers s ON pr.supplier_id = s.id
+        WHERE pri.product_id = ? AND pr.status != 'cancelled'
+      `).all(productId) as any[];
+
       // Combine non-baseline movements
       let allMovements = [
         ...purchases,
         ...sales,
-        ...salesReturns
+        ...salesReturns,
+        ...purchaseReturns
       ];
 
       // Helper to parse date to YYYY-MM-DD
@@ -3306,8 +3627,9 @@ async function startServer() {
       // Type priority for stable sorting on the exact same date and time
       const typePriority: Record<string, number> = {
         'Purchase': 1,
-        'Sale Return': 2,
-        'Sale': 3
+        'Purchase Return': 2,
+        'Sale Return': 3,
+        'Sale': 4
       };
 
       // Sort chronologically datewise
@@ -3339,7 +3661,9 @@ async function startServer() {
           ? m.qty
           : (m.type === 'Sale Return')
             ? m.return_qty
-            : -m.qty; // Sale decreases stock
+            : (m.type === 'Purchase Return')
+              ? -m.return_qty // Purchase Return decreases stock
+              : -m.qty; // Sale decreases stock
 
         if (mDateStr < sDate) {
           openingBalance += qtyDiff;
@@ -3355,7 +3679,9 @@ async function startServer() {
           ? item.qty
           : (item.type === 'Sale Return')
             ? item.return_qty
-            : -item.qty;
+            : (item.type === 'Purchase Return')
+              ? -item.return_qty
+              : -item.qty;
 
         runningBalance += qtyDiff;
         return {

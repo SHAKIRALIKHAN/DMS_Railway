@@ -104,6 +104,7 @@ import {
 } from './components/modals/DisplayModals';
 import { ReturnModal } from './components/modals/ReturnModals';
 import { SalesReturnModal } from './components/modals/SalesReturnModal';
+import { PurchaseReturnModal } from './components/modals/PurchaseReturnModal';
 import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
 import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
@@ -554,6 +555,7 @@ export default function App() {
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [editingReturn, setEditingReturn] = useState<Return | null>(null);
   const [isSalesReturnModalOpen, setIsSalesReturnModalOpen] = useState(false);
+  const [isPurchaseReturnModalOpen, setIsPurchaseReturnModalOpen] = useState(false);
   const [editingSalesReturn, setEditingSalesReturn] = useState<SalesReturn | null>(null);
   const [salesReturnSearchInput, setSalesReturnSearchInput] = useState("");
   const [showSalesReturnSuggestions, setShowSalesReturnSuggestions] = useState(false);
@@ -846,6 +848,8 @@ export default function App() {
       setIsUnitModalOpen(false);
       setIsLocationModalOpen(false);
       setIsReturnModalOpen(false);
+      setIsSalesReturnModalOpen(false);
+      setIsPurchaseReturnModalOpen(false);
       setIsInvoiceModalOpen(false);
       setIsDisplayInvoiceModalOpen(false);
       setIsDisplayOrderModalOpen(false);
@@ -932,6 +936,9 @@ export default function App() {
         break;
       case 'SRT01':
         setIsSalesReturnModalOpen(true);
+        break;
+      case 'PRT01':
+        setIsPurchaseReturnModalOpen(true);
         break;
       
       // Material Management (MM) / Product (PR)
@@ -3958,13 +3965,22 @@ export default function App() {
                           </AnimatePresence>
                         </div>
 
-                        <button 
-                          onClick={() => setIsPurchaseModalOpen(true)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
-                        >
-                          <Plus size={18} />
-                          <span>New Purchase</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsPurchaseModalOpen(true)}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          >
+                            <Plus size={18} />
+                            <span>New Purchase</span>
+                          </button>
+                          <button 
+                            onClick={() => setIsPurchaseReturnModalOpen(true)}
+                            className="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-amber-700 transition-colors shadow-md shadow-amber-100"
+                          >
+                            <RotateCcw size={18} />
+                            <span>Purchase Return (PRT01)</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -4413,6 +4429,18 @@ export default function App() {
             }}
             shops={shops}
             salesReturnRecord={editingSalesReturn}
+          />
+        )}
+
+        {isPurchaseReturnModalOpen && (
+          <PurchaseReturnModal 
+            onClose={() => {
+              setIsPurchaseReturnModalOpen(false);
+              fetchPurchases();
+              fetchProducts();
+              fetchStats();
+            }}
+            suppliers={suppliers}
           />
         )}
 

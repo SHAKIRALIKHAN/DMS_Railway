@@ -335,3 +335,31 @@ export interface SalesReturnItem {
   uom?: string;
 }
 
+export interface PurchaseReturn {
+  id: number;
+  return_date: string;
+  supplier_id: number;
+  supplier_name?: string;
+  purchase_id: number;
+  purchase_ref_id?: number;
+  total_amount: number;
+  items_summary?: string;
+  status: 'completed' | 'cancelled';
+}
+
+export interface PurchaseReturnItem {
+  id: number;
+  purchase_return_id: number;
+  purchase_item_id: number;
+  product_id: string;
+  product_name?: string;
+  brand?: string;
+  quantity: number;
+  unit_price: number;
+  original_purchase_qty?: number;
+  already_returned_qty?: number;
+  net_qty?: number;
+  current_return_qty?: number;
+  reason?: string;
+}
+
