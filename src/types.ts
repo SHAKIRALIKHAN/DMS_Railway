@@ -21,12 +21,33 @@ export interface Product {
   trade_price: number;    // TP
   retail_price: number;   // RP
   stock_quantity: number;
+  inventory_value?: number;
+  moving_average_price?: number;
   opening_stock?: number;
   unit: string;
   conversion_value: number;
   conversion_unit: string;
   min_stock_level: number;
   reorder_level: number;
+}
+
+export interface InventoryAuditLog {
+  id: number;
+  product_id: string;
+  product_name?: string;
+  brand?: string;
+  transaction_type: 'PURCHASE' | 'PURCHASE_RETURN' | 'SALE' | 'SALE_RETURN' | 'ADJUSTMENT';
+  reference_id?: string | number;
+  qty_change: number;
+  unit_price: number;
+  previous_stock: number;
+  previous_value: number;
+  previous_map: number;
+  new_stock: number;
+  new_value: number;
+  new_map: number;
+  notes?: string;
+  timestamp: string;
 }
 
 export interface Shop {

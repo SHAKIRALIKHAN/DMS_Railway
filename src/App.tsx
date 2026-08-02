@@ -105,7 +105,7 @@ import {
 import { ReturnModal } from './components/modals/ReturnModals';
 import { SalesReturnModal } from './components/modals/SalesReturnModal';
 import { PurchaseReturnModal } from './components/modals/PurchaseReturnModal';
-import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal } from './components/modals/DetailsModals';
+import { LedgerModal, OrderDetailsModal, PurchaseDetailsModal, DeliveryDetailsModal, ValuationHistoryModal } from './components/modals/DetailsModals';
 import { DriverModal, SalesmanModal, OrderBookerModal, MaterialGroupModal, TCodeMasterModal, LocationMasterModal } from './components/modals/MasterModals';
 import { PurchaseModal, NewOrderModal } from './components/modals/TransactionModals';
 import { DeliveryModal } from './components/modals/LogisticsModals';
@@ -530,6 +530,7 @@ export default function App() {
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+  const [selectedProductForValuation, setSelectedProductForValuation] = useState<Product | null>(null);
   const [isProductMasterModalOpen, setIsProductMasterModalOpen] = useState(false);
   const [isRegisterShopModalOpen, setIsRegisterShopModalOpen] = useState(false);
   const [isRegisterSupplierModalOpen, setIsRegisterSupplierModalOpen] = useState(false);
@@ -3039,35 +3040,60 @@ export default function App() {
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product Name</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Group</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">PP / TP / RP</th>
+                              <th className="px-6 py-4 text-xs font-bold text-indigo-600 uppercase tracking-wider">Valuation (MAP)</th>
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Stock</th>
+                              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {filteredProducts.map(product => (
-                              <tr key={product.product_id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-mono text-xs text-slate-500">{product.product_id}</td>
-                                <td className="px-6 py-4">
-                                  <p className="text-sm font-bold text-slate-900">{product.product_name}</p>
-                                  <p className="text-[10px] text-slate-500">{product.brand}</p>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">
-                                    {product.material_group_name || product.material_group_id}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-slate-900">PP: {formatPKR(product.purchase_price)}</span>
-                                    <span className="text-xs text-indigo-600">TP: {formatPKR(product.trade_price)}</span>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                  <span className={cn("text-sm font-bold", product.stock_quantity < 20 ? "text-rose-600" : "text-slate-900")}>
-                                    {product.stock_quantity}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
+                            {filteredProducts.map(product => {
+                              const mapVal = product.moving_average_price || product.purchase_price;
+                              const invVal = product.inventory_value || (product.stock_quantity * mapVal);
+                              return (
+                                <tr key={product.product_id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{product.product_id}</td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-sm font-bold text-slate-900">{product.product_name}</p>
+                                    <p className="text-[10px] text-slate-500">{product.brand}</p>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">
+                                      {product.material_group_name || product.material_group_id}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col text-xs">
+                                      <span className="text-slate-600">PP: {formatPKR(product.purchase_price)}</span>
+                                      <span className="text-indigo-600 font-medium">TP: {formatPKR(product.trade_price)}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md w-fit">
+                                        MAP: {formatPKR(mapVal)}
+                                      </span>
+                                      <span className="text-[11px] font-bold text-emerald-600 mt-0.5">
+                                        Val: {formatPKR(invVal)}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <span className={cn("text-sm font-bold", product.stock_quantity < 20 ? "text-rose-600" : "text-slate-900")}>
+                                      {product.stock_quantity}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <button
+                                      onClick={() => setSelectedProductForValuation(product)}
+                                      className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                                      title="View MAP Valuation Audit History"
+                                    >
+                                      MAP History
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </motion.div>
@@ -4851,6 +4877,14 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+
+        {selectedProductForValuation !== null && (
+          <ValuationHistoryModal
+            product={selectedProductForValuation}
+            onClose={() => setSelectedProductForValuation(null)}
+            formatPKR={formatPKR}
+          />
         )}
 
         {/* Global Toast Notification System */}

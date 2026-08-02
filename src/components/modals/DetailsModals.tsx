@@ -1,7 +1,160 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, Printer, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Shop, Order, Purchase, LedgerEntry, OrderItem, Delivery, DeliveryItem } from '../../types';
+import { Shop, Order, Purchase, LedgerEntry, OrderItem, Delivery, DeliveryItem, Product, InventoryAuditLog } from '../../types';
+
+export const ValuationHistoryModal = ({
+  product,
+  onClose,
+  formatPKR
+}: {
+  product: Product;
+  onClose: () => void;
+  formatPKR: (amount: number) => string;
+}) => {
+  const [logs, setLogs] = useState<InventoryAuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'F3') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch(`/api/products/${product.product_id}/valuation-history`);
+        const data = await res.json();
+        setLogs(data);
+      } catch (err) {
+        console.error("Failed to fetch valuation history", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, [product.product_id]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="bg-white w-full max-w-5xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-100 text-indigo-700">
+                {product.product_id}
+              </span>
+              <h3 className="text-lg font-bold text-slate-900">{product.product_name}</h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">SAP MM Moving Average Price (MAP) Audit Log & Valuation History</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-xl transition-colors shrink-0">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Current State Header Cards */}
+        <div className="grid grid-cols-4 gap-4 p-6 bg-slate-100/60 border-b border-slate-100">
+          <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Stock</span>
+            <p className="text-xl font-bold text-slate-900 mt-1">{product.stock_quantity} <span className="text-xs font-normal text-slate-500">{product.unit || 'EACH'}</span></p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
+            <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">Moving Avg Price (MAP)</span>
+            <p className="text-xl font-black text-indigo-600 mt-1">{formatPKR(product.moving_average_price || product.purchase_price)}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
+            <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">Inventory Value</span>
+            <p className="text-xl font-black text-emerald-600 mt-1">{formatPKR(product.inventory_value || (product.stock_quantity * (product.moving_average_price || product.purchase_price)))}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Purchase / Trade Price</span>
+            <p className="text-sm font-medium text-slate-700 mt-1">PP: {formatPKR(product.purchase_price)}</p>
+            <p className="text-xs font-medium text-slate-500">TP: {formatPKR(product.trade_price)}</p>
+          </div>
+        </div>
+
+        <div className="flex-1 p-6 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Timestamp</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Type</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Ref #</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-right">Qty Change</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-right">Unit Price</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase text-right">Prev MAP</th>
+                    <th className="px-4 py-3 text-xs font-bold text-indigo-600 uppercase text-right">New MAP</th>
+                    <th className="px-4 py-3 text-xs font-bold text-emerald-600 uppercase text-right">New Inv Value</th>
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {logs.map(log => {
+                    const isPurchase = log.transaction_type === 'PURCHASE';
+                    const isReturn = log.transaction_type === 'PURCHASE_RETURN';
+                    return (
+                      <tr key={log.id} className="text-xs hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 text-slate-500 font-mono whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            isPurchase && "bg-emerald-100 text-emerald-800",
+                            isReturn && "bg-rose-100 text-rose-800",
+                            log.transaction_type === 'SALE' && "bg-blue-100 text-blue-800",
+                            log.transaction_type === 'SALE_RETURN' && "bg-amber-100 text-amber-800",
+                            log.transaction_type === 'ADJUSTMENT' && "bg-purple-100 text-purple-800"
+                          )}>
+                            {log.transaction_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono font-medium text-slate-700">#{log.reference_id}</td>
+                        <td className={cn("px-4 py-3 text-right font-bold font-mono", log.qty_change > 0 ? "text-emerald-600" : "text-rose-600")}>
+                          {log.qty_change > 0 ? `+${log.qty_change}` : log.qty_change}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-700">{formatPKR(log.unit_price)}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">{formatPKR(log.previous_map)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-indigo-600 bg-indigo-50/50">{formatPKR(log.new_map)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-emerald-600">{formatPKR(log.new_value)}</td>
+                        <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{log.notes}</td>
+                      </tr>
+                    );
+                  })}
+                  {logs.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
+                        No valuation audit entries recorded yet for this product.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 export const LedgerModal = ({ 
   shop, 

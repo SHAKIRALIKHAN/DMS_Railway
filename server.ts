@@ -490,9 +490,345 @@ try {
   } catch (e) {
     console.error("Sales and Purchase return table creation error:", e);
   }
+
+  // Moving Average Price (MAP) & Inventory Valuation Migrations
+  try { db.exec("ALTER TABLE products ADD COLUMN inventory_value REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE products ADD COLUMN moving_average_price REAL DEFAULT 0"); } catch(e) {}
+
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS inventory_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id TEXT NOT NULL,
+        transaction_type TEXT NOT NULL, -- 'PURCHASE', 'PURCHASE_RETURN', 'SALE', 'SALE_RETURN', 'ADJUSTMENT'
+        reference_id TEXT,
+        qty_change REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        previous_stock REAL NOT NULL,
+        previous_value REAL NOT NULL,
+        previous_map REAL NOT NULL,
+        new_stock REAL NOT NULL,
+        new_value REAL NOT NULL,
+        new_map REAL NOT NULL,
+        notes TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+      );
+    `);
+  } catch (e) {
+    console.error("inventory_audit_log table creation error:", e);
+  }
+
+  // Backfill initial MAP and Inventory Value for existing products
+  try {
+    db.exec(`
+      UPDATE products 
+      SET moving_average_price = CASE WHEN (moving_average_price IS NULL OR moving_average_price = 0) THEN purchase_price ELSE moving_average_price END,
+          inventory_value = CASE WHEN (inventory_value IS NULL OR inventory_value = 0) THEN round(stock_quantity * purchase_price, 2) ELSE inventory_value END
+      WHERE purchase_price > 0;
+    `);
+  } catch (e) {
+    console.warn("MAP backfill error:", e);
+  }
 } catch (err) {
   console.error("CRITICAL: Database initialization failed:", err);
   process.exit(1);
+}
+
+/* ============================================================================
+   MOVING AVERAGE PRICE (MAP) & INVENTORY VALUATION ENGINE
+   SAP MM Compliant Valuation & Audit Ledger
+   ============================================================================ */
+
+const round2 = (val: number): number => Math.round((val + Number.EPSILON) * 100) / 100;
+const round4 = (val: number): number => Math.round((val + Number.EPSILON) * 10000) / 10000;
+
+interface ProductValuationState {
+  product_id: string;
+  product_name: string;
+  stock_quantity: number;
+  inventory_value: number;
+  moving_average_price: number;
+  purchase_price: number;
+}
+
+/**
+ * 1. Process Purchase (Goods Receipt) -> Recalculates MAP
+ *
+ * New Receipt Value = Purchase Quantity * Purchase Unit Price
+ * New Inventory Quantity = Current Stock Quantity + Purchase Quantity
+ * New Inventory Value = Current Inventory Value + New Receipt Value
+ * New MAP = New Inventory Value / New Inventory Quantity
+ */
+function processPurchaseValuation(
+  dbInstance: any,
+  productId: string,
+  purchaseQty: number,
+  purchaseUnitPrice: number,
+  referenceId: string | number,
+  notes: string = "Purchase Goods Receipt"
+) {
+  if (purchaseQty <= 0) {
+    throw new Error(`Invalid Purchase Quantity (${purchaseQty}). Must be greater than zero.`);
+  }
+  if (purchaseUnitPrice <= 0) {
+    throw new Error(`Invalid Purchase Price (${purchaseUnitPrice}). Must be greater than zero.`);
+  }
+
+  const product = dbInstance.prepare("SELECT * FROM products WHERE product_id = ?").get(productId) as ProductValuationState | undefined;
+  if (!product) {
+    throw new Error(`Product Master record not found for ID: ${productId}`);
+  }
+
+  const currentStock = Number(product.stock_quantity || 0);
+  const currentMap = Number(product.moving_average_price) > 0 
+    ? Number(product.moving_average_price) 
+    : Number(product.purchase_price || 0);
+  
+  const currentValue = (product.inventory_value !== null && product.inventory_value !== undefined && Number(product.inventory_value) > 0)
+    ? Number(product.inventory_value)
+    : round2(currentStock * currentMap);
+
+  const receiptValue = round4(purchaseQty * purchaseUnitPrice);
+  const newStock = currentStock + purchaseQty;
+  const newValue = round4(currentValue + receiptValue);
+  const newMap = newStock > 0 ? round4(newValue / newStock) : 0;
+
+  // Update Product Master
+  dbInstance.prepare(`
+    UPDATE products 
+    SET stock_quantity = ?, 
+        inventory_value = ?, 
+        moving_average_price = ?,
+        purchase_price = ?
+    WHERE product_id = ?
+  `).run(newStock, round2(newValue), newMap, purchaseUnitPrice, productId);
+
+  // Insert Audit Log Entry
+  dbInstance.prepare(`
+    INSERT INTO inventory_audit_log 
+    (product_id, transaction_type, reference_id, qty_change, unit_price, previous_stock, previous_value, previous_map, new_stock, new_value, new_map, notes)
+    VALUES (?, 'PURCHASE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    productId,
+    String(referenceId),
+    purchaseQty,
+    purchaseUnitPrice,
+    currentStock,
+    round2(currentValue),
+    currentMap,
+    newStock,
+    round2(newValue),
+    newMap,
+    notes
+  );
+
+  return { newStock, newValue: round2(newValue), newMap };
+}
+
+/**
+ * 2. Process Purchase Return (Return to Vendor)
+ *
+ * Vendor returns decrease stock and inventory value using CURRENT MAP (not original purchase price).
+ * Return Value = Return Quantity * Current MAP
+ * New Inventory Quantity = Current Stock Quantity - Return Quantity
+ * New Inventory Value = Current Inventory Value - Return Value
+ * If New Quantity > 0 -> New MAP = New Inventory Value / New Inventory Quantity (remains equal to Current MAP)
+ * If New Quantity == 0 -> New Inventory Value = 0, MAP = 0
+ */
+function processPurchaseReturnValuation(
+  dbInstance: any,
+  productId: string,
+  returnQty: number,
+  referenceId: string | number,
+  notes: string = "Purchase Return to Vendor"
+) {
+  if (returnQty <= 0) {
+    throw new Error(`Invalid Purchase Return Quantity (${returnQty}). Must be greater than zero.`);
+  }
+
+  const product = dbInstance.prepare("SELECT * FROM products WHERE product_id = ?").get(productId) as ProductValuationState | undefined;
+  if (!product) {
+    throw new Error(`Product Master record not found for ID: ${productId}`);
+  }
+
+  const currentStock = Number(product.stock_quantity || 0);
+  if (returnQty > currentStock) {
+    throw new Error(`Return quantity (${returnQty}) exceeds available stock (${currentStock}) for product ${product.product_name || productId}.`);
+  }
+
+  const currentMap = Number(product.moving_average_price) > 0 
+    ? Number(product.moving_average_price) 
+    : Number(product.purchase_price || 0);
+
+  const currentValue = (product.inventory_value !== null && product.inventory_value !== undefined && Number(product.inventory_value) > 0)
+    ? Number(product.inventory_value)
+    : round2(currentStock * currentMap);
+
+  const returnValue = round4(returnQty * currentMap);
+  const newStock = Math.max(0, currentStock - returnQty);
+  let newValue = Math.max(0, round4(currentValue - returnValue));
+  let newMap = currentMap;
+
+  if (newStock === 0) {
+    newValue = 0;
+    newMap = 0;
+  } else {
+    newMap = round4(newValue / newStock);
+  }
+
+  // Update Product Master
+  dbInstance.prepare(`
+    UPDATE products 
+    SET stock_quantity = ?, 
+        inventory_value = ?, 
+        moving_average_price = ?
+    WHERE product_id = ?
+  `).run(newStock, round2(newValue), newMap, productId);
+
+  // Insert Audit Log Entry
+  dbInstance.prepare(`
+    INSERT INTO inventory_audit_log 
+    (product_id, transaction_type, reference_id, qty_change, unit_price, previous_stock, previous_value, previous_map, new_stock, new_value, new_map, notes)
+    VALUES (?, 'PURCHASE_RETURN', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    productId,
+    String(referenceId),
+    -returnQty,
+    currentMap,
+    currentStock,
+    round2(currentValue),
+    currentMap,
+    newStock,
+    round2(newValue),
+    newMap,
+    notes
+  );
+
+  return { newStock, newValue: round2(newValue), newMap };
+}
+
+/**
+ * 3. Process Non-MAP Recalculating Goods Issue (Sales / Delivery / Internal Issue)
+ *
+ * Reduces inventory value using Current MAP:
+ * Inventory Value Reduction = Issued Quantity * Current MAP
+ * MAP remains unchanged.
+ */
+function processIssueValuation(
+  dbInstance: any,
+  productId: string,
+  issueQty: number,
+  transactionType: string = 'SALE',
+  referenceId: string | number,
+  notes: string = "Goods Issue / Sales Delivery"
+) {
+  if (issueQty <= 0) return;
+
+  const product = dbInstance.prepare("SELECT * FROM products WHERE product_id = ?").get(productId) as ProductValuationState | undefined;
+  if (!product) return;
+
+  const currentStock = Number(product.stock_quantity || 0);
+  const currentMap = Number(product.moving_average_price) > 0 
+    ? Number(product.moving_average_price) 
+    : Number(product.purchase_price || 0);
+
+  const currentValue = (product.inventory_value !== null && product.inventory_value !== undefined && Number(product.inventory_value) > 0)
+    ? Number(product.inventory_value)
+    : round2(currentStock * currentMap);
+
+  const issueValue = round4(issueQty * currentMap);
+  const newStock = Math.max(0, currentStock - issueQty);
+  let newValue = Math.max(0, round4(currentValue - issueValue));
+  let newMap = currentMap;
+
+  if (newStock === 0) {
+    newValue = 0;
+    newMap = 0;
+  }
+
+  dbInstance.prepare(`
+    UPDATE products 
+    SET stock_quantity = ?, 
+        inventory_value = ?, 
+        moving_average_price = ?
+    WHERE product_id = ?
+  `).run(newStock, round2(newValue), newMap, productId);
+
+  dbInstance.prepare(`
+    INSERT INTO inventory_audit_log 
+    (product_id, transaction_type, reference_id, qty_change, unit_price, previous_stock, previous_value, previous_map, new_stock, new_value, new_map, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    productId,
+    transactionType,
+    String(referenceId),
+    -issueQty,
+    currentMap,
+    currentStock,
+    round2(currentValue),
+    currentMap,
+    newStock,
+    round2(newValue),
+    newMap,
+    notes
+  );
+}
+
+/**
+ * 4. Process Sales Return (Goods Receipt from Customer)
+ */
+function processSalesReturnValuation(
+  dbInstance: any,
+  productId: string,
+  returnQty: number,
+  referenceId: string | number,
+  notes: string = "Sales Return from Customer"
+) {
+  if (returnQty <= 0) return;
+
+  const product = dbInstance.prepare("SELECT * FROM products WHERE product_id = ?").get(productId) as ProductValuationState | undefined;
+  if (!product) return;
+
+  const currentStock = Number(product.stock_quantity || 0);
+  const currentMap = Number(product.moving_average_price) > 0 
+    ? Number(product.moving_average_price) 
+    : Number(product.purchase_price || 0);
+
+  const currentValue = (product.inventory_value !== null && product.inventory_value !== undefined && Number(product.inventory_value) > 0)
+    ? Number(product.inventory_value)
+    : round2(currentStock * currentMap);
+
+  const returnReceiptValue = round4(returnQty * currentMap);
+  const newStock = currentStock + returnQty;
+  const newValue = round4(currentValue + returnReceiptValue);
+  const newMap = currentMap;
+
+  dbInstance.prepare(`
+    UPDATE products 
+    SET stock_quantity = ?, 
+        inventory_value = ?, 
+        moving_average_price = ?
+    WHERE product_id = ?
+  `).run(newStock, round2(newValue), newMap, productId);
+
+  dbInstance.prepare(`
+    INSERT INTO inventory_audit_log 
+    (product_id, transaction_type, reference_id, qty_change, unit_price, previous_stock, previous_value, previous_map, new_stock, new_value, new_map, notes)
+    VALUES (?, 'SALE_RETURN', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    productId,
+    String(referenceId),
+    returnQty,
+    currentMap,
+    currentStock,
+    round2(currentValue),
+    currentMap,
+    newStock,
+    round2(newValue),
+    newMap,
+    notes
+  );
 }
 
 // Seed initial data if tables are empty
@@ -1265,17 +1601,26 @@ async function startServer() {
   app.post("/api/products", (req, res) => {
     const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
     const opening_stock = req.body.opening_stock !== undefined ? Number(req.body.opening_stock) : Number(req.body.stock_quantity || 0);
+    const pPrice = Number(purchase_price) || 0;
+    const initialMap = pPrice;
+    const initialVal = round2(opening_stock * pPrice);
     const product_id = generateProductId();
     
     const transaction = db.transaction(() => {
-      db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, opening_stock, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20
+      db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, inventory_value, moving_average_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        product_id, product_name, brand, material_group_id, pPrice, trade_price, retail_price, opening_stock, initialVal, initialMap, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20
       );
 
       if (opening_stock > 0) {
         db.prepare("INSERT INTO product_batches (product_id, purchase_id, quantity, remaining_quantity, purchase_price) VALUES (?, ?, ?, ?, ?)").run(
-          product_id, null, opening_stock, opening_stock, purchase_price
+          product_id, null, opening_stock, opening_stock, pPrice
         );
+
+        db.prepare(`
+          INSERT INTO inventory_audit_log 
+          (product_id, transaction_type, reference_id, qty_change, unit_price, previous_stock, previous_value, previous_map, new_stock, new_value, new_map, notes)
+          VALUES (?, 'ADJUSTMENT', 'INITIAL_STOCK', ?, ?, 0, 0, 0, ?, ?, ?, 'Initial Opening Stock')
+        `).run(product_id, opening_stock, pPrice, opening_stock, initialVal, initialMap);
       }
     });
 
@@ -1421,6 +1766,56 @@ async function startServer() {
     }
   });
 
+  // API: Get Inventory Audit Logs / Valuation History
+  app.get("/api/inventory-audit-log", (req, res) => {
+    const { product_id, transaction_type, limit } = req.query;
+    try {
+      let query = `
+        SELECT log.*, p.product_name, p.brand
+        FROM inventory_audit_log log
+        JOIN products p ON log.product_id = p.product_id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+      if (product_id) {
+        query += ` AND log.product_id = ?`;
+        params.push(product_id);
+      }
+      if (transaction_type) {
+        query += ` AND log.transaction_type = ?`;
+        params.push(transaction_type);
+      }
+      query += ` ORDER BY log.timestamp DESC, log.id DESC`;
+      if (limit) {
+        query += ` LIMIT ?`;
+        params.push(Number(limit));
+      } else {
+        query += ` LIMIT 500`;
+      }
+
+      const logs = db.prepare(query).all(...params);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/products/:id/valuation-history", (req, res) => {
+    const { id } = req.params;
+    try {
+      const logs = db.prepare(`
+        SELECT log.*, p.product_name
+        FROM inventory_audit_log log
+        JOIN products p ON log.product_id = p.product_id
+        WHERE log.product_id = ?
+        ORDER BY log.timestamp DESC, log.id DESC
+      `).all(id);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // API to process a return
   app.post("/api/returns", (req, res) => {
     const { shop_id, items } = req.body; // items: Array<{delivery_id, product_id, quantity, unit_price}>
@@ -1440,8 +1835,8 @@ async function startServer() {
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(returnId, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
-        // 3. Update Stock (using stock_quantity column)
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?").run(item.quantity, item.product_id);
+        // 3. Update Stock and Valuation using Sales Return Valuation
+        processSalesReturnValuation(db, item.product_id, item.quantity, returnId, `Customer Sales Return #RET-${returnId}`);
         
         total += item.quantity * item.unit_price;
       }
@@ -1529,11 +1924,10 @@ async function startServer() {
       const oldReturn = db.prepare("SELECT * FROM returns WHERE id = ?").get(id) as any;
       if (!oldReturn) throw new Error("Return not found");
 
-      // 1. Get old items to reverse stock
+      // 1. Get old items to reverse stock and valuation
       const oldItems = db.prepare("SELECT * FROM return_items WHERE return_id = ?").all(id) as any[];
       for (const item of oldItems) {
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        processIssueValuation(db, item.product_id, item.quantity, 'SALE_RETURN_CANCEL', id, `Reversal of Customer Sales Return #RET-${id}`);
       }
 
       // 2. Delete old items
@@ -1548,8 +1942,7 @@ async function startServer() {
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(id, item.delivery_id, item.delivery_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        processSalesReturnValuation(db, item.product_id, item.quantity, id, `Update Customer Sales Return #RET-${id}`);
         
         total += item.quantity * item.unit_price;
       }
@@ -1967,8 +2360,8 @@ async function startServer() {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(purchaseReturnId, item.purchase_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
-        // 3. Deduct stock quantity from product
-        db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE product_id = ?").run(item.quantity, item.product_id);
+        // 3. Process MAP Valuation & Deduct stock quantity from product Master
+        processPurchaseReturnValuation(db, item.product_id, item.quantity, purchaseReturnId, `Purchase Return #${purchaseReturnId} for Purchase #${purchase_id}`);
 
         // 4. Deduct remaining_quantity from product batch corresponding to purchase
         const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(purchase_id, item.product_id) as any;
@@ -2046,11 +2439,10 @@ async function startServer() {
       const oldReturn = db.prepare("SELECT * FROM purchase_returns WHERE id = ?").get(id) as any;
       if (!oldReturn) throw new Error("Purchase Return not found");
 
-      // 1. Get old items to restore stock and batch remaining_quantity
+      // 1. Get old items to restore stock and valuation
       const oldItems = db.prepare("SELECT * FROM purchase_return_items WHERE purchase_return_id = ?").all(id) as any[];
       for (const item of oldItems) {
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        processPurchaseValuation(db, item.product_id, item.quantity, item.unit_price, id, `Reversal of Purchase Return #${id}`);
 
         const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(oldReturn.purchase_id, item.product_id) as any;
         if (batch) {
@@ -2061,7 +2453,7 @@ async function startServer() {
       // 2. Delete old return items
       db.prepare("DELETE FROM purchase_return_items WHERE purchase_return_id = ?").run(id);
 
-      // 3. Insert new items and deduct stock
+      // 3. Insert new items and deduct stock with MAP calculation
       let total = 0;
       for (const item of items) {
         if (item.quantity <= 0) continue;
@@ -2093,8 +2485,7 @@ async function startServer() {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(id, item.purchase_item_id, item.product_id, item.quantity, item.unit_price, item.reason || null);
 
-        db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        processPurchaseReturnValuation(db, item.product_id, item.quantity, id, `Updated Purchase Return #${id}`);
 
         const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(purchase_id, item.product_id) as any;
         if (batch) {
@@ -2128,8 +2519,7 @@ async function startServer() {
       if (oldReturn.status !== 'cancelled') {
         const oldItems = db.prepare("SELECT * FROM purchase_return_items WHERE purchase_return_id = ?").all(id) as any[];
         for (const item of oldItems) {
-          db.prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE product_id = ?")
-            .run(item.quantity, item.product_id);
+          processPurchaseValuation(db, item.product_id, item.quantity, item.unit_price, id, `Cancellation of Purchase Return #${id}`);
 
           const batch = db.prepare("SELECT * FROM product_batches WHERE purchase_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1").get(oldReturn.purchase_id, item.product_id) as any;
           if (batch) {
@@ -2687,9 +3077,8 @@ async function startServer() {
           item.discount_pct || 0, item.discount_amount || 0, item.extra_discount_pct || 0, item.extra_discount_amount || 0
         );
 
-        // Update stock
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        // Update stock and valuation using Issue Valuation (does not change MAP)
+        processIssueValuation(db, item.product_id, item.quantity, 'SALE', id, `Update Sales Delivery #${id}`);
         
         let remainingToReduce = item.quantity;
         const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
@@ -2895,9 +3284,8 @@ async function startServer() {
         const itemStatus = newDeliveredTotal >= orderItem.quantity ? 'delivered' : 'partially_delivered';
         db.prepare("UPDATE order_items SET status = ? WHERE id = ?").run(itemStatus, item.order_item_id);
 
-        // Update stock
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?")
-          .run(item.quantity, item.product_id);
+        // Update stock and valuation using Issue Valuation (does not change MAP)
+        processIssueValuation(db, item.product_id, item.quantity, 'SALE', deliveryId, `Sales Delivery #${deliveryId}`);
         
         let remainingToReduce = item.quantity;
         const batches = db.prepare("SELECT * FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY received_date ASC").all(item.product_id) as any[];
@@ -3149,6 +3537,10 @@ async function startServer() {
   app.post("/api/purchases", (req, res) => {
     const { supplier_id, items } = req.body;
     
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: "Purchase must contain at least one item." });
+    }
+
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     const transaction = db.transaction(() => {
@@ -3159,6 +3551,10 @@ async function startServer() {
       const purchase_id = purchase.lastInsertRowid;
 
       for (const item of items) {
+        if (item.quantity <= 0 || item.price <= 0) {
+          throw new Error(`Quantity and price must be greater than zero for product ${item.product_id}`);
+        }
+
         // 2. Check Price Deviation
         const lastPurchase = db.prepare("SELECT purchase_price FROM product_batches WHERE product_id = ? ORDER BY received_date DESC LIMIT 1").get(item.product_id) as any;
         if (lastPurchase) {
@@ -3178,11 +3574,8 @@ async function startServer() {
           item.product_id, purchase_id, item.quantity, item.quantity, item.price, item.supplier_batch_no, item.storage_location
         );
 
-        // 5. Update Product Master (Weighted Average PP or just update to latest)
-        // For this implementation, we update master PP to latest and ensure TP/RP are maintained
-        db.prepare("UPDATE products SET purchase_price = ?, stock_quantity = stock_quantity + ? WHERE product_id = ?").run(
-          item.price, item.quantity, item.product_id
-        );
+        // 5. Update Product Master with Moving Average Price (MAP) Calculation
+        processPurchaseValuation(db, item.product_id, item.quantity, item.price, purchase_id, `Purchase #${purchase_id}`);
       }
       return purchase_id;
     });
@@ -3190,9 +3583,9 @@ async function startServer() {
     try {
       const purchase_id = transaction();
       res.json({ id: purchase_id });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Purchase transaction failed", err);
-      res.status(500).json({ error: "Failed to create purchase" });
+      res.status(500).json({ error: err.message || "Failed to create purchase" });
     }
   });
 
@@ -3203,10 +3596,10 @@ async function startServer() {
     const total_amount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
     const transaction = db.transaction(() => {
-      // 1. Get old items to reverse stock
+      // 1. Get old items to reverse stock and valuation
       const oldItems = db.prepare("SELECT product_id, quantity FROM purchase_items WHERE purchase_id = ?").all(id) as any[];
       for (const oldItem of oldItems) {
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(oldItem.quantity, oldItem.product_id);
+        processPurchaseReturnValuation(db, oldItem.product_id, oldItem.quantity, id, `Reversal of Purchase #${id}`);
       }
 
       // 2. Delete old items and batches
@@ -3216,7 +3609,7 @@ async function startServer() {
       // 3. Update Purchase Record
       db.prepare("UPDATE purchases SET supplier_id = ?, total_amount = ? WHERE id = ?").run(supplier_id, total_amount, id);
 
-      // 4. Insert new items and batches
+      // 4. Insert new items and batches with MAP calculation
       for (const item of items) {
         db.prepare("INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location) VALUES (?, ?, ?, ?, ?, ?)").run(
           id, item.product_id, item.quantity, item.price, item.supplier_batch_no, item.storage_location
@@ -3226,34 +3619,31 @@ async function startServer() {
           item.product_id, id, item.quantity, item.quantity, item.price, item.supplier_batch_no, item.storage_location
         );
 
-        db.prepare("UPDATE products SET purchase_price = ?, stock_quantity = stock_quantity + ? WHERE product_id = ?").run(
-          item.price, item.quantity, item.product_id
-        );
+        processPurchaseValuation(db, item.product_id, item.quantity, item.price, id, `Update Purchase #${id}`);
       }
     });
 
     try {
       transaction();
       res.json({ success: true });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Purchase update failed", err);
-      res.status(500).json({ error: "Failed to update purchase" });
+      res.status(500).json({ error: err.message || "Failed to update purchase" });
     }
   });
 
   app.delete("/api/purchases/:id", (req, res) => {
     const { id } = req.params;
     const transaction = db.transaction(() => {
-      // 1. Get purchase items to reverse stock
+      // 1. Get purchase items to reverse stock and valuation
       const items = db.prepare("SELECT product_id, quantity FROM purchase_items WHERE purchase_id = ?").all(id) as any[];
       if (items.length === 0) {
-        // Check if purchase exists even if no items (shouldn't happen with valid purchases)
         const purchase = db.prepare("SELECT id FROM purchases WHERE id = ?").get(id);
         if (!purchase) throw new Error("Purchase not found");
       }
 
       for (const item of items) {
-        db.prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?").run(item.quantity, item.product_id);
+        processPurchaseReturnValuation(db, item.product_id, item.quantity, id, `Cancellation of Purchase #${id}`);
       }
 
       // 2. Delete batches associated with this purchase
