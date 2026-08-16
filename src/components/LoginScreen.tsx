@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, KeyRound, User, AlertCircle, ArrowRight, UserCheck, CheckCircle2 } from 'lucide-react';
+import { Shield, KeyRound, User, AlertCircle, ArrowRight, UserCheck, CheckCircle2, Building2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AuthUser } from '../types';
 
@@ -12,7 +12,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [availableUsers, setAvailableUsers] = useState<Array<{ id: number; name: string; role: string; phone: string; distributor_name?: string }>>([]);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: number; name: string; role: string; phone: string; distributor_id?: number; distributor_name?: string }>>([]);
 
   useEffect(() => {
     fetch('/api/users')
@@ -85,8 +85,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       .finally(() => setLoading(false));
   };
 
-  const adminUser = availableUsers.find(u => u.role === 'admin') || { name: 'Admin Karachi', phone: '03001234567' };
-  const salesmanUser = availableUsers.find(u => u.role !== 'admin') || { name: 'Salman', phone: '03007654321' };
+  const adminUser = availableUsers.find(u => u.role === 'admin') || { name: 'Admin Karachi', phone: '03001234567', distributor_name: 'All Distributors' };
+  const centralUser = availableUsers.find(u => u.distributor_id === 1 && u.role !== 'admin') || availableUsers.find(u => u.role !== 'admin') || { name: 'Salman', phone: '03007654321', distributor_name: 'Karachi Central' };
+  const southUser = availableUsers.find(u => u.distributor_id === 2) || { name: 'Tariq Mahmood', phone: '03005551234', distributor_name: 'South Zone FMCG' };
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
@@ -136,7 +137,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 type="text"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
-                placeholder="e.g. Salman or 03007654321"
+                placeholder="e.g. Salman or Tariq Mahmood"
                 disabled={loading}
                 autoFocus
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/60 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
@@ -178,41 +179,63 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </form>
 
         {/* Quick Demo Login Credentials Box */}
-        <div className="mt-8 pt-6 border-t border-slate-700/60">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-            Quick 1-Click Demo Accounts
+        <div className="mt-7 pt-5 border-t border-slate-700/60">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2.5">
+            Quick 1-Click Demo Logins
           </p>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => handleQuickLogin(adminUser.name, 'admin123')}
               disabled={loading}
-              className="p-3 bg-slate-900/80 hover:bg-indigo-950/60 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-left transition-all group"
+              className="p-2.5 bg-slate-900/80 hover:bg-indigo-950/60 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-left transition-all group flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
-                  {adminUser.name}
-                </span>
-                <UserCheck size={13} className="text-indigo-400 shrink-0" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+                    Admin
+                  </span>
+                  <UserCheck size={11} className="text-indigo-400 shrink-0" />
+                </div>
+                <p className="text-[9px] text-slate-400 truncate">HQ Master</p>
               </div>
-              <p className="text-[10px] font-mono text-slate-400 truncate">{adminUser.phone}</p>
-              <p className="text-[10px] font-mono text-slate-500">admin123</p>
+              <span className="text-[9px] font-mono text-indigo-400 font-semibold mt-1.5">admin123</span>
             </button>
 
             <button
               type="button"
-              onClick={() => handleQuickLogin(salesmanUser.name, 'sales123')}
+              onClick={() => handleQuickLogin(centralUser.name, 'Salman123')}
               disabled={loading}
-              className="p-3 bg-slate-900/80 hover:bg-emerald-950/60 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition-all group"
+              className="p-2.5 bg-slate-900/80 hover:bg-emerald-950/60 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition-all group flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
-                  {salesmanUser.name}
-                </span>
-                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+                    {centralUser.name}
+                  </span>
+                  <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                </div>
+                <p className="text-[9px] text-slate-400 truncate">Central Zone</p>
               </div>
-              <p className="text-[10px] font-mono text-slate-400 truncate">{salesmanUser.phone}</p>
-              <p className="text-[10px] font-mono text-slate-500">sales123</p>
+              <span className="text-[9px] font-mono text-emerald-400 font-semibold mt-1.5">Salman123</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickLogin(southUser.name, 'south123')}
+              disabled={loading}
+              className="p-2.5 bg-slate-900/80 hover:bg-amber-950/60 border border-slate-700 hover:border-amber-500/50 rounded-xl text-left transition-all group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold text-white group-hover:text-amber-300 transition-colors truncate">
+                    {southUser.name.split(' ')[0]}
+                  </span>
+                  <Building2 size={11} className="text-amber-400 shrink-0" />
+                </div>
+                <p className="text-[9px] text-slate-400 truncate">South Zone</p>
+              </div>
+              <span className="text-[9px] font-mono text-amber-400 font-semibold mt-1.5">south123</span>
             </button>
           </div>
         </div>

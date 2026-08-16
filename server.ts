@@ -1362,6 +1362,250 @@ try {
   console.error("Area Wise Report Seeding execution failed:", e);
 }
 
+function seedSouthZoneData() {
+  try {
+    db.transaction(() => {
+      // 1. Ensure South Zone distributor master exists
+      db.prepare(`
+        INSERT OR IGNORE INTO distributors (id, code, name, contact_person, phone, email, address, city, ntn_number, strn_number, status)
+        VALUES (2, 'DST-002', 'South Zone FMCG Distribution', 'Nadeem Khan', '021-35678901', 'sales@southzone.pk', 'Shop 12-14, Wholesale Market, Saddar, Karachi', 'Karachi', '2345678-9', '3277876123457', 'ACTIVE')
+      `).run();
+
+      // 2. Users for South Zone
+      const insertUser = db.prepare(`
+        INSERT OR IGNORE INTO users (name, role, phone, password, distributor_id)
+        VALUES (?, ?, ?, ?, 2)
+      `);
+      insertUser.run('Tariq Mahmood', 'salesman', '03005551234', 'south123');
+      insertUser.run('Nadeem Khan', 'order_booker', '03005559876', 'south123');
+      insertUser.run('Bilal South', 'salesman', '03219988776', 'south123');
+
+      // 3. Order Bookers for South Zone
+      const insertBooker = db.prepare(`
+        INSERT OR IGNORE INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date, distributor_id)
+        VALUES (?, ?, ?, ?, ?, 2)
+      `);
+      insertBooker.run('Rashid Mehmood', 'Mehmood Ul Hassan', '03005552211', '42301-4455667-1', '2024-03-15');
+      insertBooker.run('Waqas Siddiqui', 'Siddique Ahmed', '03335553322', '42301-7788990-2', '2024-05-01');
+
+      // 4. Salesmen for South Zone
+      const insertSalesman = db.prepare(`
+        INSERT OR IGNORE INTO salesmen (name, father_name, cell_no, cnic_no, joining_date, distributor_id)
+        VALUES (?, ?, ?, ?, ?, 2)
+      `);
+      insertSalesman.run('Hamza Farooq', 'Farooq Azam', '03005554433', '42301-1122334-3', '2024-02-20');
+      insertSalesman.run('Danish Qureshi', 'Qureshi Iqbal', '03125555544', '42301-5566778-4', '2024-04-10');
+
+      // 5. Drivers for South Zone
+      const insertDriver = db.prepare(`
+        INSERT OR IGNORE INTO drivers (name, father_name, cell_no, cnic_no, joining_date, distributor_id)
+        VALUES (?, ?, ?, ?, ?, 2)
+      `);
+      insertDriver.run('Ghulam Rasool', 'Allah Ditta', '03455556655', '42301-9988776-5', '2024-01-10');
+      insertDriver.run('Iftikhar Hussain', 'Hussain Baksh', '03465557766', '42301-3344556-6', '2024-03-25');
+
+      // 6. Shops for South Zone (Distinct South Karachi areas)
+      const insertShop = db.prepare(`
+        INSERT OR IGNORE INTO shops (shop_name, owner_name, location, phone, credit_limit, category, distributor_id)
+        VALUES (?, ?, ?, ?, ?, ?, 2)
+      `);
+      insertShop.run('South Super Market', 'Irfan Merchant', 'Saddar Wholesale Market, Karachi', '03008881101', 80000, 'Wholesaler');
+      insertShop.run('Clifton Mart & Grocery', 'Sikandar Ali', 'Block 2, Clifton, Karachi', '03008881102', 120000, 'Retailer');
+      insertShop.run('Kharadar Cash & Carry', 'Haji Abdul Sattar', 'Near Bolton Market, Kharadar, Karachi', '03008881103', 150000, 'Wholesaler');
+      insertShop.run('Burns Road Store', 'Naveed Sheikh', 'Burns Road Food Street Area, Karachi', '03008881104', 60000, 'Retailer');
+      insertShop.run('Defence Mini Mart', 'Kamran Zubair', 'Phase 5, DHA, Karachi', '03008881105', 100000, 'Modern Trade');
+      insertShop.run('Zamzama Express Shop', 'Junaid Siddiqui', 'Zamzama Commercial, DHA, Karachi', '03008881106', 75000, 'Retailer');
+
+      // 7. Products for South Zone
+      const insertProduct = db.prepare(`
+        INSERT OR IGNORE INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, unit, conversion_value, conversion_unit, min_stock_level, reorder_level, inventory_value, moving_average_price, distributor_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)
+      `);
+      insertProduct.run('S000000001', 'Canola Oil 1L Pouch', 'Seasons', '00001', 520, 560, 600, 150, 'EA', 1, 'L', 25, 50, 78000, 520);
+      insertProduct.run('S000000002', 'Premium Danedar Tea 450g', 'Vital Tea', '00003', 680, 730, 780, 85, 'EA', 450, 'GR', 15, 30, 57800, 680);
+      insertProduct.run('S000000003', 'Beauty Soap 140g Pack of 3', 'Dettol', '00003', 280, 310, 350, 210, 'PK', 3, 'EA', 40, 80, 58800, 280);
+      insertProduct.run('S000000004', 'Basmati Rice 5kg Bag', 'Guard Super', '00002', 1750, 1880, 2050, 45, 'PK', 5, 'KG', 10, 20, 78750, 1750);
+      insertProduct.run('S000000005', 'Detergent Powder 1kg', 'Surf Excel', '00003', 440, 480, 520, 120, 'EA', 1, 'KG', 20, 40, 52800, 440);
+      insertProduct.run('S000000006', 'Energy Drink 250ml Can', 'Roar Energy', '00001', 110, 130, 160, 350, 'EA', 250, 'ML', 50, 100, 38500, 110);
+      insertProduct.run('S000000007', 'Chili Garlic Sauce 800g', 'Shangrila', '00001', 320, 355, 390, 95, 'EA', 800, 'GR', 15, 30, 30400, 320);
+
+      // 8. Suppliers
+      const insertSupp = db.prepare(`
+        INSERT OR IGNORE INTO suppliers (name, contact_person, phone, address)
+        VALUES (?, ?, ?, ?)
+      `);
+      insertSupp.run('South Edible Oils & Ghee Ltd', 'Tariq Mehmood', '03009988112', 'Korangi Creek Industrial Area, Karachi');
+      insertSupp.run('National Foods South Depot', 'Shahid Rauf', '03009988113', 'Port Qasim Hub, Karachi');
+
+      const s1 = db.prepare("SELECT id FROM suppliers WHERE name = 'South Edible Oils & Ghee Ltd'").get() as any;
+      const s2 = db.prepare("SELECT id FROM suppliers WHERE name = 'National Foods South Depot'").get() as any;
+      const supp1Id = s1 ? s1.id : 1;
+      const supp2Id = s2 ? s2.id : 1;
+
+      // 9. Purchases for South Zone
+      const checkPurchases = db.prepare("SELECT COUNT(*) as count FROM purchases WHERE distributor_id = 2").get() as { count: number };
+      if (checkPurchases.count === 0) {
+        const p1 = db.prepare(`
+          INSERT INTO purchases (supplier_id, purchase_date, status, total_amount, distributor_id)
+          VALUES (?, '2026-08-10 10:00:00', 'received', 78000, 2)
+        `).run(supp1Id);
+        db.prepare(`
+          INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location)
+          VALUES (?, 'S000000001', 150, 520, 'SZ-OIL-B101', 'Warehouse South Rack A1')
+        `).run(p1.lastInsertRowid);
+
+        const p2 = db.prepare(`
+          INSERT INTO purchases (supplier_id, purchase_date, status, total_amount, distributor_id)
+          VALUES (?, '2026-08-12 11:30:00', 'received', 136550, 2)
+        `).run(supp2Id);
+        db.prepare(`
+          INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location)
+          VALUES (?, 'S000000002', 85, 680, 'SZ-TEA-B202', 'Warehouse South Rack B2')
+        `).run(p2.lastInsertRowid);
+        db.prepare(`
+          INSERT INTO purchase_items (purchase_id, product_id, quantity, price, supplier_batch_no, storage_location)
+          VALUES (?, 'S000000004', 45, 1750, 'SZ-RICE-B303', 'Warehouse South Bay 1')
+        `).run(p2.lastInsertRowid);
+      }
+
+      // 10. Orders for South Zone
+      const checkOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE distributor_id = 2").get() as { count: number };
+      if (checkOrders.count === 0) {
+        const shopList = db.prepare("SELECT id, shop_name FROM shops WHERE distributor_id = 2").all() as any[];
+        const shopMap: Record<string, number> = {};
+        shopList.forEach(s => { shopMap[s.shop_name] = s.id; });
+
+        const bookers = db.prepare("SELECT id, name FROM order_bookers WHERE distributor_id = 2").all() as any[];
+        const rashidId = bookers.find(b => b.name === 'Rashid Mehmood')?.id || bookers[0]?.id || 1;
+        const waqasId = bookers.find(b => b.name === 'Waqas Siddiqui')?.id || bookers[0]?.id || 1;
+
+        const salesmenList = db.prepare("SELECT id, name FROM salesmen WHERE distributor_id = 2").all() as any[];
+        const hamzaId = salesmenList.find(s => s.name === 'Hamza Farooq')?.id || salesmenList[0]?.id || 1;
+        const danishId = salesmenList.find(s => s.name === 'Danish Qureshi')?.id || salesmenList[0]?.id || 1;
+
+        const driversList = db.prepare("SELECT id, name FROM drivers WHERE distributor_id = 2").all() as any[];
+        const ghulamId = driversList.find(d => d.name === 'Ghulam Rasool')?.id || driversList[0]?.id || 1;
+
+        // Order 1: South Super Market (delivered)
+        const o1 = db.prepare(`
+          INSERT INTO orders (shop_id, order_booker_id, order_date, status, total_amount, distributor_id)
+          VALUES (?, ?, '2026-08-14 09:30:00', 'delivered', 24630, 2)
+        `).run(shopMap['South Super Market'] || 1, rashidId);
+        const o1Id = o1.lastInsertRowid;
+        const oi1 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000001', 20, 560, 'Delivered')").run(o1Id);
+        const oi2 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000002', 15, 730, 'Delivered')").run(o1Id);
+        const oi3 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000003', 8, 310, 'Delivered')").run(o1Id);
+
+        // Order 2: Clifton Mart & Grocery (delivered)
+        const o2 = db.prepare(`
+          INSERT INTO orders (shop_id, order_booker_id, order_date, status, total_amount, distributor_id)
+          VALUES (?, ?, '2026-08-15 10:15:00', 'delivered', 31000, 2)
+        `).run(shopMap['Clifton Mart & Grocery'] || 2, rashidId);
+        const o2Id = o2.lastInsertRowid;
+        const oi4 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000004', 10, 1880, 'Delivered')").run(o2Id);
+        const oi5 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000005', 20, 480, 'Delivered')").run(o2Id);
+        const oi6 = db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000006', 20, 130, 'Delivered')").run(o2Id);
+
+        // Order 3: Kharadar Cash & Carry (invoiced)
+        const o3 = db.prepare(`
+          INSERT INTO orders (shop_id, order_booker_id, order_date, status, total_amount, distributor_id)
+          VALUES (?, ?, '2026-08-15 14:00:00', 'invoiced', 42050, 2)
+        `).run(shopMap['Kharadar Cash & Carry'] || 3, waqasId);
+        const o3Id = o3.lastInsertRowid;
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000001', 30, 560, 'Pending')").run(o3Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000007', 30, 355, 'Pending')").run(o3Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000002', 20, 730, 'Pending')").run(o3Id);
+
+        // Order 4: Burns Road Store (approved)
+        const o4 = db.prepare(`
+          INSERT INTO orders (shop_id, order_booker_id, order_date, status, total_amount, distributor_id)
+          VALUES (?, ?, '2026-08-16 09:00:00', 'approved', 14450, 2)
+        `).run(shopMap['Burns Road Store'] || 4, waqasId);
+        const o4Id = o4.lastInsertRowid;
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000005', 15, 480, 'Pending')").run(o4Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000003', 15, 310, 'Pending')").run(o4Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000006', 20, 130, 'Pending')").run(o4Id);
+
+        // Order 5: Defence Mini Mart (pending)
+        const o5 = db.prepare(`
+          INSERT INTO orders (shop_id, order_booker_id, order_date, status, total_amount, distributor_id)
+          VALUES (?, ?, '2026-08-16 11:20:00', 'pending', 18475, 2)
+        `).run(shopMap['Defence Mini Mart'] || 5, rashidId);
+        const o5Id = o5.lastInsertRowid;
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000004', 5, 1880, 'Pending')").run(o5Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000002', 10, 730, 'Pending')").run(o5Id);
+        db.prepare("INSERT INTO order_items (order_id, product_id, quantity, price, status) VALUES (?, 'S000000007', 5, 355, 'Pending')").run(o5Id);
+
+        // Load Plan for South Zone
+        const lp = db.prepare(`
+          INSERT INTO load_plans (plan_date, vehicle_id, driver_id, status, distributor_id)
+          VALUES ('2026-08-14 07:30:00', 'KHI-SZ-8842', ?, 'completed', 2)
+        `).run(ghulamId);
+        const lpId = lp.lastInsertRowid;
+        db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(lpId, o1Id);
+        db.prepare("INSERT INTO load_plan_items (plan_id, order_id) VALUES (?, ?)").run(lpId, o2Id);
+
+        // Deliveries
+        const del1 = db.prepare(`
+          INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, status, total_amount, distributor_id)
+          VALUES (?, ?, ?, '2026-08-14 14:00:00', 'completed', 24630, 2)
+        `).run(o1Id, shopMap['South Super Market'] || 1, hamzaId);
+        const del1Id = del1.lastInsertRowid;
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000001', 20, 560)").run(del1Id, oi1.lastInsertRowid);
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000002', 15, 730)").run(del1Id, oi2.lastInsertRowid);
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000003', 8, 310)").run(del1Id, oi3.lastInsertRowid);
+
+        const del2 = db.prepare(`
+          INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, status, total_amount, distributor_id)
+          VALUES (?, ?, ?, '2026-08-15 15:30:00', 'completed', 31000, 2)
+        `).run(o2Id, shopMap['Clifton Mart & Grocery'] || 2, danishId);
+        const del2Id = del2.lastInsertRowid;
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000004', 10, 1880)").run(del2Id, oi4.lastInsertRowid);
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000005', 20, 480)").run(del2Id, oi5.lastInsertRowid);
+        db.prepare("INSERT INTO delivery_items (delivery_id, order_item_id, product_id, quantity, price) VALUES (?, ?, 'S000000006', 20, 130)").run(del2Id, oi6.lastInsertRowid);
+
+        // Invoices
+        const inv1 = db.prepare(`
+          INSERT INTO invoices (shop_id, invoice_date, gross_amount, total_discount, total_tax, net_amount, status, distributor_id)
+          VALUES (?, '2026-08-14 14:15:00', 24630, 0, 0, 24630, 'paid', 2)
+        `).run(shopMap['South Super Market'] || 1);
+        const inv1Id = inv1.lastInsertRowid;
+        const ii1 = db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 1, 'S000000001', 20, 560, 11200)").run(inv1Id, del1Id);
+        db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 2, 'S000000002', 15, 730, 10950)").run(inv1Id, del1Id);
+        db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 3, 'S000000003', 8, 310, 2480)").run(inv1Id, del1Id);
+
+        const inv2 = db.prepare(`
+          INSERT INTO invoices (shop_id, invoice_date, gross_amount, total_discount, total_tax, net_amount, status, distributor_id)
+          VALUES (?, '2026-08-15 15:45:00', 31000, 0, 0, 31000, 'open', 2)
+        `).run(shopMap['Clifton Mart & Grocery'] || 2);
+        const inv2Id = inv2.lastInsertRowid;
+        db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 4, 'S000000004', 10, 1880, 18800)").run(inv2Id, del2Id);
+        db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 5, 'S000000005', 20, 480, 9600)").run(inv2Id, del2Id);
+        db.prepare("INSERT INTO invoice_items (invoice_id, delivery_id, delivery_item_id, product_id, quantity, unit_price, net_amount) VALUES (?, ?, 6, 'S000000006', 20, 130, 2600)").run(inv2Id, del2Id);
+
+        // Sales Return for South Zone
+        const sr = db.prepare(`
+          INSERT INTO sales_returns (return_date, shop_id, invoice_id, total_amount, status, distributor_id)
+          VALUES ('2026-08-15 17:00:00', ?, ?, 620, 'completed', 2)
+        `).run(shopMap['South Super Market'] || 1, inv1Id);
+        db.prepare(`
+          INSERT INTO sales_return_items (sales_return_id, invoice_item_id, product_id, quantity, unit_price, reason)
+          VALUES (?, ?, 'S000000003', 2, 310, 'Damaged carton packaging during transit')
+        `).run(sr.lastInsertRowid, ii1.lastInsertRowid);
+      }
+    })();
+    console.log("[Database] South Zone seed data verified and ready!");
+  } catch (err) {
+    console.error("[Database Error] Seeding South Zone data failed:", err);
+  }
+}
+
+try {
+  seedSouthZoneData();
+} catch (e) {
+  console.error("South Zone Seeding execution failed:", e);
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -1699,7 +1943,8 @@ async function startServer() {
         ORDER BY d.id ASC
       `).all();
 
-      const products = db.prepare("SELECT p.*, mg.mat_description as material_group_name FROM products p LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp").all();
+      const productWhere = distId ? `WHERE (p.distributor_id = ${distId} OR p.distributor_id IS NULL)` : '';
+      const products = db.prepare(`SELECT p.*, mg.mat_description as material_group_name FROM products p LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp ${productWhere}`).all();
       const shops = db.prepare(`SELECT * FROM shops ${shopWhere}`).all();
       const suppliers = db.prepare("SELECT * FROM suppliers").all();
       const orders = db.prepare(`
@@ -1895,11 +2140,14 @@ async function startServer() {
   });
 
   app.get("/api/products", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const productWhere = distId ? `WHERE (p.distributor_id = ${distId} OR p.distributor_id IS NULL)` : '';
     const products = db.prepare(`
       SELECT p.*, mg.mat_description as material_group_name,
              (SELECT COALESCE(SUM(quantity), 0) FROM product_batches WHERE product_batches.product_id = p.product_id AND purchase_id IS NULL) AS opening_stock
       FROM products p 
       LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp
+      ${productWhere}
     `).all();
     res.json(products);
   });
