@@ -519,6 +519,73 @@ try {
     console.error("inventory_audit_log table creation error:", e);
   }
 
+  // Create Distributors table
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS distributors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        contact_person TEXT,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        city TEXT DEFAULT 'Karachi',
+        ntn_number TEXT,
+        strn_number TEXT,
+        status TEXT DEFAULT 'ACTIVE',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_distributors_code ON distributors(code);
+    `);
+  } catch (e) {
+    console.error("distributors table creation error:", e);
+  }
+
+  // Safe migration: Add distributor_id column to tables
+  const tablesForDistributor = [
+    'users', 'shops', 'orders', 'purchases', 'deliveries', 'returns',
+    'sales_returns', 'purchase_returns', 'invoices', 'order_bookers',
+    'salesmen', 'drivers', 'load_plans', 'products'
+  ];
+
+  for (const tbl of tablesForDistributor) {
+    try {
+      db.exec(`ALTER TABLE ${tbl} ADD COLUMN distributor_id INTEGER REFERENCES distributors(id);`);
+    } catch (e) {
+      // Column already exists or table does not exist
+    }
+  }
+
+  // Seed default distributors if empty
+  try {
+    const distCount = db.prepare("SELECT COUNT(*) as count FROM distributors").get() as { count: number };
+    if (distCount.count === 0) {
+      const insertDist = db.prepare(`
+        INSERT OR IGNORE INTO distributors (id, code, name, contact_person, phone, email, address, city, ntn_number, strn_number, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      insertDist.run(1, 'DST-001', 'Karachi Central Logistics & Distribution', 'Muhammad Tariq', '021-34567890', 'info@khi-central.pk', 'Plot 45, Sector 15, Korangi Industrial Area, Karachi', 'Karachi', '1234567-8', '3277876123456', 'ACTIVE');
+      insertDist.run(2, 'DST-002', 'South Zone FMCG Distribution', 'Nadeem Khan', '021-35678901', 'sales@southzone.pk', 'Shop 12-14, Wholesale Market, Saddar, Karachi', 'Karachi', '2345678-9', '3277876123457', 'ACTIVE');
+      insertDist.run(3, 'DST-003', 'North Region Wholesale & Distribution', 'Farhan Ali', '021-36789012', 'contact@northdist.pk', 'Sector 5-D, North Karachi Industrial Area', 'Karachi', '3456789-0', '3277876123458', 'ACTIVE');
+    }
+  } catch (e) {
+    console.error("Distributor seeding error:", e);
+  }
+
+  // Backfill existing records to distributor_id = 1 (Karachi Central) where distributor_id is NULL
+  try {
+    for (const tbl of tablesForDistributor) {
+      if (tbl !== 'users') {
+        db.exec(`UPDATE ${tbl} SET distributor_id = 1 WHERE distributor_id IS NULL;`);
+      }
+    }
+    // Set non-admin users to distributor_id = 1 if null
+    db.exec(`UPDATE users SET distributor_id = 1 WHERE role != 'admin' AND distributor_id IS NULL;`);
+  } catch (e) {
+    console.warn("Distributor backfill error:", e);
+  }
+
   // Backfill initial MAP and Inventory Value for existing products
   try {
     db.exec(`
@@ -1303,18 +1370,227 @@ async function startServer() {
   app.use(morgan("dev"));
   app.use(express.json());
 
+  // Authentication & User Management Routes
+  app.post("/api/auth/login", (req, res) => {
+    const { phone, password } = req.body;
+    if (!phone || !password) {
+      return res.status(400).json({ error: "Phone and password are required" });
+    }
+
+    try {
+      const user = db.prepare(`
+        SELECT u.id, u.name, u.role, u.phone, u.password, u.distributor_id,
+               d.name as distributor_name, d.code as distributor_code
+        FROM users u
+        LEFT JOIN distributors d ON u.distributor_id = d.id
+        WHERE u.phone = ?
+      `).get(phone.trim()) as any;
+
+      if (!user) {
+        return res.status(401).json({ error: "Invalid phone number or user not found" });
+      }
+
+      if (user.password !== password) {
+        return res.status(401).json({ error: "Incorrect password" });
+      }
+
+      const { password: _, ...userSafe } = user;
+      res.json({
+        success: true,
+        user: userSafe
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Login failed" });
+    }
+  });
+
+  app.get("/api/users", (req, res) => {
+    try {
+      const users = db.prepare(`
+        SELECT u.id, u.name, u.role, u.phone, u.distributor_id,
+               d.name as distributor_name, d.code as distributor_code
+        FROM users u
+        LEFT JOIN distributors d ON u.distributor_id = d.id
+        ORDER BY u.id ASC
+      `).all();
+      res.json(users);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/users", (req, res) => {
+    const { name, role, phone, password, distributor_id } = req.body;
+    if (!name || !role || !phone || !password) {
+      return res.status(400).json({ error: "All fields (name, role, phone, password) are required" });
+    }
+    if (role !== 'admin' && (!distributor_id || distributor_id === 'all')) {
+      return res.status(400).json({ error: "Please select an assigned Distributor for this user" });
+    }
+    try {
+      const distId = distributor_id && distributor_id !== 'all' ? Number(distributor_id) : null;
+      const result = db.prepare("INSERT INTO users (name, role, phone, password, distributor_id) VALUES (?, ?, ?, ?, ?)").run(
+        name.trim(), role.trim(), phone.trim(), password.trim(), distId
+      );
+      res.status(201).json({ id: result.lastInsertRowid, name, role, phone, distributor_id: distId });
+    } catch (err: any) {
+      if (err.message?.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "A user with this phone number already exists" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/users/:id", (req, res) => {
+    const { name, role, phone, password, distributor_id } = req.body;
+    if (!name || !role || !phone) {
+      return res.status(400).json({ error: "Name, role, and phone are required" });
+    }
+    if (role !== 'admin' && (!distributor_id || distributor_id === 'all')) {
+      return res.status(400).json({ error: "Please select an assigned Distributor for this user" });
+    }
+    try {
+      const distId = distributor_id && distributor_id !== 'all' ? Number(distributor_id) : null;
+      if (password && password.trim()) {
+        db.prepare("UPDATE users SET name = ?, role = ?, phone = ?, password = ?, distributor_id = ? WHERE id = ?").run(
+          name.trim(), role.trim(), phone.trim(), password.trim(), distId, req.params.id
+        );
+      } else {
+        db.prepare("UPDATE users SET name = ?, role = ?, phone = ?, distributor_id = ? WHERE id = ?").run(
+          name.trim(), role.trim(), phone.trim(), distId, req.params.id
+        );
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/users/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Distributor Master API Routes (T-Code: DST01 / DIS01)
+  app.get("/api/distributors", (req, res) => {
+    try {
+      const distributors = db.prepare(`
+        SELECT d.*,
+          (SELECT COUNT(*) FROM shops s WHERE s.distributor_id = d.id) as total_shops,
+          (SELECT COUNT(*) FROM users u WHERE u.distributor_id = d.id) as total_users,
+          (SELECT COUNT(*) FROM orders o WHERE o.distributor_id = d.id) as total_orders
+        FROM distributors d
+        ORDER BY d.id ASC
+      `).all();
+      res.json(distributors);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/distributors", (req, res) => {
+    const { code, name, contact_person, phone, email, address, city, ntn_number, strn_number, status } = req.body;
+    if (!code || !name) {
+      return res.status(400).json({ error: "Distributor Code and Name are required" });
+    }
+    try {
+      const result = db.prepare(`
+        INSERT INTO distributors (code, name, contact_person, phone, email, address, city, ntn_number, strn_number, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        code.trim().toUpperCase(),
+        name.trim(),
+        contact_person?.trim() || null,
+        phone?.trim() || null,
+        email?.trim() || null,
+        address?.trim() || null,
+        city?.trim() || 'Karachi',
+        ntn_number?.trim() || null,
+        strn_number?.trim() || null,
+        status || 'ACTIVE'
+      );
+      res.status(201).json({ id: result.lastInsertRowid, ...req.body });
+    } catch (err: any) {
+      if (err.message?.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "A distributor with this code already exists" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/distributors/:id", (req, res) => {
+    const { id } = req.params;
+    const { code, name, contact_person, phone, email, address, city, ntn_number, strn_number, status } = req.body;
+    if (!code || !name) {
+      return res.status(400).json({ error: "Distributor Code and Name are required" });
+    }
+    try {
+      db.prepare(`
+        UPDATE distributors 
+        SET code = ?, name = ?, contact_person = ?, phone = ?, email = ?, address = ?, city = ?, ntn_number = ?, strn_number = ?, status = ?
+        WHERE id = ?
+      `).run(
+        code.trim().toUpperCase(),
+        name.trim(),
+        contact_person?.trim() || null,
+        phone?.trim() || null,
+        email?.trim() || null,
+        address?.trim() || null,
+        city?.trim() || 'Karachi',
+        ntn_number?.trim() || null,
+        strn_number?.trim() || null,
+        status || 'ACTIVE',
+        id
+      );
+      res.json({ id: Number(id), ...req.body });
+    } catch (err: any) {
+      if (err.message?.includes("UNIQUE constraint failed")) {
+        return res.status(400).json({ error: "A distributor with this code already exists" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/distributors/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+      const userCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE distributor_id = ?").get(id) as { count: number };
+      const shopCount = db.prepare("SELECT COUNT(*) as count FROM shops WHERE distributor_id = ?").get(id) as { count: number };
+      const orderCount = db.prepare("SELECT COUNT(*) as count FROM orders WHERE distributor_id = ?").get(id) as { count: number };
+      if (userCount.count > 0 || shopCount.count > 0 || orderCount.count > 0) {
+        return res.status(400).json({
+          error: `Cannot delete distributor: It has ${userCount.count} user(s), ${shopCount.count} shop(s), and ${orderCount.count} order(s) attached.`
+        });
+      }
+      db.prepare("DELETE FROM distributors WHERE id = ?").run(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // API Routes
   app.get("/api/stats", (req, res) => {
     try {
-      const totalSales = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered' AND is_cancelled != 'X'").get() as { total: number };
-      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'partially_delivered') AND is_cancelled != 'X'").get() as { count: number };
+      const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+
+      const orderWhere = distId ? `WHERE status = 'delivered' AND is_cancelled != 'X' AND (distributor_id = ${distId} OR distributor_id IS NULL)` : `WHERE status = 'delivered' AND is_cancelled != 'X'`;
+      const pendingWhere = distId ? `WHERE status IN ('pending', 'partially_delivered') AND is_cancelled != 'X' AND (distributor_id = ${distId} OR distributor_id IS NULL)` : `WHERE status IN ('pending', 'partially_delivered') AND is_cancelled != 'X'`;
+      const shopWhere = distId ? `WHERE distributor_id = ${distId} OR distributor_id IS NULL` : ``;
+
+      const totalSales = db.prepare(`SELECT SUM(total_amount) as total FROM orders ${orderWhere}`).get() as { total: number };
+      const pendingOrders = db.prepare(`SELECT COUNT(*) as count FROM orders ${pendingWhere}`).get() as { count: number };
       const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as { count: number };
-      const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get() as { count: number };
+      const totalShops = db.prepare(`SELECT COUNT(*) as count FROM shops ${shopWhere}`).get() as { count: number };
       
       const statusCounts = db.prepare(`
         SELECT status as name, COUNT(*) as value 
         FROM orders 
-        WHERE is_cancelled != 'X'
+        WHERE is_cancelled != 'X' ${distId ? `AND (distributor_id = ${distId} OR distributor_id IS NULL)` : ''}
         GROUP BY status
       `).all() as { name: string; value: number }[];
 
@@ -1323,13 +1599,13 @@ async function startServer() {
         value: s.value
       }));
 
-      // 1. Sales by Town (from location string for now since area_id isn't directly in shops yet)
+      // 1. Sales by Town
       const salesByTown = db.prepare(`
-        SELECT location as name, SUM(total_amount) as value 
+        SELECT s.location as name, SUM(o.total_amount) as value 
         FROM orders o
         JOIN shops s ON o.shop_id = s.id
-        WHERE o.status = 'delivered'
-        GROUP BY location
+        WHERE o.status = 'delivered' ${distId ? `AND (o.distributor_id = ${distId} OR o.distributor_id IS NULL)` : ''}
+        GROUP BY s.location
         ORDER BY value DESC
         LIMIT 5
       `).all() as { name: string; value: number }[];
@@ -1339,7 +1615,7 @@ async function startServer() {
         SELECT ob.name as name, SUM(o.total_amount) as value 
         FROM orders o
         JOIN order_bookers ob ON o.order_booker_id = ob.id
-        WHERE o.status = 'delivered'
+        WHERE o.status = 'delivered' ${distId ? `AND (o.distributor_id = ${distId} OR o.distributor_id IS NULL)` : ''}
         GROUP BY ob.name
         ORDER BY value DESC
         LIMIT 5
@@ -1349,7 +1625,7 @@ async function startServer() {
       const salesTrend = db.prepare(`
         SELECT strftime('%Y-%m-%d', order_date) as name, SUM(total_amount) as value 
         FROM orders 
-        WHERE order_date >= date('now', '-7 days') AND status = 'delivered'
+        WHERE order_date >= date('now', '-7 days') AND status = 'delivered' ${distId ? `AND (distributor_id = ${distId} OR distributor_id IS NULL)` : ''}
         GROUP BY name
         ORDER BY name ASC
       `).all() as { name: string; value: number }[];
@@ -1361,9 +1637,10 @@ async function startServer() {
         JOIN products p ON oi.product_id = p.product_id
         JOIN material_groups mg ON p.material_group_id = mg.mat_gp
         JOIN orders o ON oi.order_id = o.id
-        WHERE o.status = 'delivered'
+        WHERE o.status = 'delivered' ${distId ? `AND (o.distributor_id = ${distId} OR o.distributor_id IS NULL)` : ''}
         GROUP BY mg.mat_description
         ORDER BY value DESC
+        LIMIT 5
       `).all() as { name: string; value: number }[];
 
       res.json({
@@ -1385,16 +1662,39 @@ async function startServer() {
 
   app.get("/api/batch-init", (req, res) => {
     try {
-      // Reuse existing logic or write queries directly
-      const stats = db.prepare("SELECT SUM(total_amount) as total FROM orders WHERE status = 'delivered'").get();
-      const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'").get();
-      const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get();
-      const totalShops = db.prepare("SELECT COUNT(*) as count FROM shops").get();
-      const statusCounts = db.prepare("SELECT status as name, COUNT(*) as value FROM orders GROUP BY status").all();
-      const salesTrend = db.prepare("SELECT strftime('%Y-%m-%d', order_date) as name, SUM(total_amount) as value FROM orders WHERE order_date >= date('now', '-7 days') AND status = 'delivered' GROUP BY name ORDER BY name ASC").all();
+      const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+
+      const orderWhere = distId ? `WHERE (o.distributor_id = ${distId} OR o.distributor_id IS NULL)` : '';
+      const statsOrderWhere = distId ? `WHERE status = 'delivered' AND (distributor_id = ${distId} OR distributor_id IS NULL)` : `WHERE status = 'delivered'`;
+      const pendingWhere = distId ? `WHERE status = 'pending' AND (distributor_id = ${distId} OR distributor_id IS NULL)` : `WHERE status = 'pending'`;
+      const shopWhere = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+      const purchaseWhere = distId ? `WHERE (p.distributor_id = ${distId} OR p.distributor_id IS NULL)` : '';
+      const loadPlanWhere = distId ? `WHERE (lp.distributor_id = ${distId} OR lp.distributor_id IS NULL)` : '';
+      const deliveryWhere = distId ? `WHERE (d.distributor_id = ${distId} OR d.distributor_id IS NULL)` : '';
+      const returnWhere = distId ? `WHERE (r.distributor_id = ${distId} OR r.distributor_id IS NULL)` : '';
+      const invoiceWhere = distId ? `WHERE (i.distributor_id = ${distId} OR i.distributor_id IS NULL)` : '';
+      const bookerWhere = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+      const salesmanWhere = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+      const driverWhere = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+
+      const stats = db.prepare(`SELECT SUM(total_amount) as total FROM orders ${statsOrderWhere}`).get() as any;
+      const pendingOrders = db.prepare(`SELECT COUNT(*) as count FROM orders ${pendingWhere}`).get() as any;
+      const lowStock = db.prepare("SELECT COUNT(*) as count FROM products WHERE stock_quantity <= min_stock_level").get() as any;
+      const totalShops = db.prepare(`SELECT COUNT(*) as count FROM shops ${shopWhere}`).get() as any;
+      const statusCounts = db.prepare(`SELECT status as name, COUNT(*) as value FROM orders ${orderWhere} GROUP BY status`).all();
+      const salesTrend = db.prepare(`SELECT strftime('%Y-%m-%d', order_date) as name, SUM(total_amount) as value FROM orders WHERE order_date >= date('now', '-7 days') AND status = 'delivered' ${distId ? `AND (distributor_id = ${distId} OR distributor_id IS NULL)` : ''} GROUP BY name ORDER BY name ASC`).all();
+
+      const distributors = db.prepare(`
+        SELECT d.*,
+          (SELECT COUNT(*) FROM shops s WHERE s.distributor_id = d.id) as total_shops,
+          (SELECT COUNT(*) FROM users u WHERE u.distributor_id = d.id) as total_users,
+          (SELECT COUNT(*) FROM orders o WHERE o.distributor_id = d.id) as total_orders
+        FROM distributors d
+        ORDER BY d.id ASC
+      `).all();
 
       const products = db.prepare("SELECT p.*, mg.mat_description as material_group_name FROM products p LEFT JOIN material_groups mg ON p.material_group_id = mg.mat_gp").all();
-      const shops = db.prepare("SELECT * FROM shops").all();
+      const shops = db.prepare(`SELECT * FROM shops ${shopWhere}`).all();
       const suppliers = db.prepare("SELECT * FROM suppliers").all();
       const orders = db.prepare(`
         SELECT o.*, r.shop_name, ob.name as order_booker_name,
@@ -1402,6 +1702,7 @@ async function startServer() {
         FROM orders o 
         LEFT JOIN shops r ON o.shop_id = r.id 
         LEFT JOIN order_bookers ob ON o.order_booker_id = ob.id 
+        ${orderWhere}
         ORDER BY o.order_date DESC
       `).all();
 
@@ -1410,6 +1711,7 @@ async function startServer() {
         (SELECT GROUP_CONCAT(COALESCE(prod.product_name, pi.product_id), ', ') FROM purchase_items pi LEFT JOIN products prod ON pi.product_id = prod.product_id WHERE pi.purchase_id = p.id) as items_summary
         FROM purchases p 
         LEFT JOIN suppliers s ON p.supplier_id = s.id 
+        ${purchaseWhere}
         ORDER BY p.purchase_date DESC
       `).all();
 
@@ -1418,13 +1720,14 @@ async function startServer() {
         (SELECT GROUP_CONCAT('ORD-' || lpi.order_id, ', ') FROM load_plan_items lpi WHERE lpi.plan_id = lp.id) as items_summary
         FROM load_plans lp 
         LEFT JOIN drivers d ON lp.driver_id = d.id 
+        ${loadPlanWhere}
         ORDER BY lp.plan_date DESC
       `).all();
 
       const materialGroups = db.prepare("SELECT * FROM material_groups").all();
-      const drivers = db.prepare("SELECT * FROM drivers").all();
-      const orderBookers = db.prepare("SELECT * FROM order_bookers").all();
-      const salesmen = db.prepare("SELECT * FROM salesmen").all();
+      const drivers = db.prepare(`SELECT * FROM drivers ${driverWhere}`).all();
+      const orderBookers = db.prepare(`SELECT * FROM order_bookers ${bookerWhere}`).all();
+      const salesmen = db.prepare(`SELECT * FROM salesmen ${salesmanWhere}`).all();
       const units = db.prepare("SELECT * FROM units").all();
 
       const deliveries = db.prepare(`
@@ -1434,6 +1737,7 @@ async function startServer() {
         LEFT JOIN orders o ON d.order_id = o.id 
         LEFT JOIN shops r ON (d.shop_id = r.id OR o.shop_id = r.id) 
         LEFT JOIN salesmen s ON d.salesman_id = s.id 
+        ${deliveryWhere}
         ORDER BY d.delivery_date DESC
       `).all();
 
@@ -1442,6 +1746,7 @@ async function startServer() {
         (SELECT GROUP_CONCAT(COALESCE(p.product_name, ret.product_id), ', ') FROM return_items ret LEFT JOIN products p ON ret.product_id = p.product_id WHERE ret.return_id = r.id) as items_summary
         FROM returns r 
         LEFT JOIN shops s ON r.shop_id = s.id 
+        ${returnWhere}
         ORDER BY r.return_date DESC
       `).all();
 
@@ -1450,6 +1755,7 @@ async function startServer() {
         (SELECT GROUP_CONCAT(COALESCE(p.product_name, ii.product_id), ', ') FROM invoice_items ii LEFT JOIN products p ON ii.product_id = p.product_id WHERE ii.invoice_id = i.id) as items_summary
         FROM invoices i 
         LEFT JOIN shops s ON i.shop_id = s.id 
+        ${invoiceWhere}
         ORDER BY i.created_at DESC
       `).all();
       
@@ -1462,7 +1768,7 @@ async function startServer() {
         WHERE remaining_quantity > 0
       `).get() as any;
 
-      // Mock daily sales for chart if not already gathered from DB
+      // Mock daily sales for chart
       const chartData = [
         { name: "Mon", sales: 45000 },
         { name: "Tue", sales: 52000 },
@@ -1485,6 +1791,7 @@ async function startServer() {
           })),
           salesTrend
         },
+        distributors,
         products,
         shops,
         suppliers,

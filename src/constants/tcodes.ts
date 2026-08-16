@@ -10,6 +10,35 @@ export interface TCodeInfo {
 }
 
 export const TCODES: TCodeInfo[] = [
+  // Master Data - Distributor Master Setup
+  {
+    module: 'Distributor Management',
+    parentModule: 'Master Data',
+    tCode: 'DST01',
+    transactionName: 'Distributor Master Setup',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SUPER_ADMIN',
+    description: 'Central portal to maintain distributor franchises, logistics hubs, NTN/STRN, and operating entities.'
+  },
+  {
+    module: 'Distributor Management',
+    parentModule: 'Master Data',
+    tCode: 'DIS01',
+    transactionName: 'Distributor Master Setup',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SUPER_ADMIN',
+    description: 'Alternative code for Distributor Master setup and franchise management.'
+  },
+  {
+    module: 'Distributor Management',
+    parentModule: 'Master Data',
+    tCode: 'DM01',
+    transactionName: 'Distributor Operations Master',
+    actionType: 'Display',
+    roleAssociation: 'Z_SUPER_ADMIN',
+    description: 'Quick lookup for registered distributors, regional branches, and active operations.'
+  },
+
   // Master Data - Salesman
   {
     module: 'Salesman Management',
@@ -409,5 +438,32 @@ export const TCODES: TCodeInfo[] = [
     actionType: 'Report',
     roleAssociation: 'Z_REPORT_AUDITOR',
     description: 'Generate high-efficiency physical load plan and stop sequencing guides.'
+  },
+  {
+    module: 'User Management',
+    parentModule: 'Basis / Security',
+    tCode: 'USR1',
+    transactionName: 'User Master & Credentials Maintenance',
+    actionType: 'Manage',
+    roleAssociation: 'Z_BASIS_ADMIN',
+    description: 'Create and manage system operator and salesman user logins and access passwords.'
+  },
+  {
+    module: 'User Maintenance',
+    parentModule: 'Basis / Security',
+    tCode: 'SU01',
+    transactionName: 'User Maintenance & Access Roles',
+    actionType: 'Manage',
+    roleAssociation: 'Z_SECURITY_ADMIN',
+    description: 'Maintain authorizations, user accounts and access profiles.'
+  },
+  {
+    module: 'System Session',
+    parentModule: 'System',
+    tCode: 'EXIT',
+    transactionName: 'Log Off Session',
+    actionType: 'Manage',
+    roleAssociation: 'ALL_USERS',
+    description: 'Safely terminate active DMS operator session and return to login portal.'
   }
 ];

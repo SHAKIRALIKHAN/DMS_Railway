@@ -91,10 +91,15 @@ import {
   Invoice,
   InvoiceItem,
   SalesReturn,
-  SalesReturnItem
+  SalesReturnItem,
+  AuthUser,
+  Distributor
 } from './types';
 
 // Modal component imports
+import { LoginScreen } from './components/LoginScreen';
+import { UserManagementModal } from './components/modals/UserManagementModal';
+import { DistributorMasterModal } from './components/modals/DistributorMasterModal';
 import { InvoiceTransactionModal, DisplayInvoiceModal } from './components/modals/InvoiceModals';
 import { 
   DisplayOrderModal, 
@@ -498,13 +503,15 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'transactions' | 'master_data' | 'reports'>(
     (localStorage.getItem('dms_activeTab') as any) || 'dashboard'
   );
-  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations'>(
+  const [masterDataSubTab, setMasterDataSubTab] = useState<'products' | 'shops' | 'suppliers' | 'order_bookers' | 'salesmen' | 'drivers' | 'locations' | 'distributors'>(
     (localStorage.getItem('dms_masterDataSubTab') as any) || 'products'
   );
   const [transactionsSubTab, setTransactionsSubTab] = useState<'purchases' | 'orders' | 'deliveries' | 'delivery_returns' | 'load_plans' | 'invoices' | 'sales_returns'>(
     (localStorage.getItem('dms_transactionsSubTab') as any) || 'purchases'
   );
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [distributors, setDistributors] = useState<Distributor[]>([]);
+  const [selectedDistributorId, setSelectedDistributorId] = useState<string>('all');
   const [products, setProducts] = useState<Product[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -531,6 +538,18 @@ export default function App() {
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [selectedProductForValuation, setSelectedProductForValuation] = useState<Product | null>(null);
+  
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('dms_auth_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return null; }
+    }
+    return null;
+  });
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+  const [isDistributorMasterModalOpen, setIsDistributorMasterModalOpen] = useState(false);
+
   const [isProductMasterModalOpen, setIsProductMasterModalOpen] = useState(false);
   const [isRegisterShopModalOpen, setIsRegisterShopModalOpen] = useState(false);
   const [isRegisterSupplierModalOpen, setIsRegisterSupplierModalOpen] = useState(false);
@@ -823,6 +842,24 @@ export default function App() {
     localStorage.setItem(`dms_filters_${module as string}`, JSON.stringify(defaults[module]));
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('dms_auth_user');
+    setCurrentUser(null);
+    setToast({
+      type: 'info',
+      message: 'You have been safely logged out of your DMS session.'
+    });
+  };
+
+  const handleLoginSuccess = (user: AuthUser) => {
+    localStorage.setItem('dms_auth_user', JSON.stringify(user));
+    setCurrentUser(user);
+    setToast({
+      type: 'success',
+      message: `Welcome back, ${user.name} (${user.role.toUpperCase()})!`
+    });
+  };
+
   const executeTransaction = (code: string) => {
     const rawCode = code.trim().toUpperCase();
     if (!rawCode) return;
@@ -844,6 +881,8 @@ export default function App() {
       setIsSalesmanModalOpen(false);
       setIsShopMasterModalOpen(false);
       setIsSupplierMasterModalOpen(false);
+      setIsUserManagementModalOpen(false);
+      setIsDistributorMasterModalOpen(false);
       setIsNewOrderModalOpen(false);
       setIsOrderCancellationOpen(false);
       setIsUnitModalOpen(false);
@@ -985,7 +1024,6 @@ export default function App() {
       case 'XK02':
       case 'XK03':
       case 'SUM1':
-      case 'SU01':
       case 'SU08':
         setIsSupplierMasterModalOpen(true);
         break;
@@ -1000,6 +1038,32 @@ export default function App() {
         break;
       case 'DRV1': setIsDriverModalOpen(true); break;
       case 'TC01': setIsTCodeModalOpen(true); break;
+
+      // Distributor Management (DST01, DIS01, DM01)
+      case 'DST01':
+      case 'DIS01':
+      case 'DM01':
+      case 'DST02':
+      case 'DST03':
+        setIsDistributorMasterModalOpen(true);
+        break;
+
+      // Basis / Security / User Management
+      case 'USR1':
+      case 'USER':
+      case 'USERS':
+      case 'USER1':
+      case 'SU01':
+      case 'SU1':
+        setIsUserManagementModalOpen(true);
+        break;
+
+      // Session Management
+      case 'EXIT':
+      case 'LOGOUT':
+      case 'LOCK':
+        handleLogout();
+        break;
       
       // Systems & Reports
       case 'DASH': setActiveTab('dashboard'); break;
@@ -1042,39 +1106,43 @@ export default function App() {
     localStorage.setItem('dms_isCommandExpanded', String(isCommandExpanded));
   }, [isCommandExpanded]);
 
-  useEffect(() => {
-    const fetchBatchInit = async () => {
-      try {
-        const res = await fetch('/api/batch-init');
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        
-        setStats(data.stats);
-        setProducts(data.products);
-        setShops(data.shops);
-        setSuppliers(data.suppliers);
-        setOrders(data.orders);
-        setChartData(data.chartData);
-        setPurchases(data.purchases);
-        setLoadPlans(data.loadPlans);
-        setValuation(data.valuation);
-        setMaterialGroups(data.materialGroups);
-        setDrivers(data.drivers);
-        setOrderBookers(data.orderBookers);
-        setSalesmen(data.salesmen);
-        setUnits(data.units);
-        setDeliveries(data.deliveries);
-        setReturns(data.returns);
-        setInvoices(data.invoices);
-      } catch (err) {
-        console.error("Batch initialization failed:", err);
-        // Fallback or retry logic if needed
-      }
-    };
+  const fetchBatchInit = async (distIdOverride?: string) => {
+    try {
+      const activeDist = distIdOverride !== undefined 
+        ? distIdOverride 
+        : (currentUser?.role === 'admin' ? selectedDistributorId : (currentUser?.distributor_id ? String(currentUser.distributor_id) : 'all'));
+      const queryParam = activeDist && activeDist !== 'all' ? `?distributor_id=${encodeURIComponent(activeDist)}` : '';
+      const res = await fetch(`/api/batch-init${queryParam}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      
+      setStats(data.stats);
+      if (data.distributors) setDistributors(data.distributors);
+      setProducts(data.products || []);
+      setShops(data.shops || []);
+      setSuppliers(data.suppliers || []);
+      setOrders(data.orders || []);
+      setChartData(data.chartData || []);
+      setPurchases(data.purchases || []);
+      setLoadPlans(data.loadPlans || []);
+      setValuation(data.valuation || null);
+      setMaterialGroups(data.materialGroups || []);
+      setDrivers(data.drivers || []);
+      setOrderBookers(data.orderBookers || []);
+      setSalesmen(data.salesmen || []);
+      setUnits(data.units || []);
+      setDeliveries(data.deliveries || []);
+      setReturns(data.returns || []);
+      setInvoices(data.invoices || []);
+    } catch (err) {
+      console.error("Batch initialization failed:", err);
+    }
+  };
 
+  useEffect(() => {
     fetchBatchInit();
     fetchSalesReturns();
-  }, []);
+  }, [currentUser, selectedDistributorId]);
 
   // Intercept query params to auto-display report on external tab load (useful for PDF printing bypass)
   useEffect(() => {
@@ -1658,6 +1726,11 @@ export default function App() {
     }).format(amount);
   };
 
+  // If no user is authenticated, render the Login Screen
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden relative">
       {/* System Modals (High Priority Overlay) */}
@@ -1812,18 +1885,30 @@ export default function App() {
           </nav>
 
           <div className="pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-3 px-4 py-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
-                AK
+            <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-black text-white text-xs shrink-0 shadow-sm shadow-indigo-200">
+                {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : 'AD'}
               </div>
-              <div>
-                <p className="text-sm font-bold">Admin Karachi</p>
-                <p className="text-xs text-slate-500">Super Admin</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-800 truncate">{currentUser?.name || 'Administrator'}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                    {currentUser?.role || 'admin'}
+                  </span>
+                </div>
+                {currentUser?.distributor_name && (
+                  <p className="text-[10px] font-medium text-slate-500 truncate mt-1">
+                    🏢 {currentUser.distributor_name}
+                  </p>
+                )}
               </div>
             </div>
-            <button className="flex items-center gap-3 w-full px-4 py-3 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
-              <LogOut size={20} />
-              <span className="font-medium">Logout</span>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-rose-600 hover:bg-rose-50 rounded-xl transition-all font-bold text-xs"
+            >
+              <LogOut size={16} />
+              <span>Sign Out (LOGOUT)</span>
             </button>
           </div>
         </div>
@@ -1936,11 +2021,75 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">System</span>
-              <span className="text-xs font-bold text-indigo-600">SK-DMS</span>
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Distributor Context Selector / Badge */}
+            {currentUser?.role === 'admin' ? (
+              <div className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100/80 px-2.5 py-1 rounded-xl">
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 font-mono flex items-center gap-1">
+                  🏢 Dist:
+                </span>
+                <select
+                  value={selectedDistributorId}
+                  onChange={(e) => {
+                    setSelectedDistributorId(e.target.value);
+                  }}
+                  className="bg-white border border-indigo-200 text-slate-800 text-xs font-bold rounded-lg px-2 py-0.5 outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="all">All Distributors (Consolidated)</option>
+                  {distributors.map(d => (
+                    <option key={d.id} value={d.id.toString()}>
+                      {d.code} - {d.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setIsDistributorMasterModalOpen(true)}
+                  className="p-1 hover:bg-white hover:shadow-xs rounded text-indigo-600 text-[10px] font-black font-mono transition-all ml-0.5"
+                  title="Distributor Master Setup (T-Code: DST01)"
+                >
+                  DST01
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
+                <span className="text-emerald-600 text-xs">🏢</span>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-emerald-900 leading-tight">
+                    {currentUser?.distributor_name || 'Assigned Distributor'}
+                  </p>
+                  <p className="text-[9px] font-black text-emerald-700/80 uppercase font-mono tracking-wider">
+                    Scoped Domain • DST-{(currentUser?.distributor_id || 1).toString().padStart(3, '0')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setIsUserManagementModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-indigo-50/80 border border-slate-200 hover:border-indigo-200 rounded-xl transition-all group"
+              title="Manage Users & Credentials (T-Code: USR1)"
+            >
+              <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
+                {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : 'AD'}
+              </div>
+              <div className="text-left hidden sm:block">
+                <p className="text-xs font-bold text-slate-800 leading-none group-hover:text-indigo-600 transition-colors">
+                  {currentUser?.name || 'Administrator'}
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mt-1">
+                  {currentUser?.role || 'admin'} • <span className="font-mono text-indigo-600">USR1</span>
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+              title="Sign Out / Terminate Session (T-Code: EXIT)"
+            >
+              <LogOut size={14} className="stroke-[2.5]" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </header>
 
@@ -2374,8 +2523,9 @@ export default function App() {
                 </div>
 
                 {/* Sub-tabs Navigation */}
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
                   {[
+                    { id: 'distributors', label: 'Distributors', icon: Store },
                     { id: 'suppliers', label: 'Suppliers', icon: Factory },
                     { id: 'shops', label: 'Shops', icon: Store },
                     { id: 'order_bookers', label: 'Order Bookers', icon: Users },
@@ -2409,6 +2559,121 @@ export default function App() {
 
                 {/* Sub-tab Content */}
                 <div className="mt-6">
+                  {masterDataSubTab === 'distributors' && (
+                    <div className="space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">Distributor Master Data (DST01)</h3>
+                          <p className="text-xs text-slate-500">Manage distribution companies, tenant scoping, and operating credentials</p>
+                        </div>
+                        {currentUser?.role === 'admin' && (
+                          <button 
+                            onClick={() => setIsDistributorMasterModalOpen(true)}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                          >
+                            <Plus size={18} />
+                            <span>Setup / Manage Distributors (DST01)</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Distributors</p>
+                          <p className="text-2xl font-black text-slate-900 mt-1">{distributors.length}</p>
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full inline-block mt-2">
+                            Multi-Tenant Architecture Active
+                          </span>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Entities</p>
+                          <p className="text-2xl font-black text-emerald-600 mt-1">
+                            {distributors.filter(d => d.is_active !== 0).length}
+                          </p>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-2">
+                            Operational & Scoped
+                          </span>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Scope</p>
+                          <p className="text-sm font-bold text-slate-900 mt-1 truncate">
+                            {currentUser?.role === 'admin' 
+                              ? (selectedDistributorId === 'all' ? 'All (Global View)' : (distributors.find(d => String(d.id) === selectedDistributorId)?.name || selectedDistributorId))
+                              : (currentUser?.distributor_name || 'Scoped User')}
+                          </p>
+                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-block mt-2">
+                            {currentUser?.role === 'admin' ? 'Super Admin Mode' : `Domain ID: ${currentUser?.distributor_id}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-wider border-b border-slate-100">
+                              <tr>
+                                <th className="px-6 py-4">Code</th>
+                                <th className="px-6 py-4">Distributor Name</th>
+                                <th className="px-6 py-4">Contact & Phone</th>
+                                <th className="px-6 py-4">Region / City</th>
+                                <th className="px-6 py-4">NTN / STRN</th>
+                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {distributors.map(dist => (
+                                <tr key={dist.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">
+                                    {dist.code}
+                                  </td>
+                                  <td className="px-6 py-4 font-bold text-slate-900">
+                                    <div>{dist.name}</div>
+                                    <div className="text-[10px] text-slate-400 font-normal truncate max-w-xs">{dist.address}</div>
+                                  </td>
+                                  <td className="px-6 py-4 text-xs text-slate-600">
+                                    <div>{dist.contact_person || '—'}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono">{dist.phone || '—'}</div>
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-medium text-slate-600">
+                                    {dist.city || 'Karachi'}
+                                  </td>
+                                  <td className="px-6 py-4 font-mono text-[10px] text-slate-500">
+                                    {dist.ntn_number || '—'}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={cn(
+                                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                      dist.is_active !== 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                                    )}>
+                                      {dist.is_active !== 0 ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    {currentUser?.role === 'admin' && (
+                                      <button
+                                        onClick={() => setIsDistributorMasterModalOpen(true)}
+                                        className="px-3 py-1 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-lg text-xs font-bold transition-all"
+                                      >
+                                        Edit
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                              {distributors.length === 0 && (
+                                <tr>
+                                  <td colSpan={7} className="px-6 py-10 text-center text-slate-400 font-medium">
+                                    No distributors configured yet. Click "Setup / Manage Distributors" to create one.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {masterDataSubTab === 'locations' && (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
@@ -4489,6 +4754,25 @@ export default function App() {
         {isTCodeModalOpen && (
           <TCodeMasterModal 
             onClose={() => setIsTCodeModalOpen(false)}
+          />
+        )}
+        {isUserManagementModalOpen && (
+          <UserManagementModal 
+            onClose={() => setIsUserManagementModalOpen(false)}
+            currentUserRole={currentUser?.role}
+            onOpenDistributorMaster={() => setIsDistributorMasterModalOpen(true)}
+          />
+        )}
+        {isDistributorMasterModalOpen && (
+          <DistributorMasterModal 
+            isOpen={isDistributorMasterModalOpen}
+            onClose={() => {
+              setIsDistributorMasterModalOpen(false);
+              fetchBatchInit();
+            }}
+            onSaveSuccess={() => {
+              fetchBatchInit();
+            }}
           />
         )}
         {isUnitModalOpen && (

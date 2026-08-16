@@ -1,3 +1,43 @@
+export interface Distributor {
+  id: number;
+  code: string;
+  name: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  ntn_number?: string;
+  strn_number?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  created_at?: string;
+  total_shops?: number;
+  total_users?: number;
+  total_orders?: number;
+}
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  role: 'admin' | 'salesman' | 'order_booker' | 'accountant' | string;
+  phone: string;
+  distributor_id?: number | null;
+  distributor_name?: string;
+  distributor_code?: string;
+  token?: string;
+}
+
+export interface DmsUser {
+  id: number;
+  name: string;
+  role: string;
+  phone: string;
+  password?: string;
+  distributor_id?: number | null;
+  distributor_name?: string;
+  distributor_code?: string;
+}
+
 export interface Unit {
   id: number;
   unit_code: string;
