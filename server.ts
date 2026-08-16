@@ -1372,26 +1372,32 @@ async function startServer() {
 
   // Authentication & User Management Routes
   app.post("/api/auth/login", (req, res) => {
-    const { phone, password } = req.body;
-    if (!phone || !password) {
-      return res.status(400).json({ error: "Phone and password are required" });
+    const { phone, username, name, identifier, password } = req.body;
+    const loginIdentifier = (identifier || phone || username || name || "").toString().trim();
+    const cleanPass = (password || "").toString().trim();
+
+    if (!loginIdentifier || !cleanPass) {
+      return res.status(400).json({ error: "Username/Phone and Password are required" });
     }
 
     try {
+      const sanitizedPhone = loginIdentifier.replace(/[\s-]/g, '');
       const user = db.prepare(`
         SELECT u.id, u.name, u.role, u.phone, u.password, u.distributor_id,
                d.name as distributor_name, d.code as distributor_code
         FROM users u
         LEFT JOIN distributors d ON u.distributor_id = d.id
-        WHERE u.phone = ?
-      `).get(phone.trim()) as any;
+        WHERE LOWER(TRIM(u.phone)) = LOWER(?)
+           OR LOWER(TRIM(u.name)) = LOWER(?)
+           OR REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = ?
+      `).get(loginIdentifier, loginIdentifier, sanitizedPhone) as any;
 
       if (!user) {
-        return res.status(401).json({ error: "Invalid phone number or user not found" });
+        return res.status(401).json({ error: "User not found. Please check your username, name, or phone number." });
       }
 
-      if (user.password !== password) {
-        return res.status(401).json({ error: "Incorrect password" });
+      if (user.password !== cleanPass) {
+        return res.status(401).json({ error: "Incorrect password. Please verify and try again." });
       }
 
       const { password: _, ...userSafe } = user;

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Shield, KeyRound, Phone, AlertCircle, ArrowRight, UserCheck, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, KeyRound, User, AlertCircle, ArrowRight, UserCheck, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AuthUser } from '../types';
 
@@ -8,15 +8,27 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: number; name: string; role: string; phone: string; distributor_name?: string }>>([]);
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAvailableUsers(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!phone.trim() || !password.trim()) {
-      setError('Please enter both your phone number and password');
+    if (!identifier.trim() || !password.trim()) {
+      setError('Please enter your Username / Name / Phone and Password');
       return;
     }
 
@@ -27,7 +39,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), password: password.trim() })
+        body: JSON.stringify({ 
+          identifier: identifier.trim(), 
+          phone: identifier.trim(),
+          password: password.trim() 
+        })
       });
 
       const data = await res.json();
@@ -37,22 +53,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       onLoginSuccess(data.user);
     } catch (err: any) {
-      setError(err.message || 'Unable to sign in. Please verify your connection.');
+      setError(err.message || 'Unable to sign in. Please verify your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuickLogin = (quickPhone: string, quickPass: string) => {
-    setPhone(quickPhone);
+  const handleQuickLogin = (userLoginId: string, quickPass: string) => {
+    setIdentifier(userLoginId);
     setPassword(quickPass);
     setError(null);
-    // Submit with the quick credentials
     setLoading(true);
     fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: quickPhone, password: quickPass })
+      body: JSON.stringify({ 
+        identifier: userLoginId, 
+        phone: userLoginId, 
+        password: quickPass 
+      })
     })
       .then(res => res.json())
       .then(data => {
@@ -65,6 +84,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   };
+
+  const adminUser = availableUsers.find(u => u.role === 'admin') || { name: 'Admin Karachi', phone: '03001234567' };
+  const salesmanUser = availableUsers.find(u => u.role !== 'admin') || { name: 'Salman', phone: '03007654321' };
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
@@ -87,7 +109,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             Enterprise Distribution Platform
           </span>
           <h1 className="text-2xl font-black text-white tracking-tight">Karachi DMS</h1>
-          <p className="text-xs text-slate-400 mt-1">Sign in with your authorized credentials</p>
+          <p className="text-xs text-slate-400 mt-1">Sign in with your Name, Username, or Phone</p>
         </div>
 
         {/* Error Alert */}
@@ -106,16 +128,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-              Phone / User ID
+              Username / Full Name / Phone No
             </label>
             <div className="relative">
-              <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="e.g. 03001234567"
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                placeholder="e.g. Salman or 03007654321"
                 disabled={loading}
+                autoFocus
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/60 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
               />
             </div>
@@ -162,29 +185,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <div className="grid grid-cols-2 gap-2.5">
             <button
               type="button"
-              onClick={() => handleQuickLogin('03001234567', 'admin123')}
+              onClick={() => handleQuickLogin(adminUser.name, 'admin123')}
               disabled={loading}
               className="p-3 bg-slate-900/80 hover:bg-indigo-950/60 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-left transition-all group"
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">Super Admin</span>
-                <UserCheck size={13} className="text-indigo-400" />
+                <span className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+                  {adminUser.name}
+                </span>
+                <UserCheck size={13} className="text-indigo-400 shrink-0" />
               </div>
-              <p className="text-[10px] font-mono text-slate-400">03001234567</p>
+              <p className="text-[10px] font-mono text-slate-400 truncate">{adminUser.phone}</p>
               <p className="text-[10px] font-mono text-slate-500">admin123</p>
             </button>
 
             <button
               type="button"
-              onClick={() => handleQuickLogin('03007654321', 'sales123')}
+              onClick={() => handleQuickLogin(salesmanUser.name, 'sales123')}
               disabled={loading}
               className="p-3 bg-slate-900/80 hover:bg-emerald-950/60 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition-all group"
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">Salesman A</span>
-                <CheckCircle2 size={13} className="text-emerald-400" />
+                <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+                  {salesmanUser.name}
+                </span>
+                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
               </div>
-              <p className="text-[10px] font-mono text-slate-400">03007654321</p>
+              <p className="text-[10px] font-mono text-slate-400 truncate">{salesmanUser.phone}</p>
               <p className="text-[10px] font-mono text-slate-500">sales123</p>
             </button>
           </div>
@@ -198,3 +225,4 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     </div>
   );
 };
+
