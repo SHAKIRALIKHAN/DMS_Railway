@@ -1320,6 +1320,13 @@ export default function App() {
     return true;
   });
 
+  const getDistParam = () => {
+    const activeDist = currentUser?.role === 'admin' 
+      ? selectedDistributorId 
+      : (currentUser?.distributor_id ? String(currentUser.distributor_id) : 'all');
+    return activeDist && activeDist !== 'all' ? `?distributor_id=${encodeURIComponent(activeDist)}` : '';
+  };
+
   const fetchUnits = async () => {
     try {
       const res = await fetch('/api/units');
@@ -1332,7 +1339,7 @@ export default function App() {
 
   const fetchDeliveries = async () => {
     try {
-      const res = await fetch('/api/deliveries');
+      const res = await fetch(`/api/deliveries${getDistParam()}`);
       const data = await res.json();
       setDeliveries(data);
     } catch (err) {
@@ -1342,7 +1349,7 @@ export default function App() {
 
   const fetchInvoices = async () => {
     try {
-      const res = await fetch('/api/invoices');
+      const res = await fetch(`/api/invoices${getDistParam()}`);
       const data = await res.json();
       setInvoices(data);
     } catch (err) {
@@ -1352,7 +1359,7 @@ export default function App() {
 
   const fetchReturns = async () => {
     try {
-      const res = await fetch('/api/returns');
+      const res = await fetch(`/api/returns${getDistParam()}`);
       const data = await res.json();
       setReturns(data);
     } catch (err) {
@@ -1362,7 +1369,7 @@ export default function App() {
 
   const fetchSalesReturns = async () => {
     try {
-      const res = await fetch('/api/sales-returns');
+      const res = await fetch(`/api/sales-returns${getDistParam()}`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -1458,7 +1465,7 @@ export default function App() {
 
   const fetchSalesmen = async () => {
     try {
-      const res = await fetch('/api/salesmen');
+      const res = await fetch(`/api/salesmen${getDistParam()}`);
       const data = await res.json();
       setSalesmen(data);
     } catch (err) {
@@ -1468,7 +1475,7 @@ export default function App() {
 
   const fetchOrderBookers = async () => {
     try {
-      const res = await fetch('/api/order-bookers');
+      const res = await fetch(`/api/order-bookers${getDistParam()}`);
       const data = await res.json();
       setOrderBookers(data);
     } catch (err) {
@@ -1478,7 +1485,7 @@ export default function App() {
 
   const fetchDrivers = async () => {
     try {
-      const res = await fetch('/api/drivers');
+      const res = await fetch(`/api/drivers${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setDrivers(data);
@@ -1500,7 +1507,7 @@ export default function App() {
 
   const fetchValuation = async () => {
     try {
-      const res = await fetch('/api/reports/stock-valuation');
+      const res = await fetch(`/api/reports/stock-valuation${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setValuation(data);
@@ -1511,7 +1518,7 @@ export default function App() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/stats');
+      const res = await fetch(`/api/stats${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setStats(data);
@@ -1522,7 +1529,7 @@ export default function App() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch(`/api/products${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setProducts(data);
@@ -1533,7 +1540,7 @@ export default function App() {
 
   const fetchShops = async () => {
     try {
-      const res = await fetch('/api/shops');
+      const res = await fetch(`/api/shops${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setShops(data);
@@ -1555,7 +1562,7 @@ export default function App() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch(`/api/orders${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setOrders(data);
@@ -1566,7 +1573,7 @@ export default function App() {
 
   const fetchPurchases = async () => {
     try {
-      const res = await fetch('/api/purchases');
+      const res = await fetch(`/api/purchases${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setPurchases(data);
@@ -1577,7 +1584,7 @@ export default function App() {
 
   const fetchLoadPlans = async () => {
     try {
-      const res = await fetch('/api/load-plans');
+      const res = await fetch(`/api/load-plans${getDistParam()}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setLoadPlans(data);

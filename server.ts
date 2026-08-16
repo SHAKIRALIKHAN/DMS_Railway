@@ -546,7 +546,7 @@ try {
   const tablesForDistributor = [
     'users', 'shops', 'orders', 'purchases', 'deliveries', 'returns',
     'sales_returns', 'purchase_returns', 'invoices', 'order_bookers',
-    'salesmen', 'drivers', 'load_plans', 'products'
+    'salesmen', 'drivers', 'load_plans', 'products', 'payments'
   ];
 
   for (const tbl of tablesForDistributor) {
@@ -2160,16 +2160,17 @@ async function startServer() {
   }
 
   app.post("/api/products", (req, res) => {
-    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level } = req.body;
+    const { product_name, brand, material_group_id, purchase_price, trade_price, retail_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level, distributor_id } = req.body;
     const opening_stock = req.body.opening_stock !== undefined ? Number(req.body.opening_stock) : Number(req.body.stock_quantity || 0);
     const pPrice = Number(purchase_price) || 0;
     const initialMap = pPrice;
     const initialVal = round2(opening_stock * pPrice);
     const product_id = generateProductId();
+    const distId = distributor_id ? Number(distributor_id) : 1;
     
     const transaction = db.transaction(() => {
-      db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, inventory_value, moving_average_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        product_id, product_name, brand, material_group_id, pPrice, trade_price, retail_price, opening_stock, initialVal, initialMap, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20
+      db.prepare("INSERT INTO products (product_id, product_name, brand, material_group_id, purchase_price, trade_price, retail_price, stock_quantity, inventory_value, moving_average_price, unit, conversion_value, conversion_unit, min_stock_level, reorder_level, distributor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        product_id, product_name, brand, material_group_id, pPrice, trade_price, retail_price, opening_stock, initialVal, initialMap, unit || 'EACH', conversion_value || 1, conversion_unit || 'EACH', min_stock_level || 10, reorder_level || 20, distId
       );
 
       if (opening_stock > 0) {
@@ -2253,7 +2254,9 @@ async function startServer() {
   });
 
   app.get("/api/shops", (req, res) => {
-    const shops = db.prepare("SELECT * FROM shops").all();
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+    const shops = db.prepare(`SELECT * FROM shops ${whereClause}`).all();
     res.json(shops);
   });
 
@@ -2279,9 +2282,10 @@ async function startServer() {
   });
 
   app.post("/api/shops", (req, res) => {
-    const { shop_name, owner_name, location, phone, credit_limit } = req.body;
-    const result = db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit) VALUES (?, ?, ?, ?, ?)").run(
-      shop_name, owner_name, location, phone, credit_limit
+    const { shop_name, owner_name, location, phone, credit_limit, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
+    const result = db.prepare("INSERT INTO shops (shop_name, owner_name, location, phone, credit_limit, distributor_id) VALUES (?, ?, ?, ?, ?, ?)").run(
+      shop_name, owner_name, location, phone, credit_limit, distId
     );
     res.json({ id: result.lastInsertRowid });
   });
@@ -2379,11 +2383,12 @@ async function startServer() {
 
   // API to process a return
   app.post("/api/returns", (req, res) => {
-    const { shop_id, items } = req.body; // items: Array<{delivery_id, product_id, quantity, unit_price}>
+    const { shop_id, items, distributor_id } = req.body; // items: Array<{delivery_id, product_id, quantity, unit_price}>
+    const distId = distributor_id ? Number(distributor_id) : 1;
     
     const transaction = db.transaction(() => {
       // 1. Create Return Header
-      const header = db.prepare("INSERT INTO returns (shop_id, status) VALUES (?, ?)").run(shop_id, 'completed');
+      const header = db.prepare("INSERT INTO returns (shop_id, status, distributor_id) VALUES (?, ?, ?)").run(shop_id, 'completed', distId);
       const returnId = header.lastInsertRowid;
 
       let total = 0;
@@ -2427,10 +2432,13 @@ async function startServer() {
   });
 
   app.get("/api/returns", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (r.distributor_id = ${distId} OR r.distributor_id IS NULL)` : '';
     const returns = db.prepare(`
       SELECT r.*, s.shop_name 
       FROM returns r 
       JOIN shops s ON r.shop_id = s.id 
+      ${whereClause}
       ORDER BY r.return_date DESC
     `).all();
     res.json(returns);
@@ -2617,7 +2625,8 @@ async function startServer() {
   });
 
   app.post("/api/sales-returns", (req, res) => {
-    const { shop_id, invoice_id, items } = req.body; // items: Array<{invoice_item_id, product_id, quantity, unit_price, reason}>
+    const { shop_id, invoice_id, items, distributor_id } = req.body; // items: Array<{invoice_item_id, product_id, quantity, unit_price, reason}>
+    const distId = distributor_id ? Number(distributor_id) : 1;
     
     if (!shop_id || !invoice_id || !items || items.length === 0) {
       return res.status(400).json({ error: "Missing required fields or return items." });
@@ -2625,7 +2634,7 @@ async function startServer() {
 
     const transaction = db.transaction(() => {
       // 1. Create Sales Return Header
-      const header = db.prepare("INSERT INTO sales_returns (shop_id, invoice_id, status) VALUES (?, ?, ?)").run(shop_id, invoice_id, 'completed');
+      const header = db.prepare("INSERT INTO sales_returns (shop_id, invoice_id, status, distributor_id) VALUES (?, ?, ?, ?)").run(shop_id, invoice_id, 'completed', distId);
       const salesReturnId = header.lastInsertRowid;
 
       let total = 0;
@@ -2693,12 +2702,15 @@ async function startServer() {
   });
 
   app.get("/api/sales-returns", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (sr.distributor_id = ${distId} OR sr.distributor_id IS NULL)` : '';
     try {
       const returns = db.prepare(`
         SELECT sr.*, s.shop_name, i.id as invoice_ref_id
         FROM sales_returns sr 
         JOIN shops s ON sr.shop_id = s.id 
         JOIN invoices i ON sr.invoice_id = i.id
+        ${whereClause}
         ORDER BY sr.return_date DESC
       `).all();
       res.json(returns);
@@ -2877,7 +2889,8 @@ async function startServer() {
   });
 
   app.post("/api/purchase-returns", (req, res) => {
-    const { supplier_id, purchase_id, items } = req.body;
+    const { supplier_id, purchase_id, items, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     
     if (!supplier_id || !purchase_id || !items || items.length === 0) {
       return res.status(400).json({ error: "Missing required fields or return items." });
@@ -2885,7 +2898,7 @@ async function startServer() {
 
     const transaction = db.transaction(() => {
       // 1. Create Purchase Return Header
-      const header = db.prepare("INSERT INTO purchase_returns (supplier_id, purchase_id, status) VALUES (?, ?, ?)").run(supplier_id, purchase_id, 'completed');
+      const header = db.prepare("INSERT INTO purchase_returns (supplier_id, purchase_id, status, distributor_id) VALUES (?, ?, ?, ?)").run(supplier_id, purchase_id, 'completed', distId);
       const purchaseReturnId = header.lastInsertRowid;
 
       let total = 0;
@@ -2949,12 +2962,15 @@ async function startServer() {
   });
 
   app.get("/api/purchase-returns", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (pr.distributor_id = ${distId} OR pr.distributor_id IS NULL)` : '';
     try {
       const returns = db.prepare(`
         SELECT pr.*, s.name as supplier_name, p.id as purchase_ref_id
         FROM purchase_returns pr 
         JOIN suppliers s ON pr.supplier_id = s.id 
         JOIN purchases p ON pr.purchase_id = p.id
+        ${whereClause}
         ORDER BY pr.return_date DESC
       `).all();
       res.json(returns);
@@ -3100,19 +3116,23 @@ async function startServer() {
   });
 
   app.get("/api/orders", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (o.distributor_id = ${distId} OR o.distributor_id IS NULL)` : '';
     const orders = db.prepare(`
       SELECT o.*, r.shop_name, ob.name as order_booker_name,
       (SELECT COUNT(*) FROM deliveries WHERE order_id = o.id) > 0 as has_delivery
       FROM orders o
       JOIN shops r ON o.shop_id = r.id
       JOIN order_bookers ob ON o.order_booker_id = ob.id
+      ${whereClause}
       ORDER BY o.order_date DESC
     `).all();
     res.json(orders);
   });
 
   app.post("/api/orders", (req, res) => {
-    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items } = req.body;
+    const { shop_id, order_booker_id, order_date, estimated_delivery_date, items, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     let { 
       sales_tax_pct, sales_tax_amount, 
       additional_tax_pct, additional_tax_amount,
@@ -3146,13 +3166,13 @@ async function startServer() {
           shop_id, order_booker_id, order_date, estimated_delivery_date, total_amount, 
           sales_tax_pct, sales_tax_amount, additional_tax_pct, additional_tax_amount,
           discount_pct, discount_amount, extra_discount_pct, extra_discount_amount,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          status, distributor_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         shop_id, order_booker_id, order_date || new Date().toISOString(), estimated_delivery_date, total_amount, 
         sales_tax_pct || 0, sales_tax_amount || 0, additional_tax_pct || 0, additional_tax_amount || 0,
         discount_pct || 0, discount_amount || 0, extra_discount_pct || 0, extra_discount_amount || 0,
-        'pending'
+        'pending', distId
       );
       const orderId = order.lastInsertRowid;
 
@@ -3182,15 +3202,18 @@ async function startServer() {
   });
 
   app.get("/api/order-bookers", (req, res) => {
-    const bookers = db.prepare("SELECT * FROM order_bookers").all();
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+    const bookers = db.prepare(`SELECT * FROM order_bookers ${whereClause}`).all();
     res.json(bookers);
   });
 
   app.post("/api/order-bookers", (req, res) => {
-    const { name, father_name, cell_no, cnic_no, joining_date } = req.body;
+    const { name, father_name, cell_no, cnic_no, joining_date, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     try {
-      const result = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        name, father_name, cell_no, cnic_no, joining_date
+      const result = db.prepare("INSERT INTO order_bookers (name, father_name, cell_no, cnic_no, joining_date, distributor_id) VALUES (?, ?, ?, ?, ?, ?)").run(
+        name, father_name, cell_no, cnic_no, joining_date, distId
       );
       res.json({ id: result.lastInsertRowid });
     } catch (err) {
@@ -3207,15 +3230,18 @@ async function startServer() {
   });
 
   app.get("/api/salesmen", (req, res) => {
-    const salesmen = db.prepare("SELECT * FROM salesmen").all();
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+    const salesmen = db.prepare(`SELECT * FROM salesmen ${whereClause}`).all();
     res.json(salesmen);
   });
 
   app.post("/api/salesmen", (req, res) => {
-    const { name, father_name, cell_no, cnic_no, joining_date } = req.body;
+    const { name, father_name, cell_no, cnic_no, joining_date, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     try {
-      const result = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        name, father_name, cell_no, cnic_no, joining_date
+      const result = db.prepare("INSERT INTO salesmen (name, father_name, cell_no, cnic_no, joining_date, distributor_id) VALUES (?, ?, ?, ?, ?, ?)").run(
+        name, father_name, cell_no, cnic_no, joining_date, distId
       );
       res.json({ id: result.lastInsertRowid });
     } catch (err) {
@@ -3451,6 +3477,8 @@ async function startServer() {
   });
 
   app.get("/api/deliveries", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (d.distributor_id = ${distId} OR d.distributor_id IS NULL)` : '';
     const deliveries = db.prepare(`
       SELECT 
         d.*, 
@@ -3463,6 +3491,7 @@ async function startServer() {
       JOIN orders o ON d.order_id = o.id
       JOIN shops r ON o.shop_id = r.id
       JOIN salesmen s ON d.salesman_id = s.id
+      ${whereClause}
       ORDER BY d.delivery_date DESC
     `).all();
     res.json(deliveries);
@@ -3795,10 +3824,11 @@ async function startServer() {
       const extra_discount_total = items.reduce((sum: number, item: any) => sum + (item.extra_discount_amount || 0), 0);
       const totalAmount = items_total + tax_total + add_tax_total - discount_total - extra_discount_total;
 
+      const distId = req.body.distributor_id ? Number(req.body.distributor_id) : 1;
       const deliveryResult = db.prepare(`
-        INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, total_amount)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(targetOrderIds[0], shop_id, salesman_id, delivery_date, totalAmount);
+        INSERT INTO deliveries (order_id, shop_id, salesman_id, delivery_date, total_amount, distributor_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(targetOrderIds[0], shop_id, salesman_id, delivery_date, totalAmount, distId);
       
       const deliveryId = deliveryResult.lastInsertRowid;
 
@@ -3892,17 +3922,21 @@ async function startServer() {
 
   // Invoice APIs
   app.get("/api/invoices", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (i.distributor_id = ${distId} OR i.distributor_id IS NULL)` : '';
     const invoices = db.prepare(`
       SELECT i.*, s.shop_name
       FROM invoices i
       JOIN shops s ON i.shop_id = s.id
+      ${whereClause}
       ORDER BY i.created_at DESC
     `).all();
     res.json(invoices);
   });
 
   app.post("/api/invoices", (req, res) => {
-    const { shop_id, invoice_date, delivery_ids, items } = req.body;
+    const { shop_id, invoice_date, delivery_ids, items, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
 
     const transaction = db.transaction(() => {
       // 1. Calculate Totals
@@ -3921,9 +3955,9 @@ async function startServer() {
 
       // 2. Create Invoice
       const info = db.prepare(`
-        INSERT INTO invoices (shop_id, invoice_date, gross_amount, total_discount, total_tax, net_amount)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(shop_id, invoice_date, gross, totalDisc, totalTax, net);
+        INSERT INTO invoices (shop_id, invoice_date, gross_amount, total_discount, total_tax, net_amount, distributor_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(shop_id, invoice_date, gross, totalDisc, totalTax, net, distId);
       const invoiceId = info.lastInsertRowid;
 
       // 3. Create Invoice Items
@@ -4063,10 +4097,13 @@ async function startServer() {
   });
 
   app.get("/api/purchases", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (p.distributor_id = ${distId} OR p.distributor_id IS NULL)` : '';
     const purchases = db.prepare(`
       SELECT p.*, s.name as supplier_name
       FROM purchases p
       JOIN suppliers s ON p.supplier_id = s.id
+      ${whereClause}
       ORDER BY p.purchase_date DESC
     `).all();
     res.json(purchases);
@@ -4096,7 +4133,8 @@ async function startServer() {
   });
 
   app.post("/api/purchases", (req, res) => {
-    const { supplier_id, items } = req.body;
+    const { supplier_id, items, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "Purchase must contain at least one item." });
@@ -4106,8 +4144,8 @@ async function startServer() {
 
     const transaction = db.transaction(() => {
       // 1. Create Purchase Record
-      const purchase = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status) VALUES (?, ?, ?)").run(
-        supplier_id, total_amount, 'received'
+      const purchase = db.prepare("INSERT INTO purchases (supplier_id, total_amount, status, distributor_id) VALUES (?, ?, ?, ?)").run(
+        supplier_id, total_amount, 'received', distId
       );
       const purchase_id = purchase.lastInsertRowid;
 
@@ -4709,15 +4747,16 @@ async function startServer() {
   });
 
   app.post("/api/payments", (req, res) => {
-    const { shop_id, amount, payment_method, payment_date } = req.body;
+    const { shop_id, amount, payment_method, payment_date, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     if (!shop_id || !amount) {
       return res.status(400).json({ error: "Shop ID and amount are required" });
     }
 
     const transaction = db.transaction(() => {
       // 1. Record payment
-      const paymentRes = db.prepare("INSERT INTO payments (shop_id, amount, payment_method, payment_date) VALUES (?, ?, ?, ?)").run(
-        shop_id, amount, payment_method || 'Cash', payment_date || new Date().toISOString()
+      const paymentRes = db.prepare("INSERT INTO payments (shop_id, amount, payment_method, payment_date, distributor_id) VALUES (?, ?, ?, ?, ?)").run(
+        shop_id, amount, payment_method || 'Cash', payment_date || new Date().toISOString(), distId
       );
       
       // 2. Update Client Ledger (Credit the shop for the payment)
@@ -4742,10 +4781,13 @@ async function startServer() {
   });
 
   app.get("/api/payments", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (p.distributor_id = ${distId} OR p.distributor_id IS NULL)` : '';
     const payments = db.prepare(`
       SELECT p.*, s.shop_name 
       FROM payments p 
       JOIN shops s ON p.shop_id = s.id 
+      ${whereClause}
       ORDER BY p.payment_date DESC
     `).all();
     res.json(payments);
@@ -4766,15 +4808,18 @@ async function startServer() {
 
   // Drivers API
   app.get("/api/drivers", (req, res) => {
-    const drivers = db.prepare("SELECT * FROM drivers").all();
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (distributor_id = ${distId} OR distributor_id IS NULL)` : '';
+    const drivers = db.prepare(`SELECT * FROM drivers ${whereClause}`).all();
     res.json(drivers);
   });
 
   app.post("/api/drivers", (req, res) => {
-    const { name, father_name, cell_no, cnic_no, joining_date } = req.body;
+    const { name, father_name, cell_no, cnic_no, joining_date, distributor_id } = req.body;
+    const distId = distributor_id ? Number(distributor_id) : 1;
     try {
-      const result = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date) VALUES (?, ?, ?, ?, ?)").run(
-        name, father_name, cell_no, cnic_no, joining_date
+      const result = db.prepare("INSERT INTO drivers (name, father_name, cell_no, cnic_no, joining_date, distributor_id) VALUES (?, ?, ?, ?, ?, ?)").run(
+        name, father_name, cell_no, cnic_no, joining_date, distId
       );
       res.json({ id: result.lastInsertRowid });
     } catch (err) {
@@ -4800,10 +4845,13 @@ async function startServer() {
   });
 
   app.get("/api/load-plans", (req, res) => {
+    const distId = req.query.distributor_id && req.query.distributor_id !== 'all' ? Number(req.query.distributor_id) : null;
+    const whereClause = distId ? `WHERE (lp.distributor_id = ${distId} OR lp.distributor_id IS NULL)` : '';
     const plans = db.prepare(`
       SELECT lp.*, d.name as driver_name 
       FROM load_plans lp
       JOIN drivers d ON lp.driver_id = d.id
+      ${whereClause}
       ORDER BY lp.plan_date DESC
     `).all();
     res.json(plans);
