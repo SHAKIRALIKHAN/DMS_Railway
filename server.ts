@@ -15,6 +15,52 @@ const __dirname = path.dirname(__filename);
 const dbPath = path.join(process.cwd(), "dms_v7.db");
 console.log(`[Database] Target path: ${dbPath}`);
 
+// Pre-flight check: verify that an existing database file has a valid,
+// complete schema before we attempt to use it. If the file is missing
+// expected columns/tables (e.g. a partially written or corrupted file),
+// delete it (along with any WAL/SHM sidecar files) so the normal
+// initialization flow below can recreate it from scratch with the
+// correct schema instead of crashing on startup.
+function removeDatabaseFiles(targetPath: string) {
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const p = targetPath + suffix;
+    try {
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+        console.warn(`[Database] Removed stale database file: ${p}`);
+      }
+    } catch (removeErr) {
+      console.error(`[Database] Failed to remove stale database file ${p}:`, removeErr);
+    }
+  }
+}
+
+if (fs.existsSync(dbPath)) {
+  let precheckDb: any;
+  try {
+    precheckDb = new Database(dbPath);
+    const materialGroupsCols = precheckDb.prepare("PRAGMA table_info(material_groups)").all() as any[];
+    const usersCols = precheckDb.prepare("PRAGMA table_info(users)").all() as any[];
+
+    // If either core table exists but is missing its expected primary column,
+    // the schema is incomplete/corrupted.
+    const materialGroupsCorrupted = materialGroupsCols.length > 0 && !materialGroupsCols.some((c: any) => c.name === "mat_gp");
+    const usersCorrupted = usersCols.length > 0 && !usersCols.some((c: any) => c.name === "id");
+
+    if (materialGroupsCorrupted || usersCorrupted) {
+      console.warn(`[Database] Detected corrupted/incomplete schema in ${dbPath}. Deleting and recreating...`);
+      precheckDb.close();
+      removeDatabaseFiles(dbPath);
+    } else {
+      precheckDb.close();
+    }
+  } catch (precheckErr) {
+    console.error(`[Database] Existing database file at ${dbPath} could not be validated. Treating as corrupted:`, precheckErr);
+    try { precheckDb?.close(); } catch (e) {}
+    removeDatabaseFiles(dbPath);
+  }
+}
+
 let db: any;
 try {
   db = new Database(dbPath);
@@ -1189,7 +1235,8 @@ try {
 function seedAreaWiseReportData() {
   try {
     // 1. Ensure material group '00001' exists
-    db.prepare("INSERT OR IGNORE INTO material_groups (id, name, description) VALUES (?, ?, ?)").run("00001", "Sugar & Sweeteners", "Sweetening agents");
+    // Note: material_groups schema uses (mat_gp, mat_description) columns.
+    db.prepare("INSERT OR IGNORE INTO material_groups (mat_gp, mat_description) VALUES (?, ?)").run("00001", "Sugar & Sweeteners");
 
     // 2. Ensure products exist
     const productsToSeed = [
