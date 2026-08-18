@@ -1655,11 +1655,16 @@ try {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(cors());
   app.use(morgan("dev"));
   app.use(express.json());
+
+  // Healthcheck endpoint - used by Railway to verify the service is up
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
 
   // Authentication & User Management Routes
   app.post("/api/auth/login", (req, res) => {
